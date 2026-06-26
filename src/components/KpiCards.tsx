@@ -1,38 +1,79 @@
 import { ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { kpis } from '../data'
+import { kpiCards, type KpiMetric } from '../data'
 
 export default function KpiCards() {
   return (
     <div className="kpi-row">
-      {kpis.map((k) => (
-        <div className="card kpi" key={k.label}>
+      {kpiCards.map((card) => (
+        <div className={`card kpi ${card.wide ? 'kpi-wide' : ''}`} key={card.label}>
           <div className="kpi-head">
-            <span className="eyebrow">{k.label}</span>
+            <span className="eyebrow">{card.label}</span>
             <ArrowUpRight size={15} color="var(--text-muted)" />
           </div>
-          <div className="sub">{k.sub}</div>
-          <div className="kpi-value-row">
-            <span className="value">{k.value}</span>
-            <span className="status">
-              <i className={`dot ${k.statusTone}`} />
-              {k.statusText}
-            </span>
-          </div>
-          <div className="foot">
-            {k.footDelta && (
-              <span className={`delta ${toneClass(k.footTone)}`}>
-                {k.trend === 'up' && <TrendingUp size={12} />}
-                {k.trend === 'down' && <TrendingDown size={12} />}
-                {k.trend === 'flat' && <Minus size={12} />}
-                {k.footDelta}
-              </span>
-            )}
-            {!k.footDelta && k.trend === 'flat' && <Minus size={12} />}
-            {k.foot && <span>{k.foot}</span>}
-          </div>
+
+          {card.metrics.length > 1 ? (
+            <div className="kpi-rows">
+              {card.metrics.map((m, i) => (
+                <CompactRow m={m} key={i} />
+              ))}
+            </div>
+          ) : (
+            <Metric m={card.metrics[0]} />
+          )}
         </div>
       ))}
     </div>
+  )
+}
+
+function CompactRow({ m }: { m: KpiMetric }) {
+  return (
+    <div className="kpi-crow">
+      <span className="crow-label">{m.sub}</span>
+      <span className="crow-value">{m.value}</span>
+      <span className="crow-delta">
+        {m.footDelta && (
+          <span className={`delta ${toneClass(m.footTone)}`}>
+            {m.trend === 'up' && <TrendingUp size={11} />}
+            {m.trend === 'down' && <TrendingDown size={11} />}
+            {m.trend === 'flat' && <Minus size={11} />}
+            {m.footDelta}
+          </span>
+        )}
+        {m.foot && <span className="crow-foot">{m.foot}</span>}
+      </span>
+      <span className="status">
+        <i className={`dot ${m.statusTone}`} />
+        {m.statusText}
+      </span>
+    </div>
+  )
+}
+
+function Metric({ m }: { m: KpiMetric }) {
+  return (
+    <>
+      <div className="sub">{m.sub}</div>
+      <div className="kpi-value-row">
+        <span className="value">{m.value}</span>
+        <span className="status">
+          <i className={`dot ${m.statusTone}`} />
+          {m.statusText}
+        </span>
+      </div>
+      <div className="foot">
+        {m.footDelta && (
+          <span className={`delta ${toneClass(m.footTone)}`}>
+            {m.trend === 'up' && <TrendingUp size={12} />}
+            {m.trend === 'down' && <TrendingDown size={12} />}
+            {m.trend === 'flat' && <Minus size={12} />}
+            {m.footDelta}
+          </span>
+        )}
+        {!m.footDelta && m.trend === 'flat' && <Minus size={12} />}
+        {m.foot && <span>{m.foot}</span>}
+      </div>
+    </>
   )
 }
 

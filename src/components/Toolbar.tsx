@@ -1,12 +1,13 @@
-import { ChevronDown, Plus } from 'lucide-react'
-
-const filters = [
-  { label: 'Class:', value: 'All' },
-  { label: 'Trucks:', value: 'All' },
-  { label: 'Date:', value: 'May 11-17, 2026' },
-]
+import { useState } from 'react'
+import { Plus } from 'lucide-react'
+import ClassFilter from './ClassFilter'
+import TrucksFilter from './TrucksFilter'
+import DateFilter from './DateFilter'
+import ConnectFleetModal from './ConnectFleetModal'
 
 export default function Toolbar() {
+  const [showConnect, setShowConnect] = useState(false)
+
   return (
     <div className="toolbar">
       <div className="tabs">
@@ -14,18 +15,16 @@ export default function Toolbar() {
         <button className="tab">Full Data</button>
       </div>
       <div className="filters">
-        {filters.map((f) => (
-          <button className="filter" key={f.label}>
-            <span>{f.label}</span>
-            <b>{f.value}</b>
-            <ChevronDown className="chev" size={15} />
-          </button>
-        ))}
-        <button className="btn-primary">
+        <ClassFilter />
+        <TrucksFilter />
+        <DateFilter />
+        <button className="btn-primary" onClick={() => setShowConnect(true)}>
           Connect Fleet
           <Plus size={15} />
         </button>
       </div>
+
+      {showConnect && <ConnectFleetModal onClose={() => setShowConnect(false)} />}
     </div>
   )
 }

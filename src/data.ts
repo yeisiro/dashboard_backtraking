@@ -1,7 +1,6 @@
 export type Tone = 'green' | 'yellow' | 'orange' | 'red' | 'blue' | 'gray'
 
-export interface Kpi {
-  label: string
+export interface KpiMetric {
   sub: string
   value: string
   statusText: string
@@ -12,61 +11,83 @@ export interface Kpi {
   trend: 'up' | 'down' | 'flat'
 }
 
-export const kpis: Kpi[] = [
+export interface KpiCard {
+  label: string
+  metrics: KpiMetric[]
+  wide?: boolean
+}
+
+export const kpiCards: KpiCard[] = [
   {
-    label: 'Money',
-    sub: 'Margin',
-    value: '6.6%',
-    statusText: 'Healthy',
-    statusTone: 'green',
-    foot: '',
-    footDelta: '+0.4 pp WoW',
-    footTone: 'green',
-    trend: 'up',
-  },
-  {
-    label: 'Efficiency',
-    sub: 'Wasted Rate',
-    value: '6.6%',
-    statusText: 'Slipping',
-    statusTone: 'yellow',
-    foot: '(improving)',
-    footDelta: '-0.2 pp WoW',
-    footTone: 'red',
-    trend: 'down',
+    label: 'Financial Health',
+    wide: true,
+    metrics: [
+      {
+        sub: 'Margin',
+        value: '6.6%',
+        statusText: 'Healthy',
+        statusTone: 'green',
+        foot: '',
+        footDelta: '+0.4 pp WoW',
+        footTone: 'green',
+        trend: 'up',
+      },
+      {
+        sub: 'Wasted Rate',
+        value: '6.6%',
+        statusText: 'Slipping',
+        statusTone: 'yellow',
+        foot: '(improving)',
+        footDelta: '-0.2 pp WoW',
+        footTone: 'red',
+        trend: 'down',
+      },
+    ],
   },
   {
     label: 'Execution',
-    sub: 'Adherence',
-    value: '70.4%',
-    statusText: 'Stable',
-    statusTone: 'green',
-    foot: '· target 90%',
-    footDelta: '+1.2 pp WoW',
-    footTone: 'green',
-    trend: 'up',
+    metrics: [
+      {
+        sub: 'Adherence',
+        value: '70.4%',
+        statusText: 'Stable',
+        statusTone: 'green',
+        foot: '· target 90%',
+        footDelta: '+1.2 pp WoW',
+        footTone: 'green',
+        trend: 'up',
+      },
+    ],
   },
   {
     label: 'Fuel',
-    sub: 'CPG vs optimal',
-    value: '+$0.18/gal',
-    statusText: 'Overpay',
-    statusTone: 'yellow',
-    foot: '· Iran Shock context',
-    footDelta: '+0.04 WoW',
-    footTone: 'gray',
-    trend: 'flat',
+    metrics: [
+      {
+        sub: 'CPG vs optimal',
+        value: '+$0.18/gal',
+        statusText: 'Overpay',
+        statusTone: 'yellow',
+        foot: '· Iran Shock context',
+        footDelta: '+0.04 WoW',
+        footTone: 'gray',
+        trend: 'flat',
+      },
+    ],
   },
   {
     label: 'Market Position',
-    sub: 'vs market',
-    value: '−2.3 pp',
-    statusText: 'Behind',
-    statusTone: 'red',
-    foot: 'opportunity $24K/wk',
-    footDelta: '',
-    footTone: 'gray',
-    trend: 'flat',
+    metrics: [
+      {
+        sub: 'vs market',
+        value: '−2.3 pp',
+        statusText: 'Behind',
+        statusTone: 'red',
+        foot: 'opportunity $24K/wk',
+        footDelta: '',
+        footTone: 'gray',
+        trend: 'flat',
+      },
+    ],
   },
 ]
 

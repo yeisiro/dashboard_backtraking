@@ -43,6 +43,12 @@ body {
   line-height: 1.4;
 }
 
+/* Global scale: the design is built at a comfortable density; shrink the
+   whole UI a touch so it fits common laptop screens at 100% browser zoom. */
+.app {
+  zoom: 0.82;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;
@@ -234,6 +240,951 @@ button {
   background: var(--surface-2);
 }
 
+/* ---------- Class filter dropdown ---------- */
+.cf {
+  position: relative;
+}
+.cf-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.cf-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  background: #0c0f15;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+/* list state */
+.cf-list {
+  width: 248px;
+  padding: 8px 0 12px;
+}
+.cf-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  padding: 14px 22px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.cf-item:hover {
+  background: var(--surface-2);
+}
+.cf-item.active {
+  color: var(--text);
+}
+.cf-check {
+  color: var(--green);
+}
+.cf-edit-btn {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 12px 12px 0;
+  padding: 14px;
+  border-radius: 11px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+.cf-edit-btn:hover {
+  background: #232a36;
+}
+
+/* edit state */
+.cf-edit {
+  width: 320px;
+  padding: 16px 18px 18px;
+}
+.cf-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.cf-tip {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+}
+.cf-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  padding: 9px 11px;
+  background: #05070b;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-dim);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 60;
+}
+.cf-tip:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+.cf-edit-head .title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.cf-section-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.cf-thresholds {
+  margin-bottom: 18px;
+}
+.cf-thr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cf-thr-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cf-thr-input {
+  width: 84px;
+  padding: 9px 12px;
+  background: transparent;
+  border: 1px solid rgba(46, 230, 166, 0.35);
+  border-radius: 9px;
+  color: var(--green);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+.cf-thr-input:focus {
+  border-color: var(--green);
+}
+.cf-criteria {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 16px;
+}
+.cf-crit {
+  flex: 1;
+  padding: 11px 8px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.cf-crit.active {
+  background: rgba(46, 230, 166, 0.1);
+  border-color: rgba(46, 230, 166, 0.4);
+  color: var(--green);
+}
+.cf-apply {
+  width: 100%;
+  padding: 14px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cf-apply:hover {
+  background: var(--surface-3);
+}
+
+/* ---------- Trucks filter dropdown ---------- */
+.tf-menu {
+  width: 300px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  max-height: 78vh;
+}
+.tf-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.tf-tab {
+  flex: 1;
+  padding: 12px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tf-tab:hover {
+  color: var(--text-dim);
+}
+.tf-tab.active {
+  background: rgba(46, 230, 166, 0.09);
+  border-color: rgba(46, 230, 166, 0.4);
+  color: var(--green);
+}
+.tf-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  margin-bottom: 6px;
+}
+.tf-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.tf-search input::placeholder {
+  color: var(--text-muted);
+}
+.tf-scroll {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -14px;
+  padding: 0 14px;
+}
+.tf-menu .cf-item {
+  padding: 14px 8px;
+}
+.tf-menu .cf-apply,
+.tf-menu .cf-edit-btn {
+  margin: 12px 0 0;
+  width: 100%;
+}
+.tf-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.tf-group {
+  padding: 16px 8px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tf-group.active {
+  background: rgba(46, 230, 166, 0.06);
+}
+.tf-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tf-group-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tf-edit {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.tf-edit:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tf-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.tf-chip {
+  padding: 8px 0;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tf-chip-more {
+  color: var(--green);
+  font-weight: 700;
+  background: rgba(46, 230, 166, 0.08);
+  border-color: rgba(46, 230, 166, 0.3);
+}
+.tf-chip-more:hover {
+  background: rgba(46, 230, 166, 0.15);
+}
+
+/* dispatcher equip editor popover */
+.tf-edit-panel {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 10px);
+  width: 320px;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: #0c0f15;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.tf-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tf-edit-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.tf-edit-close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+.tf-edit-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.tf-edit-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 4px 0 14px;
+}
+.tf-edit-list {
+  margin-top: 6px;
+}
+
+/* ---------- Date filter ---------- */
+.df-menu {
+  width: 540px;
+  padding: 20px;
+  left: auto;
+  right: 0;
+}
+.df-presets {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.df-preset {
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.df-preset:hover {
+  color: var(--text);
+}
+.df-preset.active {
+  background: rgba(46, 230, 166, 0.09);
+  border-color: rgba(46, 230, 166, 0.4);
+  color: var(--green);
+}
+.df-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.df-month {
+  font-size: 17px;
+  font-weight: 700;
+}
+.df-nav {
+  display: flex;
+  gap: 6px;
+}
+.df-nav button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+.df-nav button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.df-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 4px;
+}
+.df-dow {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 8px 0 12px;
+}
+.df-day {
+  height: 42px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: var(--text);
+  border-radius: 0;
+}
+.df-day.empty {
+  pointer-events: none;
+}
+.df-day:not(.empty):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9px;
+}
+.df-day.in-range {
+  background: var(--surface-2);
+}
+.df-day.is-start {
+  border-top-left-radius: 9px;
+  border-bottom-left-radius: 9px;
+}
+.df-day.is-end {
+  border-top-right-radius: 9px;
+  border-bottom-right-radius: 9px;
+}
+.df-day.endpoint {
+  background: var(--surface-3);
+  font-weight: 700;
+  border-radius: 9px;
+}
+
+/* ---------- Add cab modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 6, 10, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal {
+  width: 540px;
+  max-width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: #0c0f15;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head .title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.modal-step {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.modal-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 22px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+}
+.btn-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 8px 4px;
+}
+.btn-text:hover {
+  color: var(--text);
+}
+.btn-pill {
+  padding: 13px 34px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 700;
+  background: #82cabf;
+  color: #06231d;
+}
+.btn-pill:hover {
+  background: #93d4ca;
+}
+
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 9px;
+}
+.field-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+}
+.field-input:focus-within {
+  border-color: var(--blue);
+}
+.field-input input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.field-input input::placeholder {
+  color: var(--text-muted);
+}
+.field-suffix {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.field-help {
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 7px;
+}
+
+/* modal select */
+.select {
+  position: relative;
+}
+.select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.select-trigger.has-value {
+  color: var(--text);
+}
+.select-trigger.open {
+  border-color: var(--blue);
+}
+.select-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+.select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: #0c0f15;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.select-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+.select-opt:hover {
+  background: var(--surface-2);
+}
+
+/* ---------- Connect Fleet modal ---------- */
+.cfm .modal-head {
+  gap: 12px;
+}
+.cfm-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+.cfm-x,
+.cfm-back {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+.cfm-x:hover,
+.cfm-back:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.cfm-sub {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-top: -2px;
+}
+
+/* option cards */
+.cfm-option {
+  display: flex;
+  gap: 14px;
+  text-align: left;
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.cfm-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+.cfm-option-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.cfm-option-icon.blue {
+  background: rgba(77, 157, 255, 0.15);
+  color: var(--blue);
+}
+.cfm-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cfm-option-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.cfm-arrow {
+  color: var(--text-muted);
+}
+.cfm-option-tag {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.cfm-option-tag.green {
+  color: var(--green);
+}
+.cfm-option-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+/* TMS grid */
+.cfm-tms-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cfm-tms-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.cfm-tms-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+.cfm-tms-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-3);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.cfm-tms-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+/* auth segmented + form */
+.cfm-seg {
+  display: flex;
+  gap: 8px;
+}
+.cfm-seg button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.cfm-seg button.active {
+  background: rgba(46, 230, 166, 0.09);
+  border-color: rgba(46, 230, 166, 0.4);
+  color: var(--green);
+}
+.cfm-seg.sub button {
+  font-size: 12.5px;
+  padding: 10px;
+}
+.cfm-seg-rec {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(46, 230, 166, 0.15);
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.cfm-note {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.cfm-primary {
+  width: 100%;
+  padding: 14px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 700;
+  background: #82cabf;
+  color: #06231d;
+}
+.cfm-primary:hover {
+  background: #93d4ca;
+}
+
+/* centered status screens */
+.cfm-center {
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  padding: 40px 30px;
+}
+.cfm-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-bottom: 22px;
+}
+.cfm-circle.blue {
+  background: rgba(77, 157, 255, 0.18);
+  color: var(--blue);
+}
+.cfm-circle.green {
+  background: #22a565;
+  color: #fff;
+}
+.cfm-circle.spin {
+  animation: cfm-spin 1.1s linear infinite;
+}
+@keyframes cfm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cfm-status-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.cfm-status-sub {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  max-width: 320px;
+}
+.cfm-go {
+  margin-top: 26px;
+  width: 100%;
+  max-width: 340px;
+  padding: 14px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+.cfm-go:hover {
+  background: var(--surface-3);
+}
+
+/* upload dropzone */
+.cfm-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+.cfm-dropzone:hover {
+  border-color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.01);
+}
+.cfm-drop-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.cfm-drop-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.cfm-drop-sub b {
+  color: var(--blue);
+  font-weight: 600;
+}
+.cfm-or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cfm-or span {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.cfm-template-q {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.cfm-template-btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: 11px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+.cfm-template-btn:hover {
+  background: var(--surface-3);
+}
+
 /* generic card */
 .card {
   background: var(--surface);
@@ -277,6 +1228,49 @@ button {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.kpi-wide {
+  grid-column: span 2;
+}
+.kpi-rows {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 10px;
+  flex: 1;
+}
+.kpi-crow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.crow-label {
+  width: 92px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.crow-value {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.crow-delta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.kpi-crow .status {
+  margin-left: auto;
+}
+.crow-delta .delta {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 .kpi-head {
   display: flex;
