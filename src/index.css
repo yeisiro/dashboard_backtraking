@@ -1220,7 +1220,7 @@ button {
 /* ---------- KPI row ---------- */
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 .kpi {
@@ -1228,9 +1228,6 @@ button {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.kpi-wide {
-  grid-column: span 2;
 }
 .kpi-rows {
   display: flex;
@@ -1261,7 +1258,10 @@ button {
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+}
+.crow-vs {
+  color: var(--text-muted);
 }
 .kpi-crow .status {
   margin-left: auto;

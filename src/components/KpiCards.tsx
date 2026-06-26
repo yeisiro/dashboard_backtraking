@@ -1,11 +1,14 @@
 import { ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { kpiCards, type KpiMetric } from '../data'
+import { usePeriod } from '../PeriodContext'
 
 export default function KpiCards() {
+  const { compareLabel } = usePeriod()
+
   return (
     <div className="kpi-row">
       {kpiCards.map((card) => (
-        <div className={`card kpi ${card.wide ? 'kpi-wide' : ''}`} key={card.label}>
+        <div className="card kpi" key={card.label}>
           <div className="kpi-head">
             <span className="eyebrow">{card.label}</span>
             <ArrowUpRight size={15} color="var(--text-muted)" />
@@ -14,11 +17,11 @@ export default function KpiCards() {
           {card.metrics.length > 1 ? (
             <div className="kpi-rows">
               {card.metrics.map((m, i) => (
-                <CompactRow m={m} key={i} />
+                <CompactRow m={m} compare={compareLabel} key={i} />
               ))}
             </div>
           ) : (
-            <Metric m={card.metrics[0]} />
+            <Metric m={card.metrics[0]} compare={compareLabel} />
           )}
         </div>
       ))}
@@ -26,7 +29,7 @@ export default function KpiCards() {
   )
 }
 
-function CompactRow({ m }: { m: KpiMetric }) {
+function CompactRow({ m, compare }: { m: KpiMetric; compare: string }) {
   return (
     <div className="kpi-crow">
       <span className="crow-label">{m.sub}</span>
@@ -40,17 +43,14 @@ function CompactRow({ m }: { m: KpiMetric }) {
             {m.footDelta}
           </span>
         )}
+        {m.footDelta && <span className="crow-vs">{compare}</span>}
         {m.foot && <span className="crow-foot">{m.foot}</span>}
-      </span>
-      <span className="status">
-        <i className={`dot ${m.statusTone}`} />
-        {m.statusText}
       </span>
     </div>
   )
 }
 
-function Metric({ m }: { m: KpiMetric }) {
+function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
   return (
     <>
       <div className="sub">{m.sub}</div>
@@ -71,6 +71,7 @@ function Metric({ m }: { m: KpiMetric }) {
           </span>
         )}
         {!m.footDelta && m.trend === 'flat' && <Minus size={12} />}
+        {m.footDelta && <span className="crow-vs">{compare}</span>}
         {m.foot && <span>{m.foot}</span>}
       </div>
     </>
