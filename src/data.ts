@@ -57,8 +57,7 @@ const ts = (base: number, wave: number): number[] =>
 
 export const kpiCards: KpiCard[] = [
   {
-    label: 'Financial Health',
-    wide: true,
+    label: 'Profitability',
     metrics: [
       {
         sub: 'Margin',
@@ -69,6 +68,18 @@ export const kpiCards: KpiCard[] = [
         footDelta: '+0.4',
         goal: 'high',
       },
+    ],
+    details: [
+      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0) },
+      { label: 'Negotiated rate / mile', value: '$4.10', unit: '/mi', delta: '+0.10', goal: 'high', hint: 'Rate agreed with the client, per loaded mile', series: ts(4.1, 3) },
+      { label: 'RPM total', value: '$3.43', unit: '/mi', delta: '+0.05', goal: 'high', hint: 'What you actually earn per mile driven', series: ts(3.43, 2) },
+      { label: 'Profit / mile loaded', value: '$1.061', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Profit earned per loaded mile', series: ts(1.061, 0) },
+      { label: 'Profit / mile total', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
+    ],
+  },
+  {
+    label: 'Efficiency',
+    metrics: [
       {
         sub: 'Wasted Rate',
         value: '5.45%',
@@ -80,12 +91,11 @@ export const kpiCards: KpiCard[] = [
       },
     ],
     details: [
-      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0) },
-      { label: 'Negotiated rate / mile', value: '$4.10', unit: '/mi', delta: '+0.10', goal: 'high', hint: 'Client-agreed rate · income ÷ loaded miles', series: ts(4.1, 3) },
-      { label: 'RPM total', value: '$3.43', unit: '/mi', delta: '+0.05', goal: 'high', hint: 'Real income per mile · income ÷ in-route miles', series: ts(3.43, 2) },
-      { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: '% efficiency lost · (rpm_plan − rpm_actual) ÷ rpm_plan', series: ts(5.45, 1) },
-      { label: 'Profit / mile loaded', value: '$1.061', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Profit ÷ loaded miles', series: ts(1.061, 0) },
-      { label: 'Profit / mile total', value: '$0.928', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit ÷ in-route miles', series: ts(0.928, 2) },
+      { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: 'Share of expected revenue lost to inefficiency', series: ts(5.45, 1) },
+      { label: 'Empty miles', value: '11.8%', delta: '-0.4', goal: 'low', hint: 'Miles driven without a load', series: ts(11.8, 1) },
+      { label: 'Route deviation', value: '6.2%', delta: '-0.1', goal: 'low', hint: 'Miles run off the planned route', series: ts(6.2, 2) },
+      { label: 'Idle time', value: '10.7%', delta: '-0.3', goal: 'low', hint: 'Share of engine hours spent idling', series: ts(10.7, 1) },
+      { label: 'Late deliveries', value: '7%', delta: '-0.5', goal: 'low', hint: 'Loads delivered past the window', series: ts(7, 3) },
     ],
   },
   {

@@ -86,23 +86,17 @@ function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
       <div className="sub">{m.sub}</div>
       <div className="kpi-value-row">
         <span className="value">{m.value}</span>
-        <span className="status">
-          <i className={`dot ${m.statusTone}`} />
-          {m.statusText}
-        </span>
-      </div>
-      <div className="foot">
-        {m.footDelta ? (
-          <span className={`delta ${toneClass(deltaTone(m.footDelta, m.goal))}`}>
-            <DeltaArrow trend={deltaTrend(m.footDelta)} size={12} />
-            {m.footDelta}
+        {m.footDelta && (
+          <span className="kpi-cmp">
+            <span className={`delta ${toneClass(deltaTone(m.footDelta, m.goal))}`}>
+              <DeltaArrow trend={deltaTrend(m.footDelta)} size={12} />
+              {m.footDelta}
+            </span>
+            <span className="crow-vs">{compare}</span>
           </span>
-        ) : (
-          <Minus size={12} />
         )}
-        {m.footDelta && <span className="crow-vs">{compare}</span>}
-        {m.foot && <span>{m.foot}</span>}
       </div>
+      {m.foot && <div className="foot">{m.foot}</div>}
     </>
   )
 }

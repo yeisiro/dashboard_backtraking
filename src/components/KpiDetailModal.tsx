@@ -26,7 +26,7 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
         <div className="modal-body">
           <p className="cfm-sub">Select a metric to see its trend {compareLabel.replace('vs prev', 'over the last')}.</p>
 
-          <div className="kd-grid">
+          <div className="kd-grid" style={{ gridTemplateColumns: `repeat(${metrics.length}, 1fr)` }}>
             {metrics.map((m, i) => (
               <button
                 key={m.label}
