@@ -7,12 +7,19 @@ import {
   Upload,
   Search,
   Check,
+  Truck,
 } from 'lucide-react'
 
 type Step =
   | 'chooser'
   | 'tms-list'
   | 'tms-cred'
+  | 'tms-manage'
+  | 'tms-unlink'
+  | 'eld-list'
+  | 'eld-cred'
+  | 'eld-manage'
+  | 'eld-unlink'
   | 'syncing'
   | 'connected'
   | 'upload'
@@ -21,16 +28,59 @@ type Step =
 interface Tms {
   name: string
   mono: string
+  url: string
 }
 
 const tmsList: Tms[] = [
-  { name: 'McLeod LoadMaster', mono: 'Mc' },
-  { name: 'Trimble TMW Suite', mono: 'Tr' },
-  { name: 'MercuryGate', mono: 'MG' },
-  { name: 'TMW TruckMate', mono: 'TM' },
-  { name: 'Samsara', mono: 'Sa' },
-  { name: 'Project44', mono: 'P4' },
+  { name: 'Datatruck', mono: 'Da', url: 'https://xxxxx.datatruck.io/api/' },
+  { name: 'Alvys', mono: 'Al', url: 'https://api.alvys.com/' },
+  { name: 'McLeod LoadMaster', mono: 'Mc', url: 'https://api.mcleodsoftware.com/' },
+  { name: 'Trimble TMW Suite', mono: 'Tr', url: 'https://api.trimble.com/' },
+  { name: 'MercuryGate', mono: 'MG', url: 'https://api.mercurygate.com/' },
+  { name: 'Project44', mono: 'P4', url: 'https://api.project44.com/' },
 ]
+
+interface EldField {
+  key: string
+  label: string
+  placeholder: string
+  secret?: boolean // masked in the connected detail view
+}
+
+interface Eld {
+  name: string
+  mono: string
+  vehicles: string
+  fields: EldField[]
+}
+
+const eldList: Eld[] = [
+  {
+    name: 'Samsara',
+    mono: 'Sa',
+    vehicles: '18 trucks',
+    fields: [
+      { key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true },
+    ],
+  },
+  {
+    name: 'Geotab',
+    mono: 'Ge',
+    vehicles: '25 trucks',
+    fields: [
+      { key: 'user', label: 'User', placeholder: 'Enter the User', secret: true },
+      { key: 'database', label: 'Database', placeholder: 'Enter the Database' },
+      { key: 'password', label: 'Password', placeholder: 'Enter the Password', secret: true },
+    ],
+  },
+]
+
+// Geotab ships pre-connected as a live example of a linked ELD.
+const GEOTAB_EXAMPLE: Record<string, string> = {
+  user: 'fleet_admin',
+  database: '1234',
+  password: 'geotab-secret',
+}
 
 // Columns mirror the "Add new cab" form fields, one row per truck.
 const TEMPLATE_COLUMNS = [
@@ -84,19 +134,41 @@ export default function ConnectFleetModal({ onClose }: Props) {
   const [step, setStep] = useState<Step>('chooser')
   const [tms, setTms] = useState<Tms | null>(null)
   const [query, setQuery] = useState('')
-  const [authMethod, setAuthMethod] = useState<'oauth' | 'apikey'>('oauth')
+  const [apiKey, setApiKey] = useState('')
   const [fileName, setFileName] = useState('')
+  // Datatruck ships pre-connected as a live example of a linked TMS.
+  const [connected, setConnected] = useState<string[]>(['Datatruck'])
+
+  // ELD state — Geotab ships pre-connected as a live example.
+  const [eld, setEld] = useState<Eld | null>(null)
+  const [eldValues, setEldValues] = useState<Record<string, string>>({})
+  const [eldConnected, setEldConnected] = useState<Record<string, Record<string, string>>>({
+    Geotab: GEOTAB_EXAMPLE,
+  })
+  const [connectingType, setConnectingType] = useState<'tms' | 'eld'>('tms')
+
+  const activeName = connectingType === 'eld' ? eld?.name : tms?.name
 
   // Auto-advance from the syncing screen to the connected screen.
   useEffect(() => {
     if (step !== 'syncing') return
-    const t = setTimeout(() => setStep('connected'), 2200)
+    const t = setTimeout(() => {
+      if (connectingType === 'tms' && tms) {
+        setConnected((c) => (c.includes(tms.name) ? c : [...c, tms.name]))
+      } else if (connectingType === 'eld' && eld) {
+        setEldConnected((prev) => ({ ...prev, [eld.name]: eldValues }))
+      }
+      setStep('connected')
+    }, 2200)
     return () => clearTimeout(t)
-  }, [step])
+  }, [step, connectingType, tms, eld, eldValues])
 
   const filtered = tmsList.filter((t) =>
     t.name.toLowerCase().includes(query.toLowerCase()),
   )
+
+  const eldComplete =
+    !!eld && eld.fields.every((f) => (eldValues[f.key] ?? '').trim())
 
   const handleFile = (name: string) => {
     setFileName(name)
@@ -117,8 +189,8 @@ export default function ConnectFleetModal({ onClose }: Props) {
             </div>
             <div className="modal-body">
               <p className="cfm-sub">
-                Import your trucks from a TMS or upload a file to start tracking
-                lanes and performance.
+                Connect a TMS or ELD, or upload a file to start tracking lanes
+                and performance.
               </p>
 
               <button className="cfm-option" onClick={() => setStep('tms-list')}>
@@ -130,10 +202,25 @@ export default function ConnectFleetModal({ onClose }: Props) {
                     Connect TMS
                     <ChevronRight size={16} className="cfm-arrow" />
                   </span>
-                  <span className="cfm-option-tag green">Recommended · Live sync</span>
+                  <span className="cfm-option-tag green">Live sync</span>
                   <span className="cfm-option-desc">
-                    Link your TMS via API for automatic fleet updates. Trucks,
-                    lanes, and load data sync continuously.
+                    Auto-sync trucks, lanes, and loads via API.
+                  </span>
+                </span>
+              </button>
+
+              <button className="cfm-option" onClick={() => setStep('eld-list')}>
+                <span className="cfm-option-icon blue">
+                  <Truck size={20} />
+                </span>
+                <span className="cfm-option-main">
+                  <span className="cfm-option-title">
+                    Connect ELD
+                    <ChevronRight size={16} className="cfm-arrow" />
+                  </span>
+                  <span className="cfm-option-tag green">Live telematics</span>
+                  <span className="cfm-option-desc">
+                    Stream real-time location, hours, and engine data.
                   </span>
                 </span>
               </button>
@@ -149,8 +236,7 @@ export default function ConnectFleetModal({ onClose }: Props) {
                   </span>
                   <span className="cfm-option-tag">One time import</span>
                   <span className="cfm-option-desc">
-                    Upload a CSV or Excel file with your truck list, lanes, and
-                    load history. You can re-upload anytime to update.
+                    Import your fleet from a CSV or Excel file.
                   </span>
                 </span>
               </button>
@@ -182,20 +268,35 @@ export default function ConnectFleetModal({ onClose }: Props) {
                 />
               </div>
               <div className="cfm-tms-grid">
-                {filtered.map((t) => (
-                  <button
-                    key={t.name}
-                    className="cfm-tms-card"
-                    onClick={() => {
-                      setTms(t)
-                      setAuthMethod('oauth')
-                      setStep('tms-cred')
-                    }}
-                  >
-                    <span className="cfm-tms-logo">{t.mono}</span>
-                    <span className="cfm-tms-name">{t.name}</span>
-                  </button>
-                ))}
+                {filtered.map((t) => {
+                  const isConnected = connected.includes(t.name)
+                  return (
+                    <button
+                      key={t.name}
+                      className={`cfm-tms-card${isConnected ? ' connected' : ''}`}
+                      onClick={() => {
+                        setTms(t)
+                        if (isConnected) {
+                          setStep('tms-manage')
+                        } else {
+                          setApiKey('')
+                          setStep('tms-cred')
+                        }
+                      }}
+                    >
+                      <span className="cfm-tms-logo">{t.mono}</span>
+                      <span className="cfm-tms-name">{t.name}</span>
+                      {isConnected ? (
+                        <span className="cfm-conn-badge">
+                          <Check size={11} strokeWidth={3} />
+                          Connected
+                        </span>
+                      ) : (
+                        <ChevronRight size={15} className="cfm-card-arrow" />
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </>
@@ -216,68 +317,295 @@ export default function ConnectFleetModal({ onClose }: Props) {
             </div>
             <div className="modal-body">
               <p className="cfm-sub">
-                Authorize efRouting to sync your trucks, lanes, and loads.
+                Enter your {tms.name} API key to sync your trucks, lanes, and
+                loads.
               </p>
 
-              <div className="cfm-seg">
-                <button
-                  className={authMethod === 'oauth' ? 'active' : ''}
-                  onClick={() => setAuthMethod('oauth')}
-                >
-                  OAuth 2.0
-                  <span className="cfm-seg-rec">Recommended</span>
-                </button>
-                <button
-                  className={authMethod === 'apikey' ? 'active' : ''}
-                  onClick={() => setAuthMethod('apikey')}
-                >
-                  API key
-                </button>
+              <div className="field">
+                <label>API key</label>
+                <div className="field-input">
+                  <input
+                    placeholder="Enter the API key"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                </div>
+                <span className="cfm-oblig">Obligatory</span>
               </div>
 
-              {authMethod === 'oauth' ? (
-                <>
-                  <div className="cfm-note">
-                    You'll be redirected to {tms.name} to authorize read access.
-                    efRouting never stores your password — only a revocable access
-                    token.
+              <button
+                className="cfm-primary"
+                disabled={!apiKey.trim()}
+                onClick={() => {
+                  setConnectingType('tms')
+                  setStep('syncing')
+                }}
+              >
+                Connect
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ---------- TMS manage (already connected) ---------- */}
+        {step === 'tms-manage' && tms && (
+          <>
+            <div className="modal-head">
+              <button
+                className="cfm-back"
+                onClick={() => setStep('tms-list')}
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <span className="cfm-tms-logo sm">{tms.mono}</span>
+              <span className="cfm-title">{tms.name}</span>
+              <button
+                className="cfm-unlink"
+                onClick={() => setStep('tms-unlink')}
+              >
+                Unlink
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="cfm-detail-head">{tms.name} information</p>
+              <div className="cfm-detail">
+                <div className="cfm-detail-row">
+                  <span className="cfm-detail-label">Status</span>
+                  <span className="cfm-detail-value green">Synchronized</span>
+                </div>
+                <div className="cfm-detail-row">
+                  <span className="cfm-detail-label">API key</span>
+                  <span className="cfm-detail-value">*****</span>
+                </div>
+                <div className="cfm-detail-row">
+                  <span className="cfm-detail-label">URL</span>
+                  <span className="cfm-detail-value">{tms.url}</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ---------- TMS unlink confirmation ---------- */}
+        {step === 'tms-unlink' && tms && (
+          <>
+            <div className="modal-head">
+              <span className="cfm-title">{tms.name}</span>
+              <span className="cfm-tms-logo sm">{tms.mono}</span>
+            </div>
+            <div className="modal-body">
+              <h3 className="cfm-confirm-title">
+                Are you sure you want to unlink the {tms.name}?
+              </h3>
+              <p className="cfm-confirm-sub">
+                Once unlinked, real-time data from {tms.name} will no longer be
+                available for your fleet.
+              </p>
+              <div className="cfm-confirm-actions">
+                <button
+                  className="cfm-confirm-unlink"
+                  onClick={() => {
+                    setConnected((c) => c.filter((n) => n !== tms.name))
+                    setStep('tms-list')
+                  }}
+                >
+                  Unlink
+                </button>
+                <button
+                  className="cfm-primary keep"
+                  onClick={() => setStep('tms-manage')}
+                >
+                  Keep integration
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ---------- ELD provider list ---------- */}
+        {step === 'eld-list' && (
+          <>
+            <div className="modal-head">
+              <button
+                className="cfm-back"
+                onClick={() => setStep('chooser')}
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <span className="cfm-title">Select ELD Provider</span>
+            </div>
+            <div className="modal-body">
+              <p className="cfm-sub">
+                Choose your electronic logging device provider.
+              </p>
+              <div className="cfm-tms-grid one">
+                {eldList.map((e) => {
+                  const isConnected = !!eldConnected[e.name]
+                  return (
+                    <button
+                      key={e.name}
+                      className={`cfm-tms-card${isConnected ? ' connected' : ''}`}
+                      onClick={() => {
+                        setEld(e)
+                        if (isConnected) {
+                          setStep('eld-manage')
+                        } else {
+                          setEldValues({})
+                          setStep('eld-cred')
+                        }
+                      }}
+                    >
+                      <span className="cfm-tms-logo">{e.mono}</span>
+                      <span className="cfm-tms-name">{e.name}</span>
+                      {isConnected ? (
+                        <span className="cfm-conn-badge">
+                          <Check size={11} strokeWidth={3} />
+                          Connected
+                        </span>
+                      ) : (
+                        <ChevronRight size={15} className="cfm-card-arrow" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ---------- ELD credentials ---------- */}
+        {step === 'eld-cred' && eld && (
+          <>
+            <div className="modal-head">
+              <button
+                className="cfm-back"
+                onClick={() => setStep('eld-list')}
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <span className="cfm-tms-logo sm">{eld.mono}</span>
+              <span className="cfm-title">{eld.name}</span>
+            </div>
+            <div className="modal-body">
+              {eld.fields.map((f) => (
+                <div className="field" key={f.key}>
+                  <label>{f.label}</label>
+                  <div className="field-input">
+                    <input
+                      type={f.secret ? 'password' : 'text'}
+                      placeholder={f.placeholder}
+                      value={eldValues[f.key] ?? ''}
+                      onChange={(ev) =>
+                        setEldValues((v) => ({ ...v, [f.key]: ev.target.value }))
+                      }
+                    />
                   </div>
-                  <button
-                    className="cfm-primary"
-                    onClick={() => setStep('syncing')}
-                  >
-                    Authorize with {tms.name}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="field">
-                    <label>Account / Company ID</label>
-                    <div className="field-input">
-                      <input placeholder="e.g. ACME-123456" />
+                  <span className="cfm-oblig">Obligatory</span>
+                </div>
+              ))}
+
+              <div className="cfm-confirm-actions">
+                <button className="cfm-confirm-unlink" onClick={() => setStep('eld-list')}>
+                  Go back
+                </button>
+                <button
+                  className="cfm-primary keep"
+                  disabled={!eldComplete}
+                  onClick={() => {
+                    setConnectingType('eld')
+                    setStep('syncing')
+                  }}
+                >
+                  Integrate
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ---------- ELD manage (already connected) ---------- */}
+        {step === 'eld-manage' && eld && (
+          <>
+            <div className="modal-head">
+              <button
+                className="cfm-back"
+                onClick={() => setStep('eld-list')}
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <span className="cfm-tms-logo sm">{eld.mono}</span>
+              <span className="cfm-title">{eld.name}</span>
+              <button className="cfm-unlink" onClick={() => setStep('eld-unlink')}>
+                Unlink
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="cfm-detail-head">{eld.name} information</p>
+              <div className="cfm-detail">
+                <div className="cfm-detail-row">
+                  <span className="cfm-detail-label">Status</span>
+                  <span className="cfm-detail-value green">Synchronized</span>
+                </div>
+                {eld.fields.map((f) => {
+                  const val = eldConnected[eld.name]?.[f.key] ?? ''
+                  return (
+                    <div className="cfm-detail-row" key={f.key}>
+                      <span className="cfm-detail-label">{f.label}</span>
+                      <span className="cfm-detail-value">
+                        {f.secret ? '*'.repeat(Math.max(val.length, 5)) : val}
+                      </span>
                     </div>
-                  </div>
-                  <div className="field">
-                    <label>API token</label>
-                    <div className="field-input">
-                      <input placeholder="Paste your API token" />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>Environment</label>
-                    <div className="cfm-seg sub">
-                      <button className="active">Production</button>
-                      <button>Sandbox</button>
-                    </div>
-                  </div>
-                  <button
-                    className="cfm-primary"
-                    onClick={() => setStep('syncing')}
-                  >
-                    Connect
-                  </button>
-                </>
-              )}
+                  )
+                })}
+                <div className="cfm-detail-row">
+                  <span className="cfm-detail-label">Vehicles</span>
+                  <span className="cfm-detail-value">{eld.vehicles}</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ---------- ELD unlink confirmation ---------- */}
+        {step === 'eld-unlink' && eld && (
+          <>
+            <div className="modal-head">
+              <span className="cfm-title">{eld.name}</span>
+              <span className="cfm-tms-logo sm">{eld.mono}</span>
+            </div>
+            <div className="modal-body">
+              <h3 className="cfm-confirm-title">
+                Are you sure you want to unlink the {eld.name}?
+              </h3>
+              <p className="cfm-confirm-sub">
+                Once unlinked, real-time data from {eld.name} will no longer be
+                available for your fleet.
+              </p>
+              <div className="cfm-confirm-actions">
+                <button
+                  className="cfm-confirm-unlink"
+                  onClick={() => {
+                    setEldConnected((prev) => {
+                      const next = { ...prev }
+                      delete next[eld.name]
+                      return next
+                    })
+                    setStep('eld-list')
+                  }}
+                >
+                  Unlink
+                </button>
+                <button
+                  className="cfm-primary keep"
+                  onClick={() => setStep('eld-manage')}
+                >
+                  Keep integration
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -288,7 +616,7 @@ export default function ConnectFleetModal({ onClose }: Props) {
             <span className="cfm-circle blue spin">
               <RefreshCw size={30} />
             </span>
-            <h3 className="cfm-status-title">Syncing with {tms?.name}</h3>
+            <h3 className="cfm-status-title">Syncing with {activeName}</h3>
             <p className="cfm-status-sub">
               Importing your fleet data. This usually takes under a minute.
             </p>
@@ -301,7 +629,7 @@ export default function ConnectFleetModal({ onClose }: Props) {
             <span className="cfm-circle green">
               <Check size={32} strokeWidth={3} />
             </span>
-            <h3 className="cfm-status-title">{tms?.name} connected</h3>
+            <h3 className="cfm-status-title">{activeName} connected</h3>
             <p className="cfm-status-sub">Your fleet is now syncing in real time.</p>
             <button className="cfm-go" onClick={onClose}>
               Go to overview

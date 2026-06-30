@@ -1,5 +1,23 @@
 export type Tone = 'green' | 'yellow' | 'orange' | 'red' | 'blue' | 'gray'
 
+// Which direction is "good" for a metric. 'high' = higher is better
+// (margin, MPG), 'low' = lower is better (wasted rate, idle burn).
+export type Goal = 'high' | 'low'
+
+// Color a delta by whether the change is favorable, given the metric's goal.
+export function deltaTone(delta: string | undefined, goal?: Goal): Tone {
+  if (!delta || !goal) return 'gray'
+  const isNeg = delta.trim().startsWith('-')
+  const favorable = goal === 'high' ? !isNeg : isNeg
+  return favorable ? 'green' : 'red'
+}
+
+// Arrow direction follows the actual sign of the change.
+export function deltaTrend(delta?: string): 'up' | 'down' | 'flat' {
+  if (!delta) return 'flat'
+  return delta.trim().startsWith('-') ? 'down' : 'up'
+}
+
 export interface KpiMetric {
   sub: string
   value: string
@@ -7,15 +25,35 @@ export interface KpiMetric {
   statusTone: Tone
   foot: string
   footDelta: string
-  footTone: Tone
-  trend: 'up' | 'down' | 'flat'
+  goal?: Goal
+}
+
+export interface DetailMetric {
+  label: string
+  value: string
+  unit?: string
+  delta?: string
+  goal?: Goal
+  hint?: string
+  series: number[]
 }
 
 export interface KpiCard {
   label: string
   metrics: KpiMetric[]
   wide?: boolean
+  details?: DetailMetric[]
 }
+
+// Deterministic mock time-series shapes (10 points each).
+const WAVES = [
+  [0.9, 0.93, 0.91, 0.95, 0.96, 0.97, 0.98, 1.0, 1.02, 1.04],
+  [1.06, 1.03, 1.04, 1.01, 1.0, 0.99, 0.98, 0.97, 0.96, 0.95],
+  [0.94, 1.0, 0.92, 0.99, 1.03, 0.96, 1.05, 1.0, 1.04, 1.06],
+  [0.99, 1.0, 0.99, 1.01, 1.0, 1.0, 1.01, 1.0, 1.02, 1.01],
+]
+const ts = (base: number, wave: number): number[] =>
+  WAVES[wave].map((m) => Math.round(base * m * 1000) / 1000)
 
 export const kpiCards: KpiCard[] = [
   {
@@ -29,8 +67,7 @@ export const kpiCards: KpiCard[] = [
         statusTone: 'green',
         foot: '',
         footDelta: '+0.4',
-        footTone: 'green',
-        trend: 'up',
+        goal: 'high',
       },
       {
         sub: 'Wasted Rate',
@@ -39,9 +76,16 @@ export const kpiCards: KpiCard[] = [
         statusTone: 'yellow',
         foot: '',
         footDelta: '-0.2',
-        footTone: 'red',
-        trend: 'down',
+        goal: 'low',
       },
+    ],
+    details: [
+      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0) },
+      { label: 'Negotiated rate / mile', value: '$4.10', unit: '/mi', delta: '+0.10', goal: 'high', hint: 'Client-agreed rate · income ÷ loaded miles', series: ts(4.1, 3) },
+      { label: 'RPM total', value: '$3.43', unit: '/mi', delta: '+0.05', goal: 'high', hint: 'Real income per mile · income ÷ in-route miles', series: ts(3.43, 2) },
+      { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: '% efficiency lost · (rpm_plan − rpm_actual) ÷ rpm_plan', series: ts(5.45, 1) },
+      { label: 'Profit / mile loaded', value: '$1.061', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Profit ÷ loaded miles', series: ts(1.061, 0) },
+      { label: 'Profit / mile total', value: '$0.928', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit ÷ in-route miles', series: ts(0.928, 2) },
     ],
   },
   {
@@ -54,9 +98,14 @@ export const kpiCards: KpiCard[] = [
         statusTone: 'green',
         foot: '· target 90%',
         footDelta: '+1.2',
-        footTone: 'green',
-        trend: 'up',
+        goal: 'high',
       },
+    ],
+    details: [
+      { label: 'Adherence', value: '70.4%', delta: '+1.2', goal: 'high', hint: 'Trips run as planned', series: ts(70.4, 0) },
+      { label: 'On-time delivery', value: '88%', delta: '+0.6', goal: 'high', hint: 'Loads delivered within window', series: ts(88, 3) },
+      { label: 'Plan compliance', value: '60%', delta: '-0.4', goal: 'high', hint: 'Executed vs planned routing', series: ts(60, 1) },
+      { label: 'Detention hrs', value: '2.4', unit: 'h', delta: '-0.3', goal: 'low', hint: 'Avg hours held at dock', series: ts(2.4, 1) },
     ],
   },
   {
@@ -69,9 +118,14 @@ export const kpiCards: KpiCard[] = [
         statusTone: 'yellow',
         foot: '· Iran Shock context',
         footDelta: '+0.04',
-        footTone: 'gray',
-        trend: 'flat',
+        goal: 'low',
       },
+    ],
+    details: [
+      { label: 'CPG vs optimal', value: '+$0.18', unit: '/gal', delta: '+0.04', goal: 'low', hint: 'Overpay vs optimal cost per gallon', series: ts(0.18, 2) },
+      { label: 'MPG', value: '6.9', unit: 'mpg', delta: '+0.16', goal: 'high', hint: 'Miles per gallon, fleet avg', series: ts(6.9, 0) },
+      { label: 'Idle burn', value: '10.7%', delta: '-0.3', goal: 'low', hint: '% of fuel burned idling', series: ts(10.7, 1) },
+      { label: 'Fuel spend / wk', value: '$92K', delta: '-1.1K', goal: 'low', hint: 'Total weekly fuel cost', series: ts(92, 1) },
     ],
   },
   {
@@ -84,9 +138,14 @@ export const kpiCards: KpiCard[] = [
         statusTone: 'red',
         foot: 'opportunity $24K/wk',
         footDelta: '',
-        footTone: 'gray',
-        trend: 'flat',
+        goal: 'high',
       },
+    ],
+    details: [
+      { label: 'vs market', value: '−2.3 pp', delta: '-0.2', goal: 'high', hint: 'Margin gap vs market benchmark', series: ts(2.3, 1) },
+      { label: 'Win rate', value: '34%', delta: '+1.1', goal: 'high', hint: 'Bids won vs quoted', series: ts(34, 0) },
+      { label: 'Lane coverage', value: '78%', delta: '+0.5', goal: 'high', hint: 'Lanes served vs demand', series: ts(78, 3) },
+      { label: 'Rate index', value: '0.97', delta: '+0.01', goal: 'high', hint: 'Your rate vs market index', series: ts(0.97, 2) },
     ],
   },
 ]

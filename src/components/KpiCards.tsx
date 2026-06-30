@@ -1,9 +1,19 @@
+import { useState } from 'react'
 import { ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { kpiCards, type KpiMetric } from '../data'
+import {
+  kpiCards,
+  deltaTone,
+  deltaTrend,
+  type KpiMetric,
+  type KpiCard,
+  type Tone,
+} from '../data'
 import { usePeriod } from '../PeriodContext'
+import KpiDetailModal from './KpiDetailModal'
 
 export default function KpiCards() {
   const { compareLabel } = usePeriod()
+  const [openCard, setOpenCard] = useState<KpiCard | null>(null)
 
   return (
     <div className="kpi-row">
@@ -11,7 +21,14 @@ export default function KpiCards() {
         <div className="card kpi" key={card.label}>
           <div className="kpi-head">
             <span className="eyebrow">{card.label}</span>
-            <ArrowUpRight size={15} color="var(--text-muted)" />
+            <button
+              className="kpi-arrow"
+              data-tip={`View more details about ${card.label}`}
+              onClick={() => setOpenCard(card)}
+              aria-label={`View more details about ${card.label}`}
+            >
+              <ArrowUpRight size={15} />
+            </button>
           </div>
 
           {card.metrics.length > 1 ? (
@@ -25,21 +42,34 @@ export default function KpiCards() {
           )}
         </div>
       ))}
+
+      {openCard && (
+        <KpiDetailModal
+          card={openCard}
+          compareLabel={compareLabel}
+          onClose={() => setOpenCard(null)}
+        />
+      )}
     </div>
   )
 }
 
+function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: number }) {
+  if (trend === 'up') return <TrendingUp size={size} />
+  if (trend === 'down') return <TrendingDown size={size} />
+  return <Minus size={size} />
+}
+
 function CompactRow({ m, compare }: { m: KpiMetric; compare: string }) {
+  const trend = deltaTrend(m.footDelta)
   return (
     <div className="kpi-crow">
       <span className="crow-label">{m.sub}</span>
       <span className="crow-value">{m.value}</span>
       <span className="crow-delta">
         {m.footDelta && (
-          <span className={`delta ${toneClass(m.footTone)}`}>
-            {m.trend === 'up' && <TrendingUp size={11} />}
-            {m.trend === 'down' && <TrendingDown size={11} />}
-            {m.trend === 'flat' && <Minus size={11} />}
+          <span className={`delta ${toneClass(deltaTone(m.footDelta, m.goal))}`}>
+            <DeltaArrow trend={trend} size={11} />
             {m.footDelta}
           </span>
         )}
@@ -62,15 +92,14 @@ function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
         </span>
       </div>
       <div className="foot">
-        {m.footDelta && (
-          <span className={`delta ${toneClass(m.footTone)}`}>
-            {m.trend === 'up' && <TrendingUp size={12} />}
-            {m.trend === 'down' && <TrendingDown size={12} />}
-            {m.trend === 'flat' && <Minus size={12} />}
+        {m.footDelta ? (
+          <span className={`delta ${toneClass(deltaTone(m.footDelta, m.goal))}`}>
+            <DeltaArrow trend={deltaTrend(m.footDelta)} size={12} />
             {m.footDelta}
           </span>
+        ) : (
+          <Minus size={12} />
         )}
-        {!m.footDelta && m.trend === 'flat' && <Minus size={12} />}
         {m.footDelta && <span className="crow-vs">{compare}</span>}
         {m.foot && <span>{m.foot}</span>}
       </div>
@@ -78,7 +107,7 @@ function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
   )
 }
 
-function toneClass(tone: string) {
+function toneClass(tone: Tone) {
   if (tone === 'green') return 'pos'
   if (tone === 'red') return 'neg'
   if (tone === 'orange' || tone === 'yellow') return 'warn'

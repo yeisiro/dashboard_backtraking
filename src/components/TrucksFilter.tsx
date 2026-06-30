@@ -1,67 +1,80 @@
 import { useState } from 'react'
-import { ChevronDown, Check, Search, Pencil, Plus, X } from 'lucide-react'
+import { ChevronDown, Check, Search, Pencil, Plus } from 'lucide-react'
 import AddCabModal from './AddCabModal'
+import GroupModal from './GroupModal'
 
-type Tab = 'individual' | 'dispatcher'
+type Tab = 'individual' | 'group'
+
+interface Group {
+  id: string
+  name: string
+  trucks: string[]
+}
 
 const initialTrucks = ['48201', '48202', '48203', '48204', '48205', '48206', '48207']
 
-// Shared fleet pool that dispatchers draw their trucks from.
+// Shared fleet pool that groups draw their trucks from.
 const fleetPool = Array.from({ length: 14 }, (_, i) => `482${String(i + 1).padStart(2, '0')}`)
 
-const dispatcherNames = ['Pablo alboran', 'Pedro anuel', 'Jose abelardo', 'Ivan cepeda']
-
-const initialGroups: Record<string, string[]> = {
-  'Pablo alboran': fleetPool.slice(0, 8),
-  'Pedro anuel': fleetPool.slice(2, 9),
-  'Jose abelardo': fleetPool.slice(1, 7),
-  'Ivan cepeda': fleetPool.slice(3, 12),
-}
+const initialGroups: Group[] = [
+  { id: 'g1', name: 'Pablo alboran', trucks: fleetPool.slice(0, 8) },
+  { id: 'g2', name: 'Pedro anuel', trucks: fleetPool.slice(2, 9) },
+  { id: 'g3', name: 'Jose abelardo', trucks: fleetPool.slice(1, 7) },
+  { id: 'g4', name: 'Ivan cepeda', trucks: fleetPool.slice(3, 12) },
+]
 
 const CHIP_ROW = 4 // trucks shown before collapsing into "+N"
+
+type GroupEditor =
+  | { mode: 'new' }
+  | { mode: 'edit'; group: Group }
+  | null
 
 export default function TrucksFilter() {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('individual')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([]) // empty = All
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
-  const [groups, setGroups] = useState(initialGroups)
-  const [editing, setEditing] = useState<string | null>(null)
-  const [editSearch, setEditSearch] = useState('')
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]) // group ids
+  const [groups, setGroups] = useState<Group[]>(initialGroups)
+  const [nextId, setNextId] = useState(5)
   const [trucks, setTrucks] = useState(initialTrucks)
   const [showAddCab, setShowAddCab] = useState(false)
+  const [editor, setEditor] = useState<GroupEditor>(null)
 
   const isAll = selected.length === 0 && selectedGroups.length === 0
   const label = isAll ? 'All' : `${selected.length + selectedGroups.length} selected`
 
   const toggleTruck = (id: string) =>
     setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-  const toggleGroup = (name: string) =>
-    setSelectedGroups((p) => (p.includes(name) ? p.filter((x) => x !== name) : [...p, name]))
+  const toggleGroup = (id: string) =>
+    setSelectedGroups((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const reset = () => {
     setSelected([])
     setSelectedGroups([])
   }
-  const toggleTruckInGroup = (name: string, id: string) =>
-    setGroups((g) => {
-      const list = g[name]
-      return {
-        ...g,
-        [name]: list.includes(id) ? list.filter((x) => x !== id) : [...list, id],
-      }
-    })
 
-  const openEditor = (name: string) => {
-    setEditing(name)
-    setEditSearch('')
+  const saveGroup = (name: string, groupTrucks: string[]) => {
+    if (editor?.mode === 'edit') {
+      const id = editor.group.id
+      setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, name, trucks: groupTrucks } : g)))
+    } else {
+      setGroups((gs) => [...gs, { id: `g${nextId}`, name, trucks: groupTrucks }])
+      setNextId((n) => n + 1)
+    }
+    setEditor(null)
+  }
+
+  const deleteGroup = () => {
+    if (editor?.mode !== 'edit') return
+    const id = editor.group.id
+    setGroups((gs) => gs.filter((g) => g.id !== id))
+    setSelectedGroups((p) => p.filter((x) => x !== id))
+    setEditor(null)
   }
 
   const visibleTrucks = trucks.filter((t) =>
     t.toLowerCase().includes(search.toLowerCase()),
-  )
-  const editPool = fleetPool.filter((t) =>
-    t.toLowerCase().includes(editSearch.toLowerCase()),
   )
 
   return (
@@ -74,13 +87,7 @@ export default function TrucksFilter() {
 
       {open && (
         <>
-          <div
-            className="cf-backdrop"
-            onClick={() => {
-              if (editing) setEditing(null)
-              else setOpen(false)
-            }}
-          />
+          <div className="cf-backdrop" onClick={() => setOpen(false)} />
           <div className="cf-menu tf-menu">
             <div className="tf-tabs">
               <button
@@ -90,10 +97,10 @@ export default function TrucksFilter() {
                 Individual
               </button>
               <button
-                className={`tf-tab ${tab === 'dispatcher' ? 'active' : ''}`}
-                onClick={() => setTab('dispatcher')}
+                className={`tf-tab ${tab === 'group' ? 'active' : ''}`}
+                onClick={() => setTab('group')}
               >
-                By dispatcher
+                By group
               </button>
             </div>
 
@@ -135,30 +142,27 @@ export default function TrucksFilter() {
               </>
             )}
 
-            {tab === 'dispatcher' && (
+            {tab === 'group' && (
               <>
                 <div className="tf-scroll">
-                  <button className={`cf-item ${isAll ? 'active' : ''}`} onClick={reset}>
-                    All trucks
-                    {isAll && <Check size={17} className="cf-check" />}
-                  </button>
-
-                  {dispatcherNames.map((name) => {
-                    const trucks = groups[name]
-                    const active = selectedGroups.includes(name)
-                    const shown = trucks.slice(0, CHIP_ROW)
-                    const overflow = trucks.length - shown.length
+                  {groups.map((group) => {
+                    const active = selectedGroups.includes(group.id)
+                    const shown = group.trucks.slice(0, CHIP_ROW)
+                    const overflow = group.trucks.length - shown.length
                     return (
-                      <div className={`tf-group ${active ? 'active' : ''}`} key={name}>
+                      <div className={`tf-group ${active ? 'active' : ''}`} key={group.id}>
                         <div className="tf-group-head">
-                          <button className="tf-group-name" onClick={() => toggleGroup(name)}>
+                          <button
+                            className="tf-group-name"
+                            onClick={() => toggleGroup(group.id)}
+                          >
                             {active && <Check size={15} className="cf-check" />}
-                            {name}
+                            {group.name}
                           </button>
                           <button
                             className="tf-edit"
-                            aria-label={`Edit ${name}`}
-                            onClick={() => openEditor(name)}
+                            aria-label={`Edit ${group.name}`}
+                            onClick={() => setEditor({ mode: 'edit', group })}
                           >
                             <Pencil size={13} />
                           </button>
@@ -172,7 +176,7 @@ export default function TrucksFilter() {
                           {overflow > 0 && (
                             <button
                               className="tf-chip tf-chip-more"
-                              onClick={() => openEditor(name)}
+                              onClick={() => setEditor({ mode: 'edit', group })}
                             >
                               +{overflow}
                             </button>
@@ -182,51 +186,11 @@ export default function TrucksFilter() {
                     )
                   })}
                 </div>
+
+                <button className="cf-edit-btn tf-add" onClick={() => setEditor({ mode: 'new' })}>
+                  <Plus size={15} /> New group
+                </button>
               </>
-            )}
-
-            {editing && (
-              <div className="tf-edit-panel">
-                <div className="tf-edit-head">
-                  <div className="tf-edit-title">
-                    <Pencil size={15} />
-                    <span>Edit {editing.toLowerCase()} equip</span>
-                  </div>
-                  <button
-                    className="tf-edit-close"
-                    onClick={() => setEditing(null)}
-                    aria-label="Close"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <p className="tf-edit-sub">Add or remove trucks from this equip</p>
-
-                <div className="tf-search">
-                  <Search size={15} color="var(--text-muted)" />
-                  <input
-                    placeholder="Search"
-                    value={editSearch}
-                    onChange={(e) => setEditSearch(e.target.value)}
-                  />
-                </div>
-
-                <div className="tf-scroll tf-edit-list">
-                  {editPool.map((id) => {
-                    const active = groups[editing].includes(id)
-                    return (
-                      <button
-                        key={id}
-                        className={`cf-item ${active ? 'active' : ''}`}
-                        onClick={() => toggleTruckInGroup(editing, id)}
-                      >
-                        {id}
-                        {active && <Check size={17} className="cf-check" />}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
             )}
           </div>
         </>
@@ -236,6 +200,18 @@ export default function TrucksFilter() {
         <AddCabModal
           onClose={() => setShowAddCab(false)}
           onAdd={(name) => setTrucks((t) => [name, ...t])}
+        />
+      )}
+
+      {editor && (
+        <GroupModal
+          mode={editor.mode}
+          initialName={editor.mode === 'edit' ? editor.group.name : ''}
+          initialTrucks={editor.mode === 'edit' ? editor.group.trucks : []}
+          fleetPool={fleetPool}
+          onClose={() => setEditor(null)}
+          onSave={saveGroup}
+          onDelete={editor.mode === 'edit' ? deleteGroup : undefined}
         />
       )}
     </div>
