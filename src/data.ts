@@ -71,10 +71,10 @@ export const kpiCards: KpiCard[] = [
     ],
     details: [
       { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0) },
-      { label: 'Negotiated rate / mile', value: '$4.10', unit: '/mi', delta: '+0.10', goal: 'high', hint: 'Rate agreed with the client, per loaded mile', series: ts(4.1, 3) },
-      { label: 'RPM total', value: '$3.43', unit: '/mi', delta: '+0.05', goal: 'high', hint: 'What you actually earn per mile driven', series: ts(3.43, 2) },
-      { label: 'Profit / mile loaded', value: '$1.061', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Profit earned per loaded mile', series: ts(1.061, 0) },
-      { label: 'Profit / mile total', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
+      { label: 'Profit / mile', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
+      { label: 'Income / truck', value: '$740', unit: '/day', delta: '+18', goal: 'high', hint: 'Average revenue per truck per day', series: ts(740, 3) },
+      { label: 'Total leak', value: '-$1,200', unit: '/day', delta: '-40', goal: 'low', hint: 'Money lost to inefficiency per day', series: ts(1.2, 1) },
+      { label: 'Recoverable ( a recipe )', value: '+$88k', unit: '/mo', delta: '+6', goal: 'high', hint: 'Monthly money you could recover by following the winning recipe', series: ts(88, 0) },
     ],
   },
   {
@@ -92,10 +92,10 @@ export const kpiCards: KpiCard[] = [
     ],
     details: [
       { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: 'Share of expected revenue lost to inefficiency', series: ts(5.45, 1) },
-      { label: 'Empty miles', value: '11.8%', delta: '-0.4', goal: 'low', hint: 'Miles driven without a load', series: ts(11.8, 1) },
-      { label: 'Route deviation', value: '6.2%', delta: '-0.1', goal: 'low', hint: 'Miles run off the planned route', series: ts(6.2, 2) },
-      { label: 'Idle time', value: '10.7%', delta: '-0.3', goal: 'low', hint: 'Share of engine hours spent idling', series: ts(10.7, 1) },
-      { label: 'Late deliveries', value: '7%', delta: '-0.5', goal: 'low', hint: 'Loads delivered past the window', series: ts(7, 3) },
+      { label: '% Deadhead', value: '19.4%', delta: '-0.6', goal: 'low', hint: 'Share of miles driven empty', series: ts(19.4, 1) },
+      { label: 'Idle %', value: '12.1%', delta: '-0.3', goal: 'low', hint: 'Share of engine hours spent idling', series: ts(12.1, 1) },
+      { label: 'MPG', value: '6.18', unit: 'mpg', delta: '+0.12', goal: 'high', hint: 'Miles per gallon, fleet average', series: ts(6.18, 0) },
+      { label: 'Cost / mile', value: '$1.97', unit: '/mi', delta: '-0.03', goal: 'low', hint: 'All-in operating cost per mile', series: ts(1.97, 2) },
     ],
   },
   {

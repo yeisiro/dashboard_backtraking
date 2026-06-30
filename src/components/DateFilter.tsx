@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
-import { usePeriod, compareLabelFor } from '../PeriodContext'
+import { usePeriod, compareLabelFor, prevPeriodLabel } from '../PeriodContext'
 
 const presets = ['Custom', 'Last 7 days', 'Last 15 days', 'Last 30 days'] as const
 type Preset = (typeof presets)[number]
@@ -41,7 +41,7 @@ function formatLabel(start: Date | null, end: Date | null) {
 }
 
 export default function DateFilter() {
-  const { setCompareLabel } = usePeriod()
+  const { rangeDays, setPeriod } = usePeriod()
   const [open, setOpen] = useState(false)
   const [preset, setPreset] = useState<Preset>('Last 7 days')
   const init = rangeForPreset('Last 7 days')
@@ -54,14 +54,16 @@ export default function DateFilter() {
     if (p === 'Custom') {
       setStart(null)
       setEnd(null)
-      setCompareLabel(compareLabelFor('Custom', null))
+      // Keep the current window length until the user picks a full range.
+      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
       return
     }
     const r = rangeForPreset(p)
+    const days = p === 'Last 15 days' ? 15 : p === 'Last 30 days' ? 30 : 7
     setStart(r.start)
     setEnd(r.end)
     setView(new Date(r.end.getFullYear(), r.end.getMonth(), 1))
-    setCompareLabel(compareLabelFor(p, null))
+    setPeriod(compareLabelFor(p, null), days, prevPeriodLabel(r.start, days), r.end)
   }
 
   const clickDay = (day: Date) => {
@@ -69,13 +71,13 @@ export default function DateFilter() {
     if (!start || (start && end)) {
       setStart(day)
       setEnd(null)
-      setCompareLabel(compareLabelFor('Custom', null))
+      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
     } else if (day < start) {
       setStart(day)
     } else {
       setEnd(day)
       const days = Math.round((startOfDay(day).getTime() - startOfDay(start).getTime()) / 86400000) + 1
-      setCompareLabel(compareLabelFor('Custom', days))
+      setPeriod(compareLabelFor('Custom', days), days, prevPeriodLabel(start, days), startOfDay(day))
     }
   }
 

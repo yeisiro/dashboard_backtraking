@@ -12,7 +12,7 @@ import { usePeriod } from '../PeriodContext'
 import KpiDetailModal from './KpiDetailModal'
 
 export default function KpiCards() {
-  const { compareLabel } = usePeriod()
+  const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
 
   return (
@@ -34,11 +34,11 @@ export default function KpiCards() {
           {card.metrics.length > 1 ? (
             <div className="kpi-rows">
               {card.metrics.map((m, i) => (
-                <CompactRow m={m} compare={compareLabel} key={i} />
+                <CompactRow m={m} compare={compareLabel} range={compareRange} key={i} />
               ))}
             </div>
           ) : (
-            <Metric m={card.metrics[0]} compare={compareLabel} />
+            <Metric m={card.metrics[0]} compare={compareLabel} range={compareRange} />
           )}
         </div>
       ))}
@@ -60,7 +60,18 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
   return <Minus size={size} />
 }
 
-function CompactRow({ m, compare }: { m: KpiMetric; compare: string }) {
+function CompareLabel({ compare, range }: { compare: string; range: string }) {
+  return (
+    <span
+      className="crow-vs cmp-tip"
+      data-tip={range ? `Compared to ${range}` : 'Compared to the previous period'}
+    >
+      {compare}
+    </span>
+  )
+}
+
+function CompactRow({ m, compare, range }: { m: KpiMetric; compare: string; range: string }) {
   const trend = deltaTrend(m.footDelta)
   return (
     <div className="kpi-crow">
@@ -73,14 +84,14 @@ function CompactRow({ m, compare }: { m: KpiMetric; compare: string }) {
             {m.footDelta}
           </span>
         )}
-        {m.footDelta && <span className="crow-vs">{compare}</span>}
+        {m.footDelta && <CompareLabel compare={compare} range={range} />}
         {m.foot && <span className="crow-foot">{m.foot}</span>}
       </span>
     </div>
   )
 }
 
-function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
+function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: string }) {
   return (
     <>
       <div className="sub">{m.sub}</div>
@@ -92,7 +103,7 @@ function Metric({ m, compare }: { m: KpiMetric; compare: string }) {
               <DeltaArrow trend={deltaTrend(m.footDelta)} size={12} />
               {m.footDelta}
             </span>
-            <span className="crow-vs">{compare}</span>
+            <CompareLabel compare={compare} range={range} />
           </span>
         )}
       </div>
