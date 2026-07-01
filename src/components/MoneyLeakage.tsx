@@ -1,18 +1,34 @@
 import { useState } from 'react'
-import { Info, ArrowUpRight, TrendingUp } from 'lucide-react'
-import { leakBars } from '../data'
+import { Info, ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { leakBars, leakTotal, leakDelta, deltaTone, deltaTrend } from '../data'
+import { usePeriod } from '../PeriodContext'
 
 const ticks = ['$0', '$2k', '$4k', '$6k', '$8k', '$10k']
 
+function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: number }) {
+  if (trend === 'up') return <TrendingUp size={size} style={{ verticalAlign: '-1px' }} />
+  if (trend === 'down') return <TrendingDown size={size} style={{ verticalAlign: '-1px' }} />
+  return <Minus size={size} style={{ verticalAlign: '-1px' }} />
+}
+
 export default function MoneyLeakage() {
   const [seg, setSeg] = useState<'general' | 'planned' | 'executed'>('general')
+  const { compareLabel, compareRange } = usePeriod()
+  const tone = deltaTone(leakDelta, 'low')
+  const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
 
   return (
     <section className="card">
       <div className="card-head">
         <div className="title">
           <span className="eyebrow">Money Lekeage Breakdown</span>
-          <Info size={14} color="var(--text-muted)" />
+          <span className="info-tip" tabIndex={0}>
+            <Info size={14} color="var(--text-muted)" />
+            <span className="info-tip-bubble" role="tooltip">
+              Breakdown of where money is being lost across your fleet, by
+              leakage category.
+            </span>
+          </span>
         </div>
         <button className="btn-ghost">
           Compare <ArrowUpRight size={13} />
@@ -21,9 +37,21 @@ export default function MoneyLeakage() {
 
       <div className="leak-body">
         <div className="leak-amount">
-          <span className="big">$0.00</span>
-          <span className="wow pos">
-            <TrendingUp size={12} style={{ verticalAlign: '-1px' }} /> +0.4 pp WoW
+          <span className="big">{leakTotal}</span>
+          <span className="kpi-cmp">
+            <span className={`delta ${toneClass}`}>
+              <DeltaArrow trend={deltaTrend(leakDelta)} size={12} /> {leakDelta}
+            </span>
+            <span
+              className="crow-vs cmp-tip"
+              data-tip={
+                compareRange
+                  ? `Compared to ${compareRange}`
+                  : 'Compared to the previous period'
+              }
+            >
+              {compareLabel}
+            </span>
           </span>
         </div>
 

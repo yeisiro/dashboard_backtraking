@@ -1,12 +1,14 @@
 export type Tone = 'green' | 'yellow' | 'orange' | 'red' | 'blue' | 'gray'
 
 // Which direction is "good" for a metric. 'high' = higher is better
-// (margin, MPG), 'low' = lower is better (wasted rate, idle burn).
-export type Goal = 'high' | 'low'
+// (margin, MPG), 'low' = lower is better (wasted rate, idle burn),
+// 'neutral' = neither up nor down is inherently good (e.g. gallons refueled).
+export type Goal = 'high' | 'low' | 'neutral'
 
 // Color a delta by whether the change is favorable, given the metric's goal.
+// 'neutral' shows the change without judging it good or bad (gray).
 export function deltaTone(delta: string | undefined, goal?: Goal): Tone {
-  if (!delta || !goal) return 'gray'
+  if (!delta || !goal || goal === 'neutral') return 'gray'
   const isNeg = delta.trim().startsWith('-')
   const favorable = goal === 'high' ? !isNeg : isNeg
   return favorable ? 'green' : 'red'
@@ -92,7 +94,7 @@ export const kpiCards: KpiCard[] = [
     ],
     details: [
       { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: 'Share of expected revenue lost to inefficiency', series: ts(5.45, 1) },
-      { label: '% Deadhead', value: '19.4%', delta: '-0.6', goal: 'low', hint: 'Share of miles driven empty', series: ts(19.4, 1) },
+      { label: 'Deadhead %', value: '19.4%', delta: '-0.6', goal: 'low', hint: 'Share of miles driven empty', series: ts(19.4, 1) },
       { label: 'Idle %', value: '12.1%', delta: '-0.3', goal: 'low', hint: 'Share of engine hours spent idling', series: ts(12.1, 1) },
       { label: 'MPG', value: '6.18', unit: 'mpg', delta: '+0.12', goal: 'high', hint: 'Miles per gallon, fleet average', series: ts(6.18, 0) },
       { label: 'Cost / mile', value: '$1.97', unit: '/mi', delta: '-0.03', goal: 'low', hint: 'All-in operating cost per mile', series: ts(1.97, 2) },
@@ -106,16 +108,17 @@ export const kpiCards: KpiCard[] = [
         value: '70.4%',
         statusText: 'Stable',
         statusTone: 'green',
-        foot: '· target 90%',
+        foot: '',
         footDelta: '+1.2',
         goal: 'high',
       },
     ],
     details: [
       { label: 'Adherence', value: '70.4%', delta: '+1.2', goal: 'high', hint: 'Trips run as planned', series: ts(70.4, 0) },
-      { label: 'On-time delivery', value: '88%', delta: '+0.6', goal: 'high', hint: 'Loads delivered within window', series: ts(88, 3) },
-      { label: 'Plan compliance', value: '60%', delta: '-0.4', goal: 'high', hint: 'Executed vs planned routing', series: ts(60, 1) },
-      { label: 'Detention hrs', value: '2.4', unit: 'h', delta: '-0.3', goal: 'low', hint: 'Avg hours held at dock', series: ts(2.4, 1) },
+      { label: 'Late departures', value: '14', delta: '-2', goal: 'low', hint: 'Trips that left after the scheduled time', series: ts(14, 1) },
+      { label: 'Off-route events', value: '23', delta: '-5', goal: 'low', hint: 'Times a truck left the planned route', series: ts(23, 2) },
+      { label: 'Fuel deviations', value: '17', delta: '-3', goal: 'low', hint: 'Fuel usage anomalies vs plan', series: ts(17, 1) },
+      { label: 'Plan adherence / load', value: '67.8%', delta: '+1.1', goal: 'high', hint: 'Loads executed as planned', series: ts(67.8, 3) },
     ],
   },
   {
@@ -126,16 +129,17 @@ export const kpiCards: KpiCard[] = [
         value: '+$0.18/gal',
         statusText: 'Overpay',
         statusTone: 'yellow',
-        foot: '· Iran Shock context',
+        foot: '',
         footDelta: '+0.04',
         goal: 'low',
       },
     ],
     details: [
       { label: 'CPG vs optimal', value: '+$0.18', unit: '/gal', delta: '+0.04', goal: 'low', hint: 'Overpay vs optimal cost per gallon', series: ts(0.18, 2) },
-      { label: 'MPG', value: '6.9', unit: 'mpg', delta: '+0.16', goal: 'high', hint: 'Miles per gallon, fleet avg', series: ts(6.9, 0) },
-      { label: 'Idle burn', value: '10.7%', delta: '-0.3', goal: 'low', hint: '% of fuel burned idling', series: ts(10.7, 1) },
-      { label: 'Fuel spend / wk', value: '$92K', delta: '-1.1K', goal: 'low', hint: 'Total weekly fuel cost', series: ts(92, 1) },
+      { label: 'Optimal CPG', value: '$3.42', delta: '+0.02', goal: 'low', hint: 'Best achievable cost per gallon', series: ts(3.42, 0) },
+      { label: 'Actual CPG', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon actually paid', series: ts(3.6, 2) },
+      { label: 'Gallons refueled', value: '142,830', delta: '+1.2K', goal: 'neutral', hint: 'Total gallons refueled in the period', series: ts(142830, 3) },
+      { label: 'Fuel missed sav', value: '$25,710', delta: '+820', goal: 'low', hint: 'Savings missed vs optimal fueling', series: ts(25710, 1) },
     ],
   },
   {
@@ -146,16 +150,17 @@ export const kpiCards: KpiCard[] = [
         value: '−2.3 pp',
         statusText: 'Behind',
         statusTone: 'red',
-        foot: 'opportunity $24K/wk',
+        foot: '',
         footDelta: '',
         goal: 'high',
       },
     ],
     details: [
       { label: 'vs market', value: '−2.3 pp', delta: '-0.2', goal: 'high', hint: 'Margin gap vs market benchmark', series: ts(2.3, 1) },
-      { label: 'Win rate', value: '34%', delta: '+1.1', goal: 'high', hint: 'Bids won vs quoted', series: ts(34, 0) },
-      { label: 'Lane coverage', value: '78%', delta: '+0.5', goal: 'high', hint: 'Lanes served vs demand', series: ts(78, 3) },
-      { label: 'Rate index', value: '0.97', delta: '+0.01', goal: 'high', hint: 'Your rate vs market index', series: ts(0.97, 2) },
+      { label: 'RPM negotiated', value: '$3.37', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Negotiated revenue per mile', series: ts(3.37, 0) },
+      { label: 'RPM effective', value: '$2.62', unit: '/mi', delta: '-0.02', goal: 'high', hint: 'Actual revenue earned per mile', series: ts(2.62, 2) },
+      { label: 'Lane gap (top5)', value: '-$0.13', unit: '/mi', delta: '+0.01', goal: 'high', hint: 'Rate gap vs market on your top 5 lanes', series: ts(0.13, 1) },
+      { label: 'Opportunity', value: '$24k', unit: '/wk', delta: '+2K', goal: 'high', hint: 'Weekly upside if you close the market gap', series: ts(24, 3) },
     ],
   },
 ]
@@ -169,12 +174,16 @@ export interface LeakBar {
 }
 
 export const leakBars: LeakBar[] = [
-  { name: 'Missed Fuel savings', pct: 32, amount: '-$7,200', width: 80, color: '#c2453f' },
-  { name: 'Empty Mile', pct: 26, amount: '-$7,200', width: 66, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 21, amount: '-$7,200', width: 53, color: '#d97a3e' },
-  { name: 'Idle Time', pct: 14, amount: '-$7,200', width: 40, color: '#d99440' },
-  { name: 'Late Deliveries', pct: 7, amount: '-$7,200', width: 22, color: '#e0b24a' },
+  { name: 'Missed Fuel savings', pct: 35, amount: '-$7,000', width: 70, color: '#c2453f' },
+  { name: 'Deadhead Miles', pct: 28, amount: '-$5,600', width: 56, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 22, amount: '-$4,400', width: 44, color: '#d97a3e' },
+  { name: 'Idle Time', pct: 15, amount: '-$3,000', width: 30, color: '#d99440' },
 ]
+
+// Total money lost across all leakage categories (sum of leakBars), and the
+// change vs the comparison period. Goal is 'low' — less leakage is better.
+export const leakTotal = '-$20,000'
+export const leakDelta = '-5.2%'
 
 export interface RankRow {
   rank: string
