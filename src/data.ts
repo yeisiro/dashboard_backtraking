@@ -38,6 +38,11 @@ export interface DetailMetric {
   goal?: Goal
   hint?: string
   series: number[]
+  // Legend name for the primary series when a second line is overlaid.
+  seriesLabel?: string
+  // Optional second line drawn on the same chart, for related pairs
+  // (e.g. total vs in-route cost, actual vs optimal CPG).
+  compare?: { label: string; value: string; delta?: string; series: number[] }
 }
 
 export interface KpiCard {
@@ -115,7 +120,7 @@ export const kpiCards: KpiCard[] = [
     ],
     details: [
       { label: 'Adherence', value: '70.4%', delta: '+1.2', goal: 'high', hint: 'Trips run as planned', series: ts(70.4, 0) },
-      { label: 'Late departures', value: '14', delta: '-2', goal: 'low', hint: 'Trips that left after the scheduled time', series: ts(14, 1) },
+      { label: 'Late departures', value: '6.8%', delta: '-0.9', goal: 'low', hint: 'Share of trips that departed later than the planned pickup time', series: ts(6.8, 1) },
       { label: 'Off-route events', value: '23', delta: '-5', goal: 'low', hint: 'Times a truck left the planned route', series: ts(23, 2) },
       { label: 'Fuel deviations', value: '17', delta: '-3', goal: 'low', hint: 'Fuel usage anomalies vs plan', series: ts(17, 1) },
       { label: 'Plan adherence / load', value: '67.8%', delta: '+1.1', goal: 'high', hint: 'Loads executed as planned', series: ts(67.8, 3) },
@@ -135,9 +140,9 @@ export const kpiCards: KpiCard[] = [
       },
     ],
     details: [
-      { label: 'CPG vs optimal', value: '+$0.18', unit: '/gal', delta: '+0.04', goal: 'low', hint: 'Overpay vs optimal cost per gallon', series: ts(0.18, 2) },
-      { label: 'Optimal CPG', value: '$3.42', delta: '+0.02', goal: 'low', hint: 'Best achievable cost per gallon', series: ts(3.42, 0) },
-      { label: 'Actual CPG', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon actually paid', series: ts(3.6, 2) },
+      { label: 'CPG vs optimal', value: '+$0.18', unit: '/gal', delta: '+0.04', goal: 'low', hint: 'Overpay per gallon vs the best achievable cost', series: ts(0.18, 2) },
+      { label: 'CPG: actual vs optimal', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon paid vs best achievable', series: ts(3.6, 2), seriesLabel: 'Actual', compare: { label: 'Optimal', value: '$3.42', delta: '+0.02', series: ts(3.42, 0) } },
+      { label: 'Diesel cost', value: '$604,411', delta: '+9.1K', goal: 'neutral', hint: 'Total diesel spend vs the share bought on planned routes', series: ts(604411, 3), seriesLabel: 'Total', compare: { label: 'In routes', value: '$427,923', delta: '+6.2K', series: ts(427923, 3) } },
       { label: 'Gallons refueled', value: '142,830', delta: '+1.2K', goal: 'neutral', hint: 'Total gallons refueled in the period', series: ts(142830, 3) },
       { label: 'Fuel missed sav', value: '$25,710', delta: '+820', goal: 'low', hint: 'Savings missed vs optimal fueling', series: ts(25710, 1) },
     ],

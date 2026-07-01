@@ -49,7 +49,7 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
         <div className="modal-body">
           <p className="cfm-sub">Select a metric, then pick its own time range below.</p>
 
-          <div className="kd-grid" style={{ gridTemplateColumns: `repeat(${metrics.length}, 1fr)` }}>
+          <div className="kd-grid">
             {metrics.map((m, i) => (
               <button
                 key={m.label}
@@ -57,15 +57,48 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
                 onClick={() => setSelected(i)}
               >
                 <span className="kd-metric-label">{m.label}</span>
-                <span className="kd-metric-value">
-                  {m.value}
-                  {m.unit && <span className="kd-unit">{m.unit}</span>}
-                </span>
-                {m.delta && (
-                  <span className={`kd-metric-delta ${toneClass(deltaTone(m.delta, m.goal))}`}>
-                    <DeltaArrow trend={deltaTrend(m.delta)} />
-                    {m.delta} <span className="kd-vs">{compareLabel}</span>
-                  </span>
+                {m.compare ? (
+                  <>
+                    <div className="kd-metric-dual">
+                      <span className="kd-row-name">{m.seriesLabel ?? m.label}</span>
+                      <span className="kd-row-val">
+                        {m.value}
+                        {m.unit && <span className="kd-unit">{m.unit}</span>}
+                      </span>
+                      <span className={`kd-row-delta ${m.delta ? toneClass(deltaTone(m.delta, m.goal)) : ''}`}>
+                        {m.delta && (
+                          <>
+                            <DeltaArrow trend={deltaTrend(m.delta)} />
+                            {m.delta}
+                          </>
+                        )}
+                      </span>
+                      <span className="kd-row-name">{m.compare.label}</span>
+                      <span className="kd-row-val">{m.compare.value}</span>
+                      <span className={`kd-row-delta ${m.compare.delta ? toneClass(deltaTone(m.compare.delta, m.goal)) : ''}`}>
+                        {m.compare.delta && (
+                          <>
+                            <DeltaArrow trend={deltaTrend(m.compare.delta)} />
+                            {m.compare.delta}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <span className="kd-metric-vs">{compareLabel}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="kd-metric-value">
+                      {m.value}
+                      {m.unit && <span className="kd-unit">{m.unit}</span>}
+                    </span>
+                    {m.delta && (
+                      <span className={`kd-metric-delta ${toneClass(deltaTone(m.delta, m.goal))}`}>
+                        <DeltaArrow trend={deltaTrend(m.delta)} />
+                        {m.delta} <span className="kd-vs">{compareLabel}</span>
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             ))}
@@ -130,9 +163,16 @@ function Timeline({
   end: Date
 }) {
   const [hover, setHover] = useState<number | null>(null)
-  // One point per day across the selected window.
-  const s = resample(metric.series, Math.max(2, days))
-  const n = s.length
+  const pts = Math.max(2, days)
+  // Primary line, plus an optional overlaid comparison line, sharing one y-axis.
+  const lines = [
+    { label: metric.seriesLabel ?? metric.label, color: 'var(--green)', value: metric.value, s: resample(metric.series, pts) },
+    ...(metric.compare
+      ? [{ label: metric.compare.label, color: 'var(--blue)', value: metric.compare.value, s: resample(metric.compare.series, pts) }]
+      : []),
+  ]
+  const primary = lines[0].s
+  const n = primary.length
   // Match the viewBox width to the rendered width so preserveAspectRatio="none"
   // doesn't stretch the line, dots and labels horizontally.
   const W = 1000
@@ -141,23 +181,23 @@ function Timeline({
   const padR = 10
   const padT = 14
   const padB = 26
-  const min = Math.min(...s)
-  const max = Math.max(...s)
+  const all = lines.flatMap((l) => l.s)
+  const min = Math.min(...all)
+  const max = Math.max(...all)
   const range = max - min || 1
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
   const y = (v: number) => padT + (1 - (v - min) / range) * (H - padT - padB)
-
-  const line = s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
-  const area = `${line} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
+  const path = (s: number[]) =>
+    s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
+  const area = `${path(primary)} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
 
   const fmtDate = (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
   // Axis labels: dates ending on the selected date, counting back one per day.
-  const labels = s.map((_, i) => {
+  const labels = primary.map((_, i) => {
     const d = new Date(end)
     d.setDate(d.getDate() - (n - 1 - i))
     return fmtDate(d)
   })
-  const tipLabels = labels
   // Thin the x-axis labels to ~10 across, so 60-day windows don't crowd.
   const labelStep = Math.max(1, Math.ceil(n / 10))
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({
@@ -172,10 +212,22 @@ function Timeline({
           <span className="kd-chart-title">{metric.label}</span>
           {metric.hint && <span className="kd-chart-hint">{metric.hint}</span>}
         </div>
-        <span className="kd-chart-cur">
-          {metric.value}
-          {metric.unit && <span className="kd-unit">{metric.unit}</span>}
-        </span>
+        {lines.length > 1 ? (
+          <div className="kd-chart-cur-multi">
+            {lines.map((l) => (
+              <span className="kd-cur-item" key={l.label}>
+                <i style={{ background: l.color }} />
+                <span className="kd-cur-name">{l.label}</span>
+                <strong className="kd-cur-val">{l.value}</strong>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="kd-chart-cur">
+            {metric.value}
+            {metric.unit && <span className="kd-unit">{metric.unit}</span>}
+          </span>
+        )}
       </div>
       <div className="kd-plot">
         <svg className="kd-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
@@ -194,11 +246,24 @@ function Timeline({
             </g>
           ))}
           <path d={area} fill="url(#kdFill)" />
-          <path d={line} fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          {lines.map((l, li) => (
+            <path
+              key={li}
+              d={path(l.s)}
+              fill="none"
+              stroke={l.color}
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              strokeDasharray={li === 0 ? undefined : '5 4'}
+            />
+          ))}
           {hover !== null && (
             <line x1={x(hover)} y1={padT} x2={x(hover)} y2={H - padB} stroke="var(--green)" strokeWidth="1" strokeOpacity="0.4" />
           )}
-          <circle cx={x(n - 1)} cy={y(s[n - 1])} r="4.5" fill="var(--green)" stroke="var(--bg)" strokeWidth="2" />
+          {lines.map((l, li) => (
+            <circle key={li} cx={x(n - 1)} cy={y(l.s[n - 1])} r="4.5" fill={l.color} stroke="var(--bg)" strokeWidth="2" />
+          ))}
           {labels.map((lb, i) =>
             i % labelStep === 0 || i === n - 1 ? (
               <text
@@ -216,7 +281,7 @@ function Timeline({
 
         {/* Hover targets + tooltip, positioned in % so they track the SVG. */}
         <div className="kd-dots">
-          {s.map((v, i) => (
+          {primary.map((v, i) => (
             <div
               key={i}
               className={`kd-dot ${hover === i ? 'on' : ''}`}
@@ -229,10 +294,20 @@ function Timeline({
         {hover !== null && (
           <div
             className="kd-tip"
-            style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(s[hover]) / H) * 100}%` }}
+            style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(primary[hover]) / H) * 100}%` }}
           >
-            <span className="kd-tip-label">{tipLabels[hover]}</span>
-            <strong className="kd-tip-value">{fmtTick(s[hover], metric.value)}</strong>
+            <span className="kd-tip-label">{labels[hover]}</span>
+            {lines.length === 1 ? (
+              <strong className="kd-tip-value">{fmtTick(primary[hover], metric.value)}</strong>
+            ) : (
+              lines.map((l) => (
+                <span className="kd-tip-row" key={l.label}>
+                  <i style={{ background: l.color }} />
+                  <span className="kd-tip-name">{l.label}</span>
+                  <strong className="kd-tip-value">{fmtTick(l.s[hover], metric.value)}</strong>
+                </span>
+              ))
+            )}
           </div>
         )}
       </div>

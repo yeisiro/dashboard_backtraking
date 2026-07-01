@@ -920,8 +920,8 @@ button {
 }
 .kd-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
   margin: 4px 0 20px;
 }
 .kd-timeline {
@@ -959,16 +959,18 @@ button {
 .kd-metric {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: center;
+  gap: 7px;
   text-align: left;
-  padding: 11px 12px;
+  padding: 15px 16px;
   border-radius: 10px;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .kd-metric:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
+  border-color: var(--border-strong);
 }
 .kd-metric.active {
   background: rgba(46, 230, 166, 0.06);
@@ -1037,6 +1039,33 @@ button {
   font-weight: 700;
   letter-spacing: -0.5px;
 }
+/* Two-line chart: both current values with their legend in the header. */
+.kd-chart-cur-multi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-end;
+}
+.kd-cur-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+}
+.kd-cur-item i {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.kd-cur-name {
+  color: var(--text-muted);
+}
+.kd-cur-val {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
 .kd-plot {
   position: relative;
 }
@@ -1102,6 +1131,63 @@ button {
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
+}
+.kd-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kd-tip-row i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.kd-tip-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+.kd-tip-row .kd-tip-value {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* Combined (two-line) metric chip: two labeled rows color-matched to the
+   chart's lines, so it's clear which value/delta belongs to which line. */
+.kd-metric-dual {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px 8px;
+  margin-top: 2px;
+}
+.kd-row-name {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.kd-row-val {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.kd-row-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: end;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kd-metric-vs {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
 }
 
 /* ---------- Connect Fleet modal ---------- */
