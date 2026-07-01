@@ -9,22 +9,31 @@ interface Props {
   onClose: () => void
 }
 
-// Per-card timeline ranges. 4w is shown daily; longer ranges aggregate by week.
+// Timeline ranges. The API returns at most 2 months of data, and each period is
+// compared against an equal-length window just before it — so the widest series
+// is 60 days (30 selected + 30 prior). All ranges are shown daily.
 const TIMELINE_RANGES = [
-  { label: '4w', weeks: 4, daily: true },
-  { label: '8w', weeks: 8, daily: false },
-  { label: '13w', weeks: 13, daily: false },
+  { label: '15d', days: 15 },
+  { label: '30d', days: 30 },
+  { label: '60d', days: 60 },
 ]
-const DEFAULT_RANGE_IDX = 0 // 4w
+
+// Default range mirrors the active date filter: 7d→15d, 15d→30d, 30d→60d
+// (the selected window plus its equal-length comparison window).
+function defaultRangeIdx(rangeDays: number): number {
+  const target = rangeDays * 2
+  const idx = TIMELINE_RANGES.findIndex((r) => r.days >= target)
+  return idx === -1 ? TIMELINE_RANGES.length - 1 : idx
+}
 
 export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
-  const { rangeEnd } = usePeriod()
+  const { rangeEnd, rangeDays } = usePeriod()
   const metrics = card.details ?? []
   const [selected, setSelected] = useState(0)
   // Each card remembers its own timeline range (index into TIMELINE_RANGES).
   const [ranges, setRanges] = useState<Record<number, number>>({})
   const active = metrics[selected]
-  const rangeIdx = ranges[selected] ?? DEFAULT_RANGE_IDX
+  const rangeIdx = ranges[selected] ?? defaultRangeIdx(rangeDays)
   const range = TIMELINE_RANGES[rangeIdx]
 
   return (
@@ -75,7 +84,7 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
                   </button>
                 ))}
               </div>
-              <Timeline metric={active} weeks={range.weeks} daily={range.daily} end={rangeEnd} />
+              <Timeline metric={active} days={range.days} end={rangeEnd} />
             </div>
           )}
         </div>
@@ -113,19 +122,16 @@ function fmtTick(v: number, sample: string): string {
 
 function Timeline({
   metric,
-  weeks,
-  daily,
+  days,
   end,
 }: {
   metric: DetailMetric
-  weeks: number
-  daily: boolean
+  days: number
   end: Date
 }) {
   const [hover, setHover] = useState<number | null>(null)
-  // Daily: one point per day. Weekly: one point per week (W1 … Wn).
-  const points = daily ? weeks * 7 : weeks
-  const s = resample(metric.series, Math.max(2, points))
+  // One point per day across the selected window.
+  const s = resample(metric.series, Math.max(2, days))
   const n = s.length
   // Match the viewBox width to the rendered width so preserveAspectRatio="none"
   // doesn't stretch the line, dots and labels horizontally.
@@ -145,27 +151,15 @@ function Timeline({
   const area = `${line} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
 
   const fmtDate = (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
-  // Axis labels — daily: dates ending on the selected date, counting back.
-  // Weekly: W1 (oldest) … Wn (most recent).
-  const labels = daily
-    ? s.map((_, i) => {
-        const d = new Date(end)
-        d.setDate(d.getDate() - (n - 1 - i))
-        return fmtDate(d)
-      })
-    : s.map((_, i) => `W${i + 1}`)
-  // Hover labels — daily reuses the date; weekly shows the week's date span.
-  const tipLabels = daily
-    ? labels
-    : s.map((_, i) => {
-        const weekEnd = new Date(end)
-        weekEnd.setDate(weekEnd.getDate() - (n - 1 - i) * 7)
-        const weekStart = new Date(weekEnd)
-        weekStart.setDate(weekStart.getDate() - 6)
-        return `${fmtDate(weekStart)} – ${fmtDate(weekEnd)}`
-      })
-  // Weekly: every label. Daily: every other day (Jun 02, Jun 04 …).
-  const labelStep = daily ? 2 : 1
+  // Axis labels: dates ending on the selected date, counting back one per day.
+  const labels = s.map((_, i) => {
+    const d = new Date(end)
+    d.setDate(d.getDate() - (n - 1 - i))
+    return fmtDate(d)
+  })
+  const tipLabels = labels
+  // Thin the x-axis labels to ~10 across, so 60-day windows don't crowd.
+  const labelStep = Math.max(1, Math.ceil(n / 10))
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({
     y: padT + t * (H - padT - padB),
     v: max - t * range,
