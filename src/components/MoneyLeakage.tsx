@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Info, ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { leakBars, leakTotal, leakDelta, deltaTone, deltaTrend } from '../data'
 import { usePeriod } from '../PeriodContext'
+import MoneyLeakageCompare from './MoneyLeakageCompare'
 
 const ticks = ['$0', '$2k', '$4k', '$6k', '$8k', '$10k']
 
@@ -13,6 +14,7 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
 
 export default function MoneyLeakage() {
   const [seg, setSeg] = useState<'general' | 'planned' | 'executed'>('general')
+  const [compareOpen, setCompareOpen] = useState(false)
   const { compareLabel, compareRange } = usePeriod()
   const tone = deltaTone(leakDelta, 'low')
   const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
@@ -21,7 +23,7 @@ export default function MoneyLeakage() {
     <section className="card">
       <div className="card-head">
         <div className="title">
-          <span className="eyebrow">Money Lekeage Breakdown</span>
+          <span className="eyebrow">Money Leakage Breakdown</span>
           <span className="info-tip" tabIndex={0}>
             <Info size={14} color="var(--text-muted)" />
             <span className="info-tip-bubble" role="tooltip">
@@ -30,7 +32,7 @@ export default function MoneyLeakage() {
             </span>
           </span>
         </div>
-        <button className="btn-ghost">
+        <button className="btn-ghost" onClick={() => setCompareOpen(true)}>
           Compare <ArrowUpRight size={13} />
         </button>
       </div>
@@ -106,6 +108,8 @@ export default function MoneyLeakage() {
           </div>
         </div>
       </div>
+
+      {compareOpen && <MoneyLeakageCompare onClose={() => setCompareOpen(false)} />}
     </section>
   )
 }

@@ -2177,3 +2177,104 @@ button {
   .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .recovery-cards { grid-template-columns: 1fr; }
 }
+
+/* ---------- Money leakage compare modal ---------- */
+.mlc {
+  width: 980px;
+}
+.mlc-body {
+  gap: 0;
+  padding: 26px 30px 30px;
+}
+
+.mlc-table {
+  display: flex;
+  flex-direction: column;
+}
+.mlc-trow {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1fr 1.2fr;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mlc-thead {
+  align-items: end;
+  padding-bottom: 12px;
+}
+.mlc-tname {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+.mlc-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.mlc-tcol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-self: end;
+  align-items: flex-end;
+}
+.mlc-tcap {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mlc-tdate {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.mlc-thead .mlc-tname {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mlc-tchange-head {
+  justify-self: end;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mlc-tval {
+  justify-self: end;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.mlc-tchange {
+  justify-self: end;
+}
+.mlc-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.mlc-change.pos { color: var(--green); }
+.mlc-change.neg { color: var(--red); }
+.mlc-change.flat { color: var(--text-muted); }
+.mlc-ttotal {
+  border-bottom: none;
+  border-top: 1px solid var(--border-strong);
+  margin-top: 4px;
+  padding-top: 15px;
+}
+.mlc-ttotal .mlc-tname { font-weight: 700; }
+.mlc-ttotal .mlc-tval { font-size: 16px; font-weight: 700; }

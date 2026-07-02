@@ -178,17 +178,45 @@ export interface LeakBar {
   color: string
 }
 
+// Money Leakage Breakdown — cálculo de cada categoría (ver doc Notion "Nuevo Dashboard").
+// Para que las 5 barras sean disjuntas (sin doble conteo), Missed Fuel Savings NO debe
+// incluir el fuel de las desviaciones; ese fuel vive en Empty Miles y Route Deviations.
+//
+// 1. Missed Fuel Savings  = SUM(ABS(MissedSaving)), MissedSaving = Saving − ActualSaving
+//                           (loads con Optimizer_AvgCostRoute > 0 y Deadhead = 0)
+// 2. Empty Miles          = cost_reposition_deadhead["total"]  (millas DH desvío × $1.9 + fuel)
+// 3. Route Deviations     = cost_route_deviation_excess["total"] (millas Loaded desvío × $1.9 + fuel)
+// 4. Idle Time Cost       = SUM(IdleHours) × idle_gph(0.8) × precio_gal (avg_cost_gallon)
+//                           Samsara no da galones en idle → se estiman con idle_gph configurable.
+// 5. Late Deliveries      = Σ cargas_tarde [ chargeback_fijo + horas_tarde × costo_hora_tarde ]
+//                           horas_tarde = llegada_real − cita_dropoff (más allá de una tolerancia)
 export const leakBars: LeakBar[] = [
-  { name: 'Missed Fuel savings', pct: 35, amount: '-$7,000', width: 70, color: '#c2453f' },
-  { name: 'Deadhead Miles', pct: 28, amount: '-$5,600', width: 56, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 22, amount: '-$4,400', width: 44, color: '#d97a3e' },
-  { name: 'Idle Time', pct: 15, amount: '-$3,000', width: 30, color: '#d99440' },
+  { name: 'Missed Fuel Savings', pct: 33, amount: '-$7,000', width: 70, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 26, amount: '-$5,600', width: 56, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 21, amount: '-$4,400', width: 44, color: '#d97a3e' },
+  { name: 'Idle Time Cost', pct: 13, amount: '-$2,800', width: 28, color: '#d99440' },
+  { name: 'Late Deliveries', pct: 7, amount: '-$1,500', width: 15, color: '#dbb04a' },
 ]
 
 // Total money lost across all leakage categories (sum of leakBars), and the
 // change vs the comparison period. Goal is 'low' — less leakage is better.
-export const leakTotal = '-$20,000'
+export const leakTotal = '-$21,300'
 export const leakDelta = '-5.2%'
+
+// Same categories for the comparison period, shown side-by-side in the compare
+// view. Widths are 0..100 relative to the same $10k axis as leakBars.
+export const leakBarsCompare: LeakBar[] = [
+  { name: 'Missed Fuel Savings', pct: 33, amount: '-$7,200', width: 72, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 24, amount: '-$5,200', width: 52, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 21, amount: '-$4,700', width: 47, color: '#d97a3e' },
+  { name: 'Idle Time Cost', pct: 14, amount: '-$3,100', width: 31, color: '#d99440' },
+  { name: 'Late Deliveries', pct: 8, amount: '-$1,900', width: 19, color: '#dbb04a' },
+]
+
+// Parse a leak amount string like "-$7,200" into a positive number (7200).
+export function leakAmount(s: string): number {
+  return Math.abs(Number(s.replace(/[^0-9.-]/g, ''))) || 0
+}
 
 export interface RankRow {
   rank: string
