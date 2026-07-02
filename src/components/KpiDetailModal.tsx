@@ -74,7 +74,10 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
                         )}
                       </span>
                       <span className="kd-row-name">{m.compare.label}</span>
-                      <span className="kd-row-val">{m.compare.value}</span>
+                      <span className="kd-row-val">
+                        {m.compare.value}
+                        {m.unit && <span className="kd-unit">{m.unit}</span>}
+                      </span>
                       <span className={`kd-row-delta ${m.compare.delta ? toneClass(deltaTone(m.compare.delta, m.goal)) : ''}`}>
                         {m.compare.delta && (
                           <>
@@ -83,6 +86,23 @@ export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
                           </>
                         )}
                       </span>
+                      {m.compare.gap && (
+                        <>
+                          <span className="kd-row-name">Gap</span>
+                          <span className={`kd-row-val ${toneClass(deltaTone(m.compare.gap, m.goal))}`}>
+                            {m.compare.gap}
+                            {m.unit && <span className="kd-unit">{m.unit}</span>}
+                          </span>
+                          <span className={`kd-row-delta ${m.compare.gapDelta ? toneClass(deltaTone(m.compare.gapDelta, m.goal)) : ''}`}>
+                            {m.compare.gapDelta && (
+                              <>
+                                <DeltaArrow trend={deltaTrend(m.compare.gapDelta)} />
+                                {m.compare.gapDelta}
+                              </>
+                            )}
+                          </span>
+                        </>
+                      )}
                     </div>
                     <span className="kd-metric-vs">{compareLabel}</span>
                   </>

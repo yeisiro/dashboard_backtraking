@@ -9,7 +9,7 @@ export type Goal = 'high' | 'low' | 'neutral'
 // 'neutral' shows the change without judging it good or bad (gray).
 export function deltaTone(delta: string | undefined, goal?: Goal): Tone {
   if (!delta || !goal || goal === 'neutral') return 'gray'
-  const isNeg = delta.trim().startsWith('-')
+  const isNeg = isNegative(delta)
   const favorable = goal === 'high' ? !isNeg : isNeg
   return favorable ? 'green' : 'red'
 }
@@ -17,7 +17,14 @@ export function deltaTone(delta: string | undefined, goal?: Goal): Tone {
 // Arrow direction follows the actual sign of the change.
 export function deltaTrend(delta?: string): 'up' | 'down' | 'flat' {
   if (!delta) return 'flat'
-  return delta.trim().startsWith('-') ? 'down' : 'up'
+  return isNegative(delta) ? 'down' : 'up'
+}
+
+// True when a value string is negative — accepts both the ASCII hyphen "-"
+// and the typographic minus "−" (U+2212) used in some display values.
+function isNegative(s: string): boolean {
+  const t = s.trim()
+  return t.startsWith('-') || t.startsWith('−')
 }
 
 export interface KpiMetric {
@@ -42,7 +49,7 @@ export interface DetailMetric {
   seriesLabel?: string
   // Optional second line drawn on the same chart, for related pairs
   // (e.g. total vs in-route cost, actual vs optimal CPG).
-  compare?: { label: string; value: string; delta?: string; series: number[] }
+  compare?: { label: string; value: string; delta?: string; gap?: string; gapDelta?: string; series: number[] }
 }
 
 export interface KpiCard {
@@ -71,7 +78,7 @@ export const kpiCards: KpiCard[] = [
         value: '6.6%',
         statusText: 'Healthy',
         statusTone: 'green',
-        foot: '',
+        foot: 'Net profit as a share of revenue',
         footDelta: '+0.4',
         goal: 'high',
       },
@@ -92,7 +99,7 @@ export const kpiCards: KpiCard[] = [
         value: '5.45%',
         statusText: 'Slipping',
         statusTone: 'yellow',
-        foot: '',
+        foot: 'Share of expected revenue lost to inefficiency',
         footDelta: '-0.2',
         goal: 'low',
       },
@@ -113,7 +120,7 @@ export const kpiCards: KpiCard[] = [
         value: '70.4%',
         statusText: 'Stable',
         statusTone: 'green',
-        foot: '',
+        foot: 'Share of trips run as planned',
         footDelta: '+1.2',
         goal: 'high',
       },
@@ -134,7 +141,7 @@ export const kpiCards: KpiCard[] = [
         value: '+$0.18/gal',
         statusText: 'Overpay',
         statusTone: 'yellow',
-        foot: '',
+        foot: 'Extra cost per gallon vs the best achievable price',
         footDelta: '+0.04',
         goal: 'low',
       },
@@ -151,20 +158,19 @@ export const kpiCards: KpiCard[] = [
     label: 'Market Position',
     metrics: [
       {
-        sub: 'vs market',
-        value: '−2.3 pp',
+        sub: 'Margin gap vs market',
+        value: '−2.3%',
         statusText: 'Behind',
         statusTone: 'red',
-        foot: '',
-        footDelta: '',
+        foot: 'Your margin is 2.3% below the market benchmark',
+        footDelta: '+0.3%',
         goal: 'high',
       },
     ],
     details: [
-      { label: 'vs market', value: '−2.3 pp', delta: '-0.2', goal: 'high', hint: 'Margin gap vs market benchmark', series: ts(2.3, 1) },
-      { label: 'RPM negotiated', value: '$3.37', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Negotiated revenue per mile', series: ts(3.37, 0) },
-      { label: 'RPM effective', value: '$2.62', unit: '/mi', delta: '-0.02', goal: 'high', hint: 'Actual revenue earned per mile', series: ts(2.62, 2) },
-      { label: 'Lane gap (top5)', value: '-$0.13', unit: '/mi', delta: '+0.01', goal: 'high', hint: 'Rate gap vs market on your top 5 lanes', series: ts(0.13, 1) },
+      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Your net margin vs the market benchmark, and the gap between them', series: ts(6.6, 0), seriesLabel: 'Mine', compare: { label: 'Market', value: '8.9%', delta: '+0.1', gap: '−2.3%', gapDelta: '+0.3%', series: ts(8.9, 3) } },
+      { label: 'RPM negotiated', value: '$3.37', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Negotiated revenue per mile — yours vs the market benchmark, and the gap between them', series: ts(3.37, 0), seriesLabel: 'Mine', compare: { label: 'Market', value: '$3.50', delta: '+0.02', gap: '−$0.13', gapDelta: '+0.01', series: ts(3.5, 0) } },
+      { label: 'RPM effective', value: '$2.62', unit: '/mi', delta: '-0.02', goal: 'high', hint: 'Actual revenue earned per mile — yours vs the market benchmark, and the gap between them', series: ts(2.62, 2), seriesLabel: 'Mine', compare: { label: 'Market', value: '$2.75', delta: '+0.01', gap: '−$0.13', gapDelta: '−0.03', series: ts(2.75, 2) } },
       { label: 'Opportunity', value: '$24k', unit: '/wk', delta: '+2K', goal: 'high', hint: 'Weekly upside if you close the market gap', series: ts(24, 3) },
     ],
   },
