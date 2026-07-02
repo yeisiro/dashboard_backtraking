@@ -13,7 +13,7 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
 }
 
 export default function MoneyLeakage() {
-  const [seg, setSeg] = useState<'general' | 'planned' | 'executed'>('general')
+  const [seg, setSeg] = useState<'planned' | 'executed'>('planned')
   const [compareOpen, setCompareOpen] = useState(false)
   const { compareLabel, compareRange } = usePeriod()
   const tone = deltaTone(leakDelta, 'low')
@@ -27,8 +27,9 @@ export default function MoneyLeakage() {
           <span className="info-tip" tabIndex={0}>
             <Info size={14} color="var(--text-muted)" />
             <span className="info-tip-bubble" role="tooltip">
-              Breakdown of where money is being lost across your fleet, by
-              leakage category.
+              Where money is being lost across your fleet. Planned = gap between
+              your plan and the best plan we could build; Executed = gap between
+              your plan and what actually happened.
             </span>
           </span>
         </div>
@@ -61,22 +62,18 @@ export default function MoneyLeakage() {
           <span />
           <div className="segment">
             <button
-              className={seg === 'general' ? 'active' : ''}
-              onClick={() => setSeg('general')}
-            >
-              General
-            </button>
-            <button
               className={seg === 'planned' ? 'active' : ''}
               onClick={() => setSeg('planned')}
+              data-tip="Gap between what you planned and the best plan we could have built for you"
             >
-              Planned <span className="pct">60%</span>
+              Planned
             </button>
             <button
               className={seg === 'executed' ? 'active' : ''}
               onClick={() => setSeg('executed')}
+              data-tip="Gap between what you planned and what actually got executed"
             >
-              Executed <span className="pct">40%</span>
+              Executed
             </button>
           </div>
         </div>

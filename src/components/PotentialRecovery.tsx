@@ -1,19 +1,28 @@
-import { ArrowUpRight, ArrowDown, ArrowUp, Trophy } from 'lucide-react'
-import { bottom3, top3, leaders, type RankRow } from '../data'
+import { useState } from 'react'
+import { ArrowUpRight, ArrowDown, ArrowUp, Info, Trophy, Star, TrendingUp } from 'lucide-react'
+import { bottom5, top5, leaders, type RankRow } from '../data'
+import RecommendationsModal from './RecommendationsModal'
 
 export default function PotentialRecovery() {
+  const [showRecs, setShowRecs] = useState(false)
   return (
-    <section className="card">
+    <section className="card recovery-card">
       <div className="card-head">
         <div className="title" style={{ flexWrap: 'wrap' }}>
           <span className="eyebrow">Potential Recovery</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }}>
-            If you improve these features of your fleet, you could earn more
+          <span
+            className="cf-tip"
+            data-tip="If you improve these features of your fleet, you could earn more"
+          >
+            <Info size={14} color="var(--text-muted)" />
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-ghost">
-            Details <ArrowUpRight size={13} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span className="improve-hint">
+            Recover ~<strong>+$10.5k/mo</strong> with prioritized actions
+          </span>
+          <button className="btn-teal" onClick={() => setShowRecs(true)}>
+            <TrendingUp size={13} /> What to improve
           </button>
           <button className="btn-ghost">
             View fleet analytics <ArrowUpRight size={13} />
@@ -22,35 +31,16 @@ export default function PotentialRecovery() {
       </div>
 
       <div className="recovery-body">
-        <div className="pill-row">
-          <span className="pill green-pill">
-            <span className="metric">+$88k</span> Mo/Recoverable
-          </span>
-          <span className="pill">
-            <span className="metric pos">+12.8 pp</span> Adherence
-          </span>
-          <span className="pill">
-            <span className="metric neg">-10.7 pp</span> Idle
-          </span>
-          <span className="pill">
-            <span className="metric pos">+0.16</span> MPG
-          </span>
-          <span className="pill">The Winning Recipe</span>
-          <button className="btn-teal" style={{ marginLeft: 'auto' }}>
-            Recommendations
-          </button>
-        </div>
-
         <div className="recovery-cards">
           <RankCard
-            title="Bottom 3 - Your Fleet"
+            title="Bottom 5 - What's dragging you down"
             icon={<ArrowDown size={13} color="var(--red)" />}
-            rows={bottom3}
+            rows={bottom5}
           />
           <RankCard
-            title="Top 3 - Your Fleet"
+            title="Top 5 - What's going well"
             icon={<ArrowUp size={13} color="var(--green)" />}
-            rows={top3}
+            rows={top5}
           />
           <RankCard
             title="Market Leaders"
@@ -59,6 +49,8 @@ export default function PotentialRecovery() {
           />
         </div>
       </div>
+
+      {showRecs && <RecommendationsModal onClose={() => setShowRecs(false)} />}
     </section>
   )
 }
@@ -78,15 +70,21 @@ function RankCard({
         {icon}
         {title}
       </div>
-      {rows.map((r, i) => (
-        <div className="mini-row" key={i}>
-          <span className="rank">{r.rank}</span>
-          <span className="name">{r.name}</span>
-          {r.you && <span className="badge-you">Your truck</span>}
-          <span className={`val ${r.tone === 'red' ? 'neg' : 'pos'}`}>{r.value}</span>
-        </div>
-      ))}
-      <button className="mini-more">View More</button>
+      <div className="mini-rows">
+        {rows.map((r, i) => (
+          <div className="mini-row" key={i}>
+            <span className="rank">{r.rank}</span>
+            <span className="name">{r.name}</span>
+            {r.you && (
+              <span className="badge-you">
+                <Star size={11} fill="var(--green)" /> Your truck
+              </span>
+            )}
+            {r.issue && <span className="issue">{r.issue}</span>}
+            <span className={`val ${r.tone === 'red' ? 'neg' : 'pos'}`}>{r.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

@@ -227,25 +227,50 @@ export function leakAmount(s: string): number {
 export interface RankRow {
   rank: string
   name: string
+  issue?: string // what's wrong (bottom) or what's going well (top)
   value: string
   tone: Tone
   you?: boolean
 }
 
-export const bottom3: RankRow[] = [
-  { rank: '01', name: '#4521', value: '-$465/mo', tone: 'red' },
-  { rank: '02', name: '#4521', value: '-$465/mo', tone: 'red' },
-  { rank: '03', name: '#4521', value: '-$465/mo', tone: 'red' },
+// Worst offenders: which trucks are dragging the fleet and why.
+export const bottom5: RankRow[] = [
+  { rank: '01', name: '#7834', issue: 'Deadhead 31% of miles', value: '-$310/wk', tone: 'red' },
+  { rank: '02', name: '#3390', issue: 'Fuel outside corridor', value: '-$280/wk', tone: 'red' },
+  { rank: '03', name: '#2210', issue: 'Idle 28 min/day', value: '-$260/wk', tone: 'red' },
+  { rank: '04', name: '#5567', issue: 'Late departures', value: '-$190/wk', tone: 'red' },
+  { rank: '05', name: '#4521', issue: 'Off-route (I-30)', value: '-$175/wk', tone: 'red' },
 ]
-export const top3: RankRow[] = [
-  { rank: '01', name: '#4521', value: '+$465/mo', tone: 'green' },
-  { rank: '02', name: '#4521', value: '+$465/mo', tone: 'green' },
-  { rank: '03', name: '#4521', value: '+$465/mo', tone: 'green' },
+export const top5: RankRow[] = [
+  { rank: '01', name: '#5012', issue: 'Best route adherence', value: '+$465/wk', tone: 'green' },
+  { rank: '02', name: '#4408', issue: 'Lowest deadhead', value: '+$390/wk', tone: 'green' },
+  { rank: '03', name: '#6120', issue: 'On-corridor fueling', value: '+$355/wk', tone: 'green' },
+  { rank: '04', name: '#3301', issue: 'Fewest idle minutes', value: '+$320/wk', tone: 'green' },
+  { rank: '05', name: '#2884', issue: 'Top fuel economy', value: '+$300/wk', tone: 'green' },
 ]
+// Market benchmark ranking — where your best truck sits against the market.
 export const leaders: RankRow[] = [
   { rank: '01', name: 'Truck X', value: '+$465/mo', tone: 'green' },
   { rank: '02', name: '#4521', value: '+$465/mo', tone: 'green', you: true },
-  { rank: '03', name: 'Truck Z', value: '+$465/mo', tone: 'green' },
+  { rank: '03', name: 'Truck Z', value: '+$450/mo', tone: 'green' },
+  { rank: '04', name: 'Truck W', value: '+$440/mo', tone: 'green' },
+  { rank: '05', name: 'Truck Y', value: '+$430/mo', tone: 'green' },
+]
+
+// What to improve — prioritized actions, ordered by monthly $ upside.
+export interface Recommendation {
+  rank: number
+  action: string
+  detail: string
+  category: string
+  impact: string
+}
+export const recommendations: Recommendation[] = [
+  { rank: 1, action: 'Cut deadhead on ATL → DAL backhauls', detail: 'Truck #7834 running 31% empty', category: 'Efficiency', impact: '+$4.2k/mo' },
+  { rank: 2, action: 'Reduce idle at MS hub', detail: 'Trucks #2210, #5567 idling 28 min/day', category: 'Efficiency', impact: '+$2.8k/mo' },
+  { rank: 3, action: 'Keep fueling on-corridor', detail: 'Truck #3390 refueling off JAX → NSH', category: 'Fuel', impact: '+$1.5k/mo' },
+  { rank: 4, action: 'Lift plan adherence per load', detail: 'Currently 67.8%, below target', category: 'Execution', impact: '+$1.1k/mo' },
+  { rank: 5, action: 'Close margin gap on top 5 lanes', detail: '$0.13/mi below market rate', category: 'Market Position', impact: '+$0.9k/mo' },
 ]
 
 export interface Trip {
