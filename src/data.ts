@@ -81,7 +81,7 @@ export const kpiCards: KpiCard[] = [
       { label: 'Profit / mile', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
       { label: 'Income / truck', value: '$740', unit: '/day', delta: '+18', goal: 'high', hint: 'Average revenue per truck per day', series: ts(740, 3) },
       { label: 'Total leak', value: '-$1,200', unit: '/day', delta: '-40', goal: 'low', hint: 'Money lost to inefficiency per day', series: ts(1.2, 1) },
-      { label: 'Recoverable ( a recipe )', value: '+$88k', unit: '/mo', delta: '+6', goal: 'high', hint: 'Monthly money you could recover by following the winning recipe', series: ts(88, 0) },
+      { label: 'Recoverable', value: '+$300–$900', unit: '/day', delta: '+6', goal: 'high', hint: 'Daily money you could recover — Q1 to Q3 range of the total leak', series: ts(88, 0) },
     ],
   },
   {
