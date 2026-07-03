@@ -63,16 +63,17 @@ export default function MoneyLeakage() {
               </span>
             </span>
           </div>
-        </div>
 
-        {avoidable && (
-          <button className="leak-avoidable" onClick={() => setRecsOpen(true)}>
-            <strong>{avoidable.amount}</strong> saved with a better plan
-            <span className="la-link">
-              See how <ArrowRight size={11} />
-            </span>
-          </button>
-        )}
+          {avoidable && (
+            <button className="leak-avoidable" onClick={() => setRecsOpen(true)}>
+              You could've saved an extra{' '}
+              <strong>{avoidable.amount.replace('-', '')}</strong> with a better plan
+              <span className="la-link">
+                See how <ArrowRight size={11} />
+              </span>
+            </button>
+          )}
+        </div>
 
         <div className="bars">
           {bars.map((b) => (
