@@ -1,14 +1,23 @@
 import { X, TrendingUp } from 'lucide-react'
-import { recommendations } from '../data'
+import { recommendations, type Recommendation } from '../data'
 
-export default function RecommendationsModal({ onClose }: { onClose: () => void }) {
-  const total = recommendations.length
+export default function RecommendationsModal({
+  title = 'What to improve',
+  subtitle,
+  items = recommendations,
+  onClose,
+}: {
+  title?: string
+  subtitle?: string
+  items?: Recommendation[]
+  onClose: () => void
+}) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal recs-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="cfm-title">
-            <TrendingUp size={17} color="var(--green)" /> What to improve
+            <TrendingUp size={17} color="var(--green)" /> {title}
           </span>
           <button className="cfm-x" onClick={onClose} aria-label="Close">
             <X size={18} />
@@ -16,13 +25,10 @@ export default function RecommendationsModal({ onClose }: { onClose: () => void 
         </div>
 
         <div className="modal-body">
-          <p className="cfm-sub">
-            {total} prioritized actions, ordered by monthly upside. Fixing all of them
-            recovers about <strong>+$10.5k/mo</strong>.
-          </p>
+          {subtitle && <p className="cfm-sub">{subtitle}</p>}
 
           <div className="recs-list">
-            {recommendations.map((r) => (
+            {items.map((r) => (
               <div className="recs-row" key={r.rank}>
                 <span className="recs-rank">{r.rank}</span>
                 <div className="recs-text">

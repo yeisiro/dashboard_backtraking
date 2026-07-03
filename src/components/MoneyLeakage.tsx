@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Info, ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { leakBars, leakTotal, leakDelta, deltaTone, deltaTrend } from '../data'
+import { Info, ArrowUpRight, TrendingUp, TrendingDown, Minus, ArrowRight } from 'lucide-react'
+import { leakBars, leakTotal, leakDelta, planFixes, deltaTone, deltaTrend } from '../data'
 import { usePeriod } from '../PeriodContext'
 import MoneyLeakageCompare from './MoneyLeakageCompare'
+import RecommendationsModal from './RecommendationsModal'
 
 const ticks = ['$0', '$2k', '$4k', '$6k', '$8k', '$10k']
+const AVOIDABLE_NAME = 'Ignored recommendations'
 
 function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: number }) {
   if (trend === 'up') return <TrendingUp size={size} style={{ verticalAlign: '-1px' }} />
@@ -13,11 +15,14 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
 }
 
 export default function MoneyLeakage() {
-  const [seg, setSeg] = useState<'planned' | 'executed'>('planned')
   const [compareOpen, setCompareOpen] = useState(false)
+  const [recsOpen, setRecsOpen] = useState(false)
   const { compareLabel, compareRange } = usePeriod()
   const tone = deltaTone(leakDelta, 'low')
   const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
+
+  const avoidable = leakBars.find((b) => b.name === AVOIDABLE_NAME)
+  const bars = leakBars.filter((b) => b.name !== AVOIDABLE_NAME)
 
   return (
     <section className="card">
@@ -27,9 +32,9 @@ export default function MoneyLeakage() {
           <span className="info-tip" tabIndex={0}>
             <Info size={14} color="var(--text-muted)" />
             <span className="info-tip-bubble" role="tooltip">
-              Where money is being lost across your fleet. Planned = gap between
-              your plan and the best plan we could build; Executed = gap between
-              your plan and what actually happened.
+              Where money is being lost across your fleet, by category. "Ignored
+              recommendations" is what you could have saved by following the plan
+              we recommended.
             </span>
           </span>
         </div>
@@ -40,46 +45,37 @@ export default function MoneyLeakage() {
 
       <div className="leak-body">
         <div className="leak-amount">
-          <span className="big">{leakTotal}</span>
-          <span className="kpi-cmp">
-            <span className={`delta ${toneClass}`}>
-              <DeltaArrow trend={deltaTrend(leakDelta)} size={12} /> {leakDelta}
+          <div className="leak-total">
+            <span className="big">{leakTotal}</span>
+            <span className="kpi-cmp">
+              <span className={`delta ${toneClass}`}>
+                <DeltaArrow trend={deltaTrend(leakDelta)} size={12} /> {leakDelta}
+              </span>
+              <span
+                className="crow-vs cmp-tip"
+                data-tip={
+                  compareRange
+                    ? `Compared to ${compareRange}`
+                    : 'Compared to the previous period'
+                }
+              >
+                {compareLabel}
+              </span>
             </span>
-            <span
-              className="crow-vs cmp-tip"
-              data-tip={
-                compareRange
-                  ? `Compared to ${compareRange}`
-                  : 'Compared to the previous period'
-              }
-            >
-              {compareLabel}
-            </span>
-          </span>
-        </div>
-
-        <div className="leak-toprow">
-          <span />
-          <div className="segment">
-            <button
-              className={seg === 'planned' ? 'active' : ''}
-              onClick={() => setSeg('planned')}
-              data-tip="Gap between what you planned and the best plan we could have built for you"
-            >
-              Planned
-            </button>
-            <button
-              className={seg === 'executed' ? 'active' : ''}
-              onClick={() => setSeg('executed')}
-              data-tip="Gap between what you planned and what actually got executed"
-            >
-              Executed
-            </button>
           </div>
         </div>
 
+        {avoidable && (
+          <button className="leak-avoidable" onClick={() => setRecsOpen(true)}>
+            <strong>{avoidable.amount}</strong> saved with a better plan
+            <span className="la-link">
+              See how <ArrowRight size={11} />
+            </span>
+          </button>
+        )}
+
         <div className="bars">
-          {leakBars.map((b) => (
+          {bars.map((b) => (
             <div className="bar-row" key={b.name}>
               <div className="bar-label">
                 <div className="name">{b.name}</div>
@@ -107,6 +103,16 @@ export default function MoneyLeakage() {
       </div>
 
       {compareOpen && <MoneyLeakageCompare onClose={() => setCompareOpen(false)} />}
+      {recsOpen && (
+        <RecommendationsModal
+          title="A different plan would've done better"
+          subtitle={`With better planning this period, these choices would have gone better — worth ${
+            avoidable?.amount.replace('-', '') ?? '$3,700'
+          }.`}
+          items={planFixes}
+          onClose={() => setRecsOpen(false)}
+        />
+      )}
     </section>
   )
 }

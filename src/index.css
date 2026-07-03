@@ -1943,61 +1943,15 @@ button {
   color: #07120d;
 }
 
-/* segmented toggle */
-.segment {
-  display: inline-flex;
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 3px;
-  gap: 2px;
-}
-.segment button {
-  padding: 5px 11px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-.segment button .pct { color: var(--text-dim); }
-.segment button.active {
-  background: var(--surface-3);
-  color: var(--text);
-}
-.segment button[data-tip] { position: relative; cursor: help; }
-.segment button[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 7px);
-  right: 0;
-  width: max-content;
-  max-width: 260px;
-  padding: 8px 10px;
-  background: #05070b;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.4;
-  letter-spacing: normal;
-  text-transform: none;
-  white-space: normal;
-  text-align: left;
-  color: var(--text-dim);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  transform: translateY(3px);
-  pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 40;
-}
-.segment button[data-tip]:hover::after { opacity: 1; transform: translateY(0); }
-
 /* ---------- Money leakage ---------- */
 .leak-body { padding: 4px 18px 18px; }
 .leak-amount {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.leak-total {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -2008,13 +1962,31 @@ button {
   letter-spacing: -0.5px;
 }
 .leak-amount .wow { font-size: 12px; }
-.leak-toprow {
-  display: flex;
+.leak-avoidable {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  margin: 14px 0 18px;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
-.bars { display: flex; flex-direction: column; gap: 16px; }
+.leak-avoidable strong { color: var(--text); font-weight: 700; }
+.la-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--green);
+  font-weight: 600;
+}
+.leak-avoidable:hover .la-link { text-decoration: underline; }
+.bars { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
 .bar-row {
   display: grid;
   grid-template-columns: 130px 1fr;

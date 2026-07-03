@@ -50,7 +50,13 @@ export default function PotentialRecovery() {
         </div>
       </div>
 
-      {showRecs && <RecommendationsModal onClose={() => setShowRecs(false)} />}
+      {showRecs && (
+        <RecommendationsModal
+          title="What to improve"
+          subtitle="Prioritized fleet actions, ordered by monthly upside. Fixing all of them recovers about +$10.5k/mo."
+          onClose={() => setShowRecs(false)}
+        />
+      )}
     </section>
   )
 }

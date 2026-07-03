@@ -88,7 +88,6 @@ export const kpiCards: KpiCard[] = [
       { label: 'Profit / mile', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
       { label: 'Income / truck', value: '$740', unit: '/day', delta: '+18', goal: 'high', hint: 'Average revenue per truck per day', series: ts(740, 3) },
       { label: 'Total leak', value: '-$1,200', unit: '/day', delta: '-40', goal: 'low', hint: 'Money lost to inefficiency per day', series: ts(1.2, 1) },
-      { label: 'Recoverable', value: '+$300–$900', unit: '/day', delta: '+6', goal: 'high', hint: 'Daily money you could recover — Q1 to Q3 range of the total leak', series: ts(88, 0) },
     ],
   },
   {
@@ -148,10 +147,10 @@ export const kpiCards: KpiCard[] = [
     ],
     details: [
       { label: 'CPG vs optimal', value: '+$0.18', unit: '/gal', delta: '+0.04', goal: 'low', hint: 'Overpay per gallon vs the best achievable cost', series: ts(0.18, 2) },
-      { label: 'CPG: actual vs optimal', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon paid vs best achievable', series: ts(3.6, 2), seriesLabel: 'Actual', compare: { label: 'Optimal', value: '$3.42', delta: '+0.02', series: ts(3.42, 0) } },
-      { label: 'Diesel cost', value: '$604,411', delta: '+9.1K', goal: 'neutral', hint: 'Total diesel spend vs the share bought on planned routes', series: ts(604411, 3), seriesLabel: 'Total', compare: { label: 'In routes', value: '$427,923', delta: '+6.2K', series: ts(427923, 3) } },
       { label: 'Gallons refueled', value: '142,830', delta: '+1.2K', goal: 'neutral', hint: 'Total gallons refueled in the period', series: ts(142830, 3) },
       { label: 'Fuel missed sav', value: '$25,710', delta: '+820', goal: 'low', hint: 'Savings missed vs optimal fueling', series: ts(25710, 1) },
+      { label: 'CPG: actual vs optimal', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon paid vs best achievable', series: ts(3.6, 2), seriesLabel: 'Actual', compare: { label: 'Optimal', value: '$3.42', delta: '+0.02', series: ts(3.42, 0) } },
+      { label: 'Diesel cost', value: '$604,411', delta: '+9.1K', goal: 'neutral', hint: 'Total diesel spend vs the share bought on planned routes', series: ts(604411, 3), seriesLabel: 'Total', compare: { label: 'In routes', value: '$427,923', delta: '+6.2K', series: ts(427923, 3) } },
     ],
   },
   {
@@ -171,7 +170,6 @@ export const kpiCards: KpiCard[] = [
       { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Your net margin vs the market benchmark, and the gap between them', series: ts(6.6, 0), seriesLabel: 'Mine', compare: { label: 'Market', value: '8.9%', delta: '+0.1', gap: '−2.3%', gapDelta: '+0.3%', series: ts(8.9, 3) } },
       { label: 'RPM negotiated', value: '$3.37', unit: '/mi', delta: '+0.03', goal: 'high', hint: 'Negotiated revenue per mile — yours vs the market benchmark, and the gap between them', series: ts(3.37, 0), seriesLabel: 'Mine', compare: { label: 'Market', value: '$3.50', delta: '+0.02', gap: '−$0.13', gapDelta: '+0.01', series: ts(3.5, 0) } },
       { label: 'RPM effective', value: '$2.62', unit: '/mi', delta: '-0.02', goal: 'high', hint: 'Actual revenue earned per mile — yours vs the market benchmark, and the gap between them', series: ts(2.62, 2), seriesLabel: 'Mine', compare: { label: 'Market', value: '$2.75', delta: '+0.01', gap: '−$0.13', gapDelta: '−0.03', series: ts(2.75, 2) } },
-      { label: 'Opportunity', value: '$24k', unit: '/wk', delta: '+2K', goal: 'high', hint: 'Weekly upside if you close the market gap', series: ts(24, 3) },
     ],
   },
 ]
@@ -196,27 +194,29 @@ export interface LeakBar {
 //                           Samsara no da galones en idle → se estiman con idle_gph configurable.
 // 5. Late Deliveries      = Σ cargas_tarde [ chargeback_fijo + horas_tarde × costo_hora_tarde ]
 //                           horas_tarde = llegada_real − cita_dropoff (más allá de una tolerancia)
+// "Ignored recommendations" = money you could have saved by following the plan
+// we recommended (the old "Planned" concept, now a leakage category of its own).
 export const leakBars: LeakBar[] = [
-  { name: 'Missed Fuel Savings', pct: 33, amount: '-$7,000', width: 70, color: '#c2453f' },
-  { name: 'Empty Miles', pct: 26, amount: '-$5,600', width: 56, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 21, amount: '-$4,400', width: 44, color: '#d97a3e' },
-  { name: 'Idle Time Cost', pct: 13, amount: '-$2,800', width: 28, color: '#d99440' },
-  { name: 'Late Deliveries', pct: 7, amount: '-$1,500', width: 15, color: '#dbb04a' },
+  { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,000', width: 70, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 24, amount: '-$5,600', width: 56, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 19, amount: '-$4,400', width: 44, color: '#d56b41' },
+  { name: 'Ignored recommendations', pct: 15, amount: '-$3,700', width: 37, color: '#d9843f' },
+  { name: 'Idle Time Cost', pct: 12, amount: '-$2,800', width: 28, color: '#d99f42' },
 ]
 
 // Total money lost across all leakage categories (sum of leakBars), and the
-// change vs the comparison period. Goal is 'low' — less leakage is better.
-export const leakTotal = '-$21,300'
-export const leakDelta = '-5.2%'
+// change in dollars vs the comparison period. Goal is 'low' — less is better.
+export const leakTotal = '-$23,500'
+export const leakDelta = '-$800'
 
 // Same categories for the comparison period, shown side-by-side in the compare
 // view. Widths are 0..100 relative to the same $10k axis as leakBars.
 export const leakBarsCompare: LeakBar[] = [
-  { name: 'Missed Fuel Savings', pct: 33, amount: '-$7,200', width: 72, color: '#c2453f' },
-  { name: 'Empty Miles', pct: 24, amount: '-$5,200', width: 52, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 21, amount: '-$4,700', width: 47, color: '#d97a3e' },
-  { name: 'Idle Time Cost', pct: 14, amount: '-$3,100', width: 31, color: '#d99440' },
-  { name: 'Late Deliveries', pct: 8, amount: '-$1,900', width: 19, color: '#dbb04a' },
+  { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,200', width: 72, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 21, amount: '-$5,200', width: 52, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 19, amount: '-$4,700', width: 47, color: '#d56b41' },
+  { name: 'Ignored recommendations', pct: 17, amount: '-$4,100', width: 41, color: '#d9843f' },
+  { name: 'Idle Time Cost', pct: 13, amount: '-$3,100', width: 31, color: '#d99f42' },
 ]
 
 // Parse a leak amount string like "-$7,200" into a positive number (7200).
@@ -271,6 +271,15 @@ export const recommendations: Recommendation[] = [
   { rank: 3, action: 'Keep fueling on-corridor', detail: 'Truck #3390 refueling off JAX → NSH', category: 'Fuel', impact: '+$1.5k/mo' },
   { rank: 4, action: 'Lift plan adherence per load', detail: 'Currently 67.8%, below target', category: 'Execution', impact: '+$1.1k/mo' },
   { rank: 5, action: 'Close margin gap on top 5 lanes', detail: '$0.13/mi below market rate', category: 'Market Position', impact: '+$0.9k/mo' },
+]
+
+// Plan fixes — how a different plan would have gone better. Together they add
+// up to the "Ignored recommendations" leak ($3,700 this period).
+export const planFixes: Recommendation[] = [
+  { rank: 1, action: 'Assign these loads to lower-cost lanes', detail: '6 loads ran on higher-cost lanes', category: 'Planning', impact: '+$1,400' },
+  { rank: 2, action: 'Plan fuel stops on the cheaper corridor', detail: '3 trucks fueled off the best corridor', category: 'Fuel', impact: '+$900' },
+  { rank: 3, action: 'Schedule earlier departure windows', detail: '8 departures planned too late', category: 'Planning', impact: '+$800' },
+  { rank: 4, action: 'Pair backhauls in the plan', detail: 'Backhauls left unpaired', category: 'Planning', impact: '+$600' },
 ]
 
 export interface Trip {
