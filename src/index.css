@@ -2028,6 +2028,63 @@ button {
   flex-direction: column;
 }
 .recovery-cards { flex: 1; grid-auto-rows: 1fr; }
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 28px 12px;
+  min-height: 120px;
+}
+.empty-state.compact {
+  min-height: 0;
+  padding: 14px 0 4px;
+  align-items: flex-start;
+  text-align: left;
+}
+.empty-state-title { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.empty-state.compact .empty-state-title { font-size: 12px; }
+.empty-state-sub { font-size: 11.5px; color: var(--text-muted); }
+
+/* Fleet-size preview control (demo) */
+.fleet-sim {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+.fleet-sim-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.fleet-sim-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.fleet-sim-btn:hover { background: var(--surface-3); color: var(--text); }
+.fleet-sim-btn.active {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
 .mini-rows {
   flex: 1;
   display: flex;

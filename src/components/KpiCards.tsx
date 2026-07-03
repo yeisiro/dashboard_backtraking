@@ -10,8 +10,9 @@ import {
 } from '../data'
 import { usePeriod } from '../PeriodContext'
 import KpiDetailModal from './KpiDetailModal'
+import EmptyState from './EmptyState'
 
-export default function KpiCards() {
+export default function KpiCards({ noData = false }: { noData?: boolean }) {
   const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
 
@@ -21,17 +22,21 @@ export default function KpiCards() {
         <div className="card kpi" key={card.label}>
           <div className="kpi-head">
             <span className="eyebrow">{card.label}</span>
-            <button
-              className="kpi-arrow"
-              data-tip={`View more details about ${card.label}`}
-              onClick={() => setOpenCard(card)}
-              aria-label={`View more details about ${card.label}`}
-            >
-              <ArrowUpRight size={15} />
-            </button>
+            {!noData && (
+              <button
+                className="kpi-arrow"
+                data-tip={`View more details about ${card.label}`}
+                onClick={() => setOpenCard(card)}
+                aria-label={`View more details about ${card.label}`}
+              >
+                <ArrowUpRight size={15} />
+              </button>
+            )}
           </div>
 
-          {card.metrics.length > 1 ? (
+          {noData ? (
+            <EmptyState compact />
+          ) : card.metrics.length > 1 ? (
             <div className="kpi-rows">
               {card.metrics.map((m, i) => (
                 <CompactRow m={m} compare={compareLabel} range={compareRange} key={i} />

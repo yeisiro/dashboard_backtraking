@@ -4,6 +4,7 @@ import { leakBars, leakTotal, leakDelta, planFixes, deltaTone, deltaTrend } from
 import { usePeriod } from '../PeriodContext'
 import MoneyLeakageCompare from './MoneyLeakageCompare'
 import RecommendationsModal from './RecommendationsModal'
+import EmptyState from './EmptyState'
 
 const ticks = ['$0', '$2k', '$4k', '$6k', '$8k', '$10k']
 const AVOIDABLE_NAME = 'Ignored recommendations'
@@ -14,7 +15,7 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
   return <Minus size={size} style={{ verticalAlign: '-1px' }} />
 }
 
-export default function MoneyLeakage() {
+export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [recsOpen, setRecsOpen] = useState(false)
   const { compareLabel, compareRange } = usePeriod()
@@ -32,17 +33,22 @@ export default function MoneyLeakage() {
           <span className="info-tip" tabIndex={0}>
             <Info size={14} color="var(--text-muted)" />
             <span className="info-tip-bubble" role="tooltip">
-              Where money is being lost across your fleet, by category. "Ignored
-              recommendations" is what you could have saved by following the plan
-              we recommended.
+              Where money is being lost across your fleet, by category.
             </span>
           </span>
         </div>
-        <button className="btn-ghost" onClick={() => setCompareOpen(true)}>
-          Compare <ArrowUpRight size={13} />
-        </button>
+        {!noData && (
+          <button className="btn-ghost" onClick={() => setCompareOpen(true)}>
+            Compare <ArrowUpRight size={13} />
+          </button>
+        )}
       </div>
 
+      {noData ? (
+        <div className="leak-body">
+          <EmptyState />
+        </div>
+      ) : (
       <div className="leak-body">
         <div className="leak-amount">
           <div className="leak-total">
@@ -102,6 +108,7 @@ export default function MoneyLeakage() {
           </div>
         </div>
       </div>
+      )}
 
       {compareOpen && <MoneyLeakageCompare onClose={() => setCompareOpen(false)} />}
       {recsOpen && (

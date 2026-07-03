@@ -10,7 +10,7 @@ const toneColor: Record<Tone, string> = {
   gray: 'var(--text-muted)',
 }
 
-export default function FleetMap() {
+export default function FleetMap({ noData = false }: { noData?: boolean }) {
   return (
     <section className="card map-card">
       <div className="map-head">
@@ -18,7 +18,8 @@ export default function FleetMap() {
           <Maximize2 size={13} /> Expand
         </button>
         <span className="map-live">
-          <i className="dot green" /> 77 trucks live · updated 14s ago
+          <i className={`dot ${noData ? 'gray' : 'green'}`} />{' '}
+          {noData ? 'No trucks live · connect your fleet' : '77 trucks live · updated 14s ago'}
         </span>
       </div>
 
@@ -40,7 +41,7 @@ export default function FleetMap() {
             strokeWidth="1"
           />
 
-          {mapTrucks.map((t, i) => (
+          {!noData && mapTrucks.map((t, i) => (
             <g key={i}>
               {t.ring && (
                 <circle

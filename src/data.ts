@@ -248,6 +248,31 @@ export const top5: RankRow[] = [
   { rank: '04', name: '#3301', issue: 'Fewest idle minutes', value: '+$320/wk', tone: 'green' },
   { rank: '05', name: '#2884', issue: 'Top fuel economy', value: '+$300/wk', tone: 'green' },
 ]
+// Small-fleet simulation (1–5 trucks): with so few trucks, Bottom and Top end
+// up being the same trucks in reverse order — useful to preview the layout.
+export const bottomSmall: RankRow[] = [
+  { rank: '01', name: '#1201', issue: 'Deadhead 24% of miles', value: '-$210/wk', tone: 'red' },
+  { rank: '02', name: '#1188', issue: 'Idle 22 min/day', value: '-$160/wk', tone: 'red' },
+  { rank: '03', name: '#1150', issue: 'Occasional route drift', value: '-$45/wk', tone: 'red' },
+]
+export const topSmall: RankRow[] = [
+  { rank: '01', name: '#1150', issue: 'Best fuel economy', value: '+$180/wk', tone: 'green' },
+  { rank: '02', name: '#1188', issue: 'Good plan adherence', value: '+$90/wk', tone: 'green' },
+  { rank: '03', name: '#1201', issue: 'On-corridor fueling', value: '+$60/wk', tone: 'green' },
+]
+// Single-truck fleet: no ranking makes sense, so show that one truck's own
+// weak spots and strengths (name = the aspect, issue = the detail).
+export const bottomSingle: RankRow[] = [
+  { rank: '01', name: 'Idle time', issue: '18 min/day above target', value: '-$70/wk', tone: 'red' },
+  { rank: '02', name: 'Route drift', issue: '2 minor deviations', value: '-$45/wk', tone: 'red' },
+  { rank: '03', name: 'Fuel stops', issue: '1 off-corridor refuel', value: '-$30/wk', tone: 'red' },
+]
+export const topSingle: RankRow[] = [
+  { rank: '01', name: 'Plan adherence', issue: '98% on plan', value: '+$120/wk', tone: 'green' },
+  { rank: '02', name: 'Fuel economy', issue: '6.4 mpg, top decile', value: '+$60/wk', tone: 'green' },
+  { rank: '03', name: 'On-time delivery', issue: 'no late loads', value: '+$40/wk', tone: 'green' },
+]
+
 // Market benchmark ranking — where your best truck sits against the market.
 export const leaders: RankRow[] = [
   { rank: '01', name: 'Truck X', value: '+$465/mo', tone: 'green' },
