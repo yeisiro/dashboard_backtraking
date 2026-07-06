@@ -22,8 +22,6 @@ export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
   const tone = deltaTone(leakDelta, 'low')
   const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
 
-  const avoidable = leakBars.find((b) => b.name === AVOIDABLE_NAME)
-
   return (
     <section className="card">
       <div className="card-head">
