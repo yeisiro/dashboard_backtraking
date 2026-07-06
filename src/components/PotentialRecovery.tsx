@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, Info, Trophy, Star, TrendingUp, BarChart3 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Info, Trophy, Star, BarChart3 } from 'lucide-react'
 import {
   bottom5,
   top5,
@@ -10,7 +10,6 @@ import {
   leaders,
   type RankRow,
 } from '../data'
-import RecommendationsModal from './RecommendationsModal'
 import MarketBenchmarkModal from './MarketBenchmarkModal'
 import EmptyState from './EmptyState'
 import { usePeriod, currentPeriodLabel } from '../PeriodContext'
@@ -32,14 +31,6 @@ function periodValue(weekly: number, days: number): string {
   return `${sign}$${Math.abs(total).toLocaleString('en-US')}`
 }
 
-// Total upside from acting on all recommendations. Stated as a monthly figure
-// ($10.5k/mo) and scaled to the selected window so it matches the per-row values.
-const MONTHLY_UPSIDE = 10500
-function upsideForWindow(days: number): string {
-  const total = (MONTHLY_UPSIDE / 30) * days
-  return `$${(total / 1000).toFixed(1)}k${periodSuffix(days)}`
-}
-
 const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders: RankRow[] }> = {
   full: { bottom: bottom5, top: top5, leaders },
   small: { bottom: bottomSmall, top: topSmall, leaders },
@@ -48,7 +39,6 @@ const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders
 }
 
 export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: FleetMode }) {
-  const [showRecs, setShowRecs] = useState(false)
   const [showMarket, setShowMarket] = useState(false)
   const { rangeDays, rangeEnd } = usePeriod()
   const data = FLEET_DATA[fleetMode]
@@ -71,15 +61,8 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
         </div>
         {!noData && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span className="improve-hint">
-              By acting on these, you could earn an extra{' '}
-              <strong>{upsideForWindow(rangeDays)}</strong>
-            </span>
-            <button className="btn-teal" onClick={() => setShowRecs(true)}>
-              <TrendingUp size={13} /> What to improve
-            </button>
-            <button className="btn-ghost" onClick={() => setShowMarket(true)}>
-              <BarChart3 size={13} /> How the market is doing
+            <button className="btn-teal" onClick={() => setShowMarket(true)}>
+              <BarChart3 size={13} /> Compare to market
             </button>
           </div>
         )}
@@ -111,13 +94,6 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
         </div>
       </div>
 
-      {showRecs && (
-        <RecommendationsModal
-          title="What to improve"
-          subtitle="Prioritized fleet actions, ordered by monthly upside. Taking all of them saves about +$10.5k/mo going forward."
-          onClose={() => setShowRecs(false)}
-        />
-      )}
       {showMarket && <MarketBenchmarkModal onClose={() => setShowMarket(false)} />}
     </section>
   )
