@@ -38,6 +38,13 @@ export function prevPeriodLabel(start: Date, days: number): string {
   return formatRange(ps, pe)
 }
 
+// Date range of the currently selected window (spans `days` days, ending on
+// `end`). Shown on hover so a per-period value says which dates it covers.
+export function currentPeriodLabel(end: Date, days: number): string {
+  const start = addDays(startOfDay(end), -(days - 1))
+  return formatRange(start, end)
+}
+
 // Comparison range for the default window (Last 7 days ending today).
 export function initialCompareRange(): string {
   const start = addDays(startOfDay(new Date()), -6)

@@ -130,9 +130,7 @@ export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
       {recsOpen && (
         <RecommendationsModal
           title="A different plan would've done better"
-          subtitle={`With better planning this period, these choices would have gone better — worth ${
-            avoidable?.amount.replace('-', '') ?? '$3,700'
-          }.`}
+          subtitle="With better planning this period, these choices would have gone better."
           items={planFixes}
           onClose={() => setRecsOpen(false)}
         />

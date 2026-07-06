@@ -229,58 +229,58 @@ export interface RankRow {
   rank: string
   name: string
   issue?: string // what's wrong (bottom) or what's going well (top)
-  value: string
+  weekly: number // signed $/week baseline; scaled to the selected date window at render
   tone: Tone
   you?: boolean
 }
 
 // Worst offenders: which trucks are dragging the fleet and why.
 export const bottom5: RankRow[] = [
-  { rank: '01', name: '#7834', issue: 'Deadhead 31% of miles', value: '-$310/wk', tone: 'red' },
-  { rank: '02', name: '#3390', issue: 'Fuel outside corridor', value: '-$280/wk', tone: 'red' },
-  { rank: '03', name: '#2210', issue: 'Idle 28 min/day', value: '-$260/wk', tone: 'red' },
-  { rank: '04', name: '#5567', issue: 'Late departures', value: '-$190/wk', tone: 'red' },
-  { rank: '05', name: '#4521', issue: 'Off-route (I-30)', value: '-$175/wk', tone: 'red' },
+  { rank: '01', name: '#7834', issue: 'Deadhead 31% of miles', weekly: -310, tone: 'red' },
+  { rank: '02', name: '#3390', issue: 'Fuel outside corridor', weekly: -280, tone: 'red' },
+  { rank: '03', name: '#2210', issue: 'Idle 28 min/day', weekly: -260, tone: 'red' },
+  { rank: '04', name: '#5567', issue: 'Late departures', weekly: -190, tone: 'red' },
+  { rank: '05', name: '#4521', issue: 'Off-route (I-30)', weekly: -175, tone: 'red' },
 ]
 export const top5: RankRow[] = [
-  { rank: '01', name: '#5012', issue: 'Best route adherence', value: '+$465/wk', tone: 'green' },
-  { rank: '02', name: '#4408', issue: 'Lowest deadhead', value: '+$390/wk', tone: 'green' },
-  { rank: '03', name: '#6120', issue: 'On-corridor fueling', value: '+$355/wk', tone: 'green' },
-  { rank: '04', name: '#3301', issue: 'Fewest idle minutes', value: '+$320/wk', tone: 'green' },
-  { rank: '05', name: '#2884', issue: 'Top fuel economy', value: '+$300/wk', tone: 'green' },
+  { rank: '01', name: '#5012', issue: 'Best route adherence', weekly: 465, tone: 'green' },
+  { rank: '02', name: '#4408', issue: 'Lowest deadhead', weekly: 390, tone: 'green' },
+  { rank: '03', name: '#6120', issue: 'On-corridor fueling', weekly: 355, tone: 'green' },
+  { rank: '04', name: '#3301', issue: 'Fewest idle minutes', weekly: 320, tone: 'green' },
+  { rank: '05', name: '#2884', issue: 'Top fuel economy', weekly: 300, tone: 'green' },
 ]
 // Small-fleet simulation (1–5 trucks): with so few trucks, Bottom and Top end
 // up being the same trucks in reverse order — useful to preview the layout.
 export const bottomSmall: RankRow[] = [
-  { rank: '01', name: '#1201', issue: 'Deadhead 24% of miles', value: '-$210/wk', tone: 'red' },
-  { rank: '02', name: '#1188', issue: 'Idle 22 min/day', value: '-$160/wk', tone: 'red' },
-  { rank: '03', name: '#1150', issue: 'Occasional route drift', value: '-$45/wk', tone: 'red' },
+  { rank: '01', name: '#1201', issue: 'Deadhead 24% of miles', weekly: -210, tone: 'red' },
+  { rank: '02', name: '#1188', issue: 'Idle 22 min/day', weekly: -160, tone: 'red' },
+  { rank: '03', name: '#1150', issue: 'Occasional route drift', weekly: -45, tone: 'red' },
 ]
 export const topSmall: RankRow[] = [
-  { rank: '01', name: '#1150', issue: 'Best fuel economy', value: '+$180/wk', tone: 'green' },
-  { rank: '02', name: '#1188', issue: 'Good plan adherence', value: '+$90/wk', tone: 'green' },
-  { rank: '03', name: '#1201', issue: 'On-corridor fueling', value: '+$60/wk', tone: 'green' },
+  { rank: '01', name: '#1150', issue: 'Best fuel economy', weekly: 180, tone: 'green' },
+  { rank: '02', name: '#1188', issue: 'Good plan adherence', weekly: 90, tone: 'green' },
+  { rank: '03', name: '#1201', issue: 'On-corridor fueling', weekly: 60, tone: 'green' },
 ]
 // Single-truck fleet: no ranking makes sense, so show that one truck's own
 // weak spots and strengths (name = the aspect, issue = the detail).
 export const bottomSingle: RankRow[] = [
-  { rank: '01', name: 'Idle time', issue: '18 min/day above target', value: '-$70/wk', tone: 'red' },
-  { rank: '02', name: 'Route drift', issue: '2 minor deviations', value: '-$45/wk', tone: 'red' },
-  { rank: '03', name: 'Fuel stops', issue: '1 off-corridor refuel', value: '-$30/wk', tone: 'red' },
+  { rank: '01', name: 'Idle time', issue: '18 min/day above target', weekly: -70, tone: 'red' },
+  { rank: '02', name: 'Route drift', issue: '2 minor deviations', weekly: -45, tone: 'red' },
+  { rank: '03', name: 'Fuel stops', issue: '1 off-corridor refuel', weekly: -30, tone: 'red' },
 ]
 export const topSingle: RankRow[] = [
-  { rank: '01', name: 'Plan adherence', issue: '98% on plan', value: '+$120/wk', tone: 'green' },
-  { rank: '02', name: 'Fuel economy', issue: '6.4 mpg, top decile', value: '+$60/wk', tone: 'green' },
-  { rank: '03', name: 'On-time delivery', issue: 'no late loads', value: '+$40/wk', tone: 'green' },
+  { rank: '01', name: 'Plan adherence', issue: '98% on plan', weekly: 120, tone: 'green' },
+  { rank: '02', name: 'Fuel economy', issue: '6.4 mpg, top decile', weekly: 60, tone: 'green' },
+  { rank: '03', name: 'On-time delivery', issue: 'no late loads', weekly: 40, tone: 'green' },
 ]
 
 // Market benchmark ranking — where your best truck sits against the market.
 export const leaders: RankRow[] = [
-  { rank: '01', name: 'Truck X', value: '+$465/mo', tone: 'green' },
-  { rank: '02', name: '#4521', value: '+$465/mo', tone: 'green', you: true },
-  { rank: '03', name: 'Truck Z', value: '+$450/mo', tone: 'green' },
-  { rank: '04', name: 'Truck W', value: '+$440/mo', tone: 'green' },
-  { rank: '05', name: 'Truck Y', value: '+$430/mo', tone: 'green' },
+  { rank: '01', name: 'Truck X', weekly: 465, tone: 'green' },
+  { rank: '02', name: '#4521', weekly: 465, tone: 'green', you: true },
+  { rank: '03', name: 'Truck Z', weekly: 450, tone: 'green' },
+  { rank: '04', name: 'Truck W', weekly: 440, tone: 'green' },
+  { rank: '05', name: 'Truck Y', weekly: 430, tone: 'green' },
 ]
 
 // Market benchmark table — how your trips compare to the market. For each
@@ -338,6 +338,12 @@ export const brokerDrivers: DriverRow[] = [
   { name: 'Spot market', why: 'Low RPM, detention often unpaid', worst: '$1.74', best: '$2.12', leaders: '$2.58', gap: '+$0.46', verdict: 'lose', marketAligned: false },
 ]
 
+// One metric shown per plan (income, cost, booking, connectivity, …).
+export interface PlanMetric {
+  label: string
+  value: string
+}
+
 // What to improve — prioritized actions, ordered by monthly $ upside.
 export interface Recommendation {
   rank: number
@@ -345,23 +351,62 @@ export interface Recommendation {
   detail: string
   category: string
   impact: string
-  // Optional route comparison — the route you ran and its cost vs. a better
-  // route eFrouting would have planned and what it would have cost.
+  // Wrong → right framing: what went wrong, and the concrete move to fix it.
+  problem?: string
+  fix?: string
+  // Optional route comparison — the route you ran vs. a better route eFrouting
+  // would have planned, each with its own metrics (income, cost, booking, …).
   yourRoute?: string
-  yourCost?: string
   betterRoute?: string
-  betterCost?: string
-  // Why the better route was cheaper this trip, and how it leaves the truck
-  // positioned so the *next* move costs less too.
-  whyLess?: string
-  setsUp?: string
+  yourMetrics?: PlanMetric[]
+  betterMetrics?: PlanMetric[]
 }
 export const recommendations: Recommendation[] = [
-  { rank: 1, action: 'Cut deadhead on ATL → DAL backhauls', detail: 'Truck #7834 running 31% empty', category: 'Efficiency', impact: '+$4.2k/mo' },
-  { rank: 2, action: 'Reduce idle at MS hub', detail: 'Trucks #2210, #5567 idling 28 min/day', category: 'Efficiency', impact: '+$2.8k/mo' },
-  { rank: 3, action: 'Keep fueling on-corridor', detail: 'Truck #3390 refueling off JAX → NSH', category: 'Fuel', impact: '+$1.5k/mo' },
-  { rank: 4, action: 'Lift plan adherence per load', detail: 'Currently 67.8%, below target', category: 'Execution', impact: '+$1.1k/mo' },
-  { rank: 5, action: 'Close margin gap on top 5 lanes', detail: '$0.13/mi below market rate', category: 'Market Position', impact: '+$0.9k/mo' },
+  {
+    rank: 1,
+    action: 'Cut deadhead on ATL → DAL backhauls',
+    detail: 'Truck #7834 running 31% empty',
+    category: 'Efficiency',
+    impact: '+$4.2k/mo',
+    problem: 'Truck #7834 ran 31% of its miles empty on ATL → DAL backhauls.',
+    fix: 'Book a paired backhaul out of DAL so the return leg carries a load.',
+  },
+  {
+    rank: 2,
+    action: 'Reduce idle at MS hub',
+    detail: 'Trucks #2210, #5567 idling 28 min/day',
+    category: 'Efficiency',
+    impact: '+$2.8k/mo',
+    problem: 'Trucks #2210 and #5567 idled 28 min/day waiting at the MS hub.',
+    fix: 'Stagger dock appointments so trucks arrive to an open door, not a queue.',
+  },
+  {
+    rank: 3,
+    action: 'Keep fueling on-corridor',
+    detail: 'Truck #3390 refueling off JAX → NSH',
+    category: 'Fuel',
+    impact: '+$1.5k/mo',
+    problem: 'Truck #3390 refueled off the JAX → NSH corridor at retail pumps.',
+    fix: 'Route fuel stops onto on-corridor network pumps (~$0.30/gal cheaper).',
+  },
+  {
+    rank: 4,
+    action: 'Lift plan adherence per load',
+    detail: 'Currently 67.8%, below target',
+    category: 'Execution',
+    impact: '+$1.1k/mo',
+    problem: 'Plan adherence is 67.8%, below the 80% target.',
+    fix: 'Coach drivers to follow the dispatched plan and flag deviations early.',
+  },
+  {
+    rank: 5,
+    action: 'Close margin gap on top 5 lanes',
+    detail: '$0.13/mi below market rate',
+    category: 'Market Position',
+    impact: '+$0.9k/mo',
+    problem: 'Your top 5 lanes bill $0.13/mi below the market rate.',
+    fix: 'Renegotiate those lane rates or shift volume to higher-RPM brokers.',
+  },
 ]
 
 // Plan fixes — how a different plan would have gone better. Together they add
@@ -373,12 +418,20 @@ export const planFixes: Recommendation[] = [
     detail: '6 loads ran on higher-cost lanes',
     category: 'Planning',
     impact: '+$1,400',
-    yourRoute: 'ATL → DAL · via I-30 premium lanes',
-    yourCost: '$8,200',
-    betterRoute: 'ATL → DAL · via I-20 lower-cost lanes',
-    betterCost: '$6,800',
-    whyLess: 'I-20 skips the toll corridor and runs 40 fewer loaded miles at a lower cost-per-mile.',
-    setsUp: 'Drops you at the DAL freight hub where your next load is already booked. The I-30 plan would have left you 60 mi out — another ~$220 of deadhead just to start the next trip.',
+    yourRoute: 'Los Angeles, CA → Miami, FL',
+    betterRoute: 'Los Angeles, CA → Dallas, TX → Miami, FL',
+    yourMetrics: [
+      { label: 'Income', value: '$10,600' },
+      { label: 'Cost', value: '$8,200' },
+      { label: 'Booking', value: '62%' },
+      { label: 'Connectivity', value: '48%' },
+    ],
+    betterMetrics: [
+      { label: 'Income', value: '$10,600' },
+      { label: 'Cost', value: '$6,800' },
+      { label: 'Booking', value: '88%' },
+      { label: 'Connectivity', value: '91%' },
+    ],
   },
   {
     rank: 2,
@@ -386,12 +439,20 @@ export const planFixes: Recommendation[] = [
     detail: '3 trucks fueled off the planned corridor',
     category: 'Planning',
     impact: '+$900',
-    yourRoute: 'JAX → NSH · fueled off-corridor at retail',
-    yourCost: '$4,300',
-    betterRoute: 'JAX → NSH · stops planned on-corridor',
-    betterCost: '$3,400',
-    whyLess: 'Planned stops sit on discounted network pumps ~$0.30/gal below the retail stations you diverted to.',
-    setsUp: 'No detour means you reach NSH on schedule, so the next dispatch departs on time instead of paying a late-reload premium.',
+    yourRoute: 'Jacksonville, FL → Nashville, TN',
+    betterRoute: 'Jacksonville, FL → Atlanta, GA → Nashville, TN',
+    yourMetrics: [
+      { label: 'Income', value: '$5,700' },
+      { label: 'Cost', value: '$4,300' },
+      { label: 'Booking', value: '55%' },
+      { label: 'Connectivity', value: '40%' },
+    ],
+    betterMetrics: [
+      { label: 'Income', value: '$5,700' },
+      { label: 'Cost', value: '$3,400' },
+      { label: 'Booking', value: '84%' },
+      { label: 'Connectivity', value: '86%' },
+    ],
   },
   {
     rank: 3,
@@ -399,12 +460,20 @@ export const planFixes: Recommendation[] = [
     detail: '8 departures planned too late',
     category: 'Planning',
     impact: '+$800',
-    yourRoute: 'CHI → ATL · departed in peak traffic',
-    yourCost: '$5,600',
-    betterRoute: 'CHI → ATL · depart ~90 min earlier, off-peak',
-    betterCost: '$4,800',
-    whyLess: 'Leaving off-peak skips 2+ hrs of stop-and-go, cutting idle burn and hours on the clock.',
-    setsUp: 'Arrives before the ATL window closes, freeing the truck for a same-day backhaul instead of sitting overnight — about $300 in idle and a missed load.',
+    yourRoute: 'Chicago, IL → Atlanta, GA',
+    betterRoute: 'Chicago, IL → Nashville, TN → Atlanta, GA',
+    yourMetrics: [
+      { label: 'Income', value: '$7,200' },
+      { label: 'Cost', value: '$5,600' },
+      { label: 'Booking', value: '60%' },
+      { label: 'Connectivity', value: '52%' },
+    ],
+    betterMetrics: [
+      { label: 'Income', value: '$7,200' },
+      { label: 'Cost', value: '$4,800' },
+      { label: 'Booking', value: '82%' },
+      { label: 'Connectivity', value: '88%' },
+    ],
   },
   {
     rank: 4,
@@ -412,12 +481,20 @@ export const planFixes: Recommendation[] = [
     detail: 'Backhauls left unpaired',
     category: 'Planning',
     impact: '+$600',
-    yourRoute: 'ATL → DAL · returned empty',
-    yourCost: '$3,900',
-    betterRoute: 'ATL → DAL · paired with DAL → ATL backhaul',
-    betterCost: '$3,300',
-    whyLess: 'The paired load covers the return miles with paying freight instead of running deadhead.',
-    setsUp: 'Leaves the truck back at home base loaded and on-cycle, so the next week starts without a repositioning leg.',
+    yourRoute: 'Atlanta, GA → Dallas, TX',
+    betterRoute: 'Atlanta, GA → Dallas, TX → Atlanta, GA',
+    yourMetrics: [
+      { label: 'Income', value: '$5,100' },
+      { label: 'Cost', value: '$3,900' },
+      { label: 'Booking', value: '58%' },
+      { label: 'Connectivity', value: '45%' },
+    ],
+    betterMetrics: [
+      { label: 'Income', value: '$5,100' },
+      { label: 'Cost', value: '$3,300' },
+      { label: 'Booking', value: '90%' },
+      { label: 'Connectivity', value: '93%' },
+    ],
   },
 ]
 

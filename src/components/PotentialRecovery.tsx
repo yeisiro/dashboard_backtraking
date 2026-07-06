@@ -13,8 +13,32 @@ import {
 import RecommendationsModal from './RecommendationsModal'
 import MarketBenchmarkModal from './MarketBenchmarkModal'
 import EmptyState from './EmptyState'
+import { usePeriod, currentPeriodLabel } from '../PeriodContext'
 
 export type FleetMode = 'full' | 'small' | 'single' | 'empty'
+
+// Short suffix for the selected window: nice "/wk" and "/mo" for the common
+// presets, generic "/Nd" otherwise. The exact dates go in the hover tooltip.
+function periodSuffix(days: number): string {
+  if (days === 7) return '/wk'
+  if (days === 30) return '/mo'
+  return `/${days}d`
+}
+
+// Weekly baseline scaled to the selected window, e.g. -310/wk over 30 days.
+function periodValue(weekly: number, days: number): string {
+  const total = Math.round((weekly / 7) * days)
+  const sign = total >= 0 ? '+' : '-'
+  return `${sign}$${Math.abs(total).toLocaleString('en-US')}`
+}
+
+// Total upside from acting on all recommendations. Stated as a monthly figure
+// ($10.5k/mo) and scaled to the selected window so it matches the per-row values.
+const MONTHLY_UPSIDE = 10500
+function upsideForWindow(days: number): string {
+  const total = (MONTHLY_UPSIDE / 30) * days
+  return `$${(total / 1000).toFixed(1)}k${periodSuffix(days)}`
+}
 
 const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders: RankRow[] }> = {
   full: { bottom: bottom5, top: top5, leaders },
@@ -26,10 +50,12 @@ const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders
 export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: FleetMode }) {
   const [showRecs, setShowRecs] = useState(false)
   const [showMarket, setShowMarket] = useState(false)
+  const { rangeDays, rangeEnd } = usePeriod()
   const data = FLEET_DATA[fleetMode]
   const noData = fleetMode === 'empty'
   const bottomTitle = "Bottom - What's dragging you down"
   const topTitle = "Top - What's going well"
+  const rangeLabel = currentPeriodLabel(rangeEnd, rangeDays)
 
   return (
     <section className="card recovery-card">
@@ -46,7 +72,8 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
         {!noData && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span className="improve-hint">
-              By acting on these, you could earn an extra <strong>$10.5k/mo</strong>
+              By acting on these, you could earn an extra{' '}
+              <strong>{upsideForWindow(rangeDays)}</strong>
             </span>
             <button className="btn-teal" onClick={() => setShowRecs(true)}>
               <TrendingUp size={13} /> What to improve
@@ -64,16 +91,22 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
             title={bottomTitle}
             icon={<ArrowDown size={13} color="var(--red)" />}
             rows={data.bottom}
+            days={rangeDays}
+            rangeLabel={rangeLabel}
           />
           <RankCard
             title={topTitle}
             icon={<ArrowUp size={13} color="var(--green)" />}
             rows={data.top}
+            days={rangeDays}
+            rangeLabel={rangeLabel}
           />
           <RankCard
             title="Market Leaders"
             icon={<Trophy size={13} color="var(--yellow)" />}
             rows={data.leaders}
+            days={rangeDays}
+            rangeLabel={rangeLabel}
           />
         </div>
       </div>
@@ -94,11 +127,16 @@ function RankCard({
   title,
   icon,
   rows,
+  days,
+  rangeLabel,
 }: {
   title: string
   icon: React.ReactNode
   rows: RankRow[]
+  days: number
+  rangeLabel: string
 }) {
+  const suffix = periodSuffix(days)
   return (
     <div className="mini-card">
       <div className="mini-head">
@@ -119,7 +157,13 @@ function RankCard({
                 </span>
               )}
               {r.issue && <span className="issue">{r.issue}</span>}
-              <span className={`val ${r.tone === 'red' ? 'neg' : 'pos'}`}>{r.value}</span>
+              <span
+                className={`val cf-tip ${r.tone === 'red' ? 'neg' : 'pos'}`}
+                data-tip={rangeLabel}
+              >
+                {periodValue(r.weekly, days)}
+                <span className="val-per">{suffix}</span>
+              </span>
             </div>
           ))}
         </div>

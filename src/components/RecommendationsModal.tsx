@@ -1,6 +1,33 @@
 import { useState } from 'react'
-import { X, TrendingUp, ArrowRight, ArrowUpRight, Map, Database, PiggyBank, Compass } from 'lucide-react'
-import { recommendations, type Recommendation } from '../data'
+import { X, TrendingUp, ArrowRight, ArrowUpRight, Map, Database } from 'lucide-react'
+import { recommendations, type Recommendation, type PlanMetric } from '../data'
+
+// What each metric means, shown on hover. Keyed by label so it's shared across
+// every route rather than repeated in the data.
+const METRIC_TIPS: Record<string, string> = {
+  Income: 'Revenue this plan books — what the loads on the route pay.',
+  Cost: 'All-in cost to run the plan: fuel, tolls, driver hours and deadhead.',
+  Booking: 'How likely these loads are to book as planned — higher means less risk of the plan falling through.',
+  Connectivity: 'How well the plan sets up your next load — higher means less empty repositioning after.',
+}
+
+function PlanMetrics({ metrics }: { metrics?: PlanMetric[] }) {
+  if (!metrics?.length) return null
+  return (
+    <ul className="cmp-metrics">
+      {metrics.map((m, i) => (
+        <li
+          key={m.label}
+          className={`cmp-metric${i >= 2 ? ' tip-right' : ''}`}
+          data-tip={METRIC_TIPS[m.label]}
+        >
+          <b>{m.value}</b>
+          <span>{m.label}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export default function RecommendationsModal({
   title = 'What to improve',
@@ -24,9 +51,16 @@ export default function RecommendationsModal({
           <span className="cfm-title">
             <TrendingUp size={17} color="var(--green)" /> {title}
           </span>
-          <button className="cfm-x" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <div className="modal-head-actions">
+            {isCompare && (
+              <button className="cmp-view" onClick={() => setNavOpen(true)}>
+                Try new routes <ArrowUpRight size={14} />
+              </button>
+            )}
+            <button className="cfm-x" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="modal-body">
@@ -39,75 +73,52 @@ export default function RecommendationsModal({
                   <div className="cmp-item" key={r.rank}>
                     <div className="cmp-item-head">
                       <span className="recs-rank">{r.rank}</span>
-                      <span className="cmp-title">{r.action}</span>
-                      <span className="recs-cat">{r.category}</span>
-                      <span className="recs-impact pos">{r.impact}</span>
+                      <span className="cmp-save">
+                        save <b>{r.impact.replace('+', '')}</b>
+                      </span>
                     </div>
                     <div className="cmp-cols">
                       <div className="cmp-col yours">
-                        <span className="cmp-tag">This is what you did</span>
+                        <span className="cmp-tag">You ran</span>
                         <span className="cmp-route">{r.yourRoute}</span>
-                        <span className="cmp-cost">
-                          Your cost <b>{r.yourCost}</b>
-                        </span>
+                        <PlanMetrics metrics={r.yourMetrics} />
                       </div>
                       <span className="cmp-arrow-wrap">
-                        <ArrowRight size={15} />
+                        <ArrowRight size={16} />
                       </span>
                       <div className="cmp-col rec">
-                        <span className="cmp-tag">A better route</span>
+                        <span className="cmp-tag">We'd route</span>
                         <span className="cmp-route">{r.betterRoute}</span>
-                        <span className="cmp-cost">
-                          Would've cost <b>{r.betterCost}</b>
-                        </span>
+                        <PlanMetrics metrics={r.betterMetrics} />
                       </div>
                     </div>
-                    {(r.whyLess || r.setsUp) && (
-                      <div className="cmp-notes">
-                        {r.whyLess && (
-                          <div className="cmp-note">
-                            <span className="cmp-note-icon">
-                              <PiggyBank size={14} />
-                            </span>
-                            <span className="cmp-note-text">
-                              <b>Why it costs less</b>
-                              {r.whyLess}
-                            </span>
-                          </div>
-                        )}
-                        {r.setsUp && (
-                          <div className="cmp-note">
-                            <span className="cmp-note-icon">
-                              <Compass size={14} />
-                            </span>
-                            <span className="cmp-note-text">
-                              <b>Where it leaves you</b>
-                              {r.setsUp}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 ))}
-              </div>
-              <div className="cmp-list-foot">
-                <button className="cmp-view" onClick={() => setNavOpen(true)}>
-                  View route <ArrowUpRight size={14} />
-                </button>
               </div>
             </>
           ) : (
             <div className="recs-list">
               {items.map((r) => (
-                <div className="recs-row" key={r.rank}>
-                  <span className="recs-rank">{r.rank}</span>
-                  <div className="recs-text">
-                    <span className="recs-action">{r.action}</span>
-                    <span className="recs-detail">{r.detail}</span>
+                <div className="rec-card" key={r.rank}>
+                  <div className="rec-card-head">
+                    <span className="recs-rank">{r.rank}</span>
+                    <span className="rec-card-title">{r.action}</span>
+                    <span className="recs-cat">{r.category}</span>
+                    <span className="recs-impact pos">{r.impact}</span>
                   </div>
-                  <span className="recs-cat">{r.category}</span>
-                  <span className="recs-impact pos">{r.impact}</span>
+                  <div className="rec-cols">
+                    <div className="rec-col wrong">
+                      <span className="rec-tag neg">What went wrong</span>
+                      <span className="rec-col-text">{r.problem ?? r.detail}</span>
+                    </div>
+                    <span className="rec-arrow-wrap">
+                      <ArrowRight size={15} />
+                    </span>
+                    <div className="rec-col right">
+                      <span className="rec-tag pos">What to do</span>
+                      <span className="rec-col-text">{r.fix ?? r.action}</span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
