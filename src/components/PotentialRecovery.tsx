@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, ArrowDown, ArrowUp, Info, Trophy, Star, TrendingUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Info, Trophy, Star, TrendingUp, BarChart3 } from 'lucide-react'
 import {
   bottom5,
   top5,
@@ -11,6 +11,7 @@ import {
   type RankRow,
 } from '../data'
 import RecommendationsModal from './RecommendationsModal'
+import MarketBenchmarkModal from './MarketBenchmarkModal'
 import EmptyState from './EmptyState'
 
 export type FleetMode = 'full' | 'small' | 'single' | 'empty'
@@ -24,6 +25,7 @@ const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders
 
 export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: FleetMode }) {
   const [showRecs, setShowRecs] = useState(false)
+  const [showMarket, setShowMarket] = useState(false)
   const data = FLEET_DATA[fleetMode]
   const noData = fleetMode === 'empty'
   const bottomTitle = "Bottom - What's dragging you down"
@@ -49,8 +51,8 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
             <button className="btn-teal" onClick={() => setShowRecs(true)}>
               <TrendingUp size={13} /> What to improve
             </button>
-            <button className="btn-ghost">
-              View fleet analytics <ArrowUpRight size={13} />
+            <button className="btn-ghost" onClick={() => setShowMarket(true)}>
+              <BarChart3 size={13} /> How the market is doing
             </button>
           </div>
         )}
@@ -83,6 +85,7 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
           onClose={() => setShowRecs(false)}
         />
       )}
+      {showMarket && <MarketBenchmarkModal onClose={() => setShowMarket(false)} />}
     </section>
   )
 }

@@ -194,13 +194,14 @@ export interface LeakBar {
 //                           Samsara no da galones en idle → se estiman con idle_gph configurable.
 // 5. Late Deliveries      = Σ cargas_tarde [ chargeback_fijo + horas_tarde × costo_hora_tarde ]
 //                           horas_tarde = llegada_real − cita_dropoff (más allá de una tolerancia)
-// "Ignored recommendations" = money you could have saved by following the plan
-// we recommended (the old "Planned" concept, now a leakage category of its own).
+// "Poor Planning" = money lost to suboptimal planning choices — what you could
+// have saved by following the plan we recommended (the old "Planned" concept,
+// now a leakage category of its own). Named for the cause, not the fix.
 export const leakBars: LeakBar[] = [
   { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,000', width: 70, color: '#c2453f' },
   { name: 'Empty Miles', pct: 24, amount: '-$5,600', width: 56, color: '#cf5a44' },
   { name: 'Route Deviations', pct: 19, amount: '-$4,400', width: 44, color: '#d56b41' },
-  { name: 'Ignored recommendations', pct: 15, amount: '-$3,700', width: 37, color: '#d9843f' },
+  { name: 'Poor Planning', pct: 15, amount: '-$3,700', width: 37, color: '#d9843f' },
   { name: 'Idle Time Cost', pct: 12, amount: '-$2,800', width: 28, color: '#d99f42' },
 ]
 
@@ -215,7 +216,7 @@ export const leakBarsCompare: LeakBar[] = [
   { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,200', width: 72, color: '#c2453f' },
   { name: 'Empty Miles', pct: 21, amount: '-$5,200', width: 52, color: '#cf5a44' },
   { name: 'Route Deviations', pct: 19, amount: '-$4,700', width: 47, color: '#d56b41' },
-  { name: 'Ignored recommendations', pct: 17, amount: '-$4,100', width: 41, color: '#d9843f' },
+  { name: 'Poor Planning', pct: 17, amount: '-$4,100', width: 41, color: '#d9843f' },
   { name: 'Idle Time Cost', pct: 13, amount: '-$3,100', width: 31, color: '#d99f42' },
 ]
 
@@ -282,6 +283,61 @@ export const leaders: RankRow[] = [
   { rank: '05', name: 'Truck Y', value: '+$430/mo', tone: 'green' },
 ]
 
+// Market benchmark table — how your trips compare to the market. For each
+// attribute we show your 3 worst trips, your 3 best trips, the market leaders,
+// and the gap your best trips still have to close to reach the leaders.
+// `betterHigher` says which direction is good, so the gap can be toned right.
+export interface BenchmarkAttr {
+  attribute: string
+  betterHigher: boolean
+  worst: string // avg of your 3 worst trips
+  best: string // avg of your 3 best trips
+  leaders: string // market leaders
+  gap: string // best trips → market leaders
+  tip: string // what the metric means, shown on hover
+}
+
+export const benchmarkAttrs: BenchmarkAttr[] = [
+  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads.' },
+  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', tip: 'Share of paid miles that produced no revenue. Lower is better.' },
+  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
+  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
+  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
+  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
+]
+
+// Performance drivers — the "why" behind the numbers. Each zone and broker is a
+// row with the same columns as the attributes, measured by effective RPM
+// ($/mi): your worst 3 trips there, your best 3 trips, the market leaders, and
+// the gap left to close. `why` explains the number and shows as a subline.
+export interface DriverRow {
+  name: string // zone or broker
+  why: string // what makes it good or bad
+  worst: string // avg RPM of your 3 worst trips
+  best: string // avg RPM of your 3 best trips
+  leaders: string // market leaders' RPM
+  gap: string // best trips → leaders
+  verdict: 'win' | 'lose' // is this where your trips win or drag?
+  marketAligned: boolean // do the market's best trips also concentrate here?
+}
+
+// Sorted best → worst so your winners sit at the top and the drags at the
+// bottom. `marketAligned` marks the zones/brokers where the market leaders also
+// earn their highest RPM — the ones worth leaning into.
+export const zoneDrivers: DriverRow[] = [
+  { name: 'ATL ⇄ DAL corridor', why: 'Dense backhauls, almost no deadhead', worst: '$2.58', best: '$3.05', leaders: '$3.20', gap: '+$0.15', verdict: 'win', marketAligned: true },
+  { name: 'TX Triangle (DAL–HOU–SAT)', why: 'Short legs, high load density', worst: '$2.44', best: '$2.90', leaders: '$3.02', gap: '+$0.12', verdict: 'win', marketAligned: true },
+  { name: 'Mountain West (DEN → SLC)', why: 'Long empty legs on the way back', worst: '$1.86', best: '$2.21', leaders: '$2.64', gap: '+$0.43', verdict: 'lose', marketAligned: false },
+  { name: 'FL Panhandle', why: 'Thin backhaul market, low RPM', worst: '$1.79', best: '$2.08', leaders: '$2.42', gap: '+$0.34', verdict: 'lose', marketAligned: false },
+]
+
+export const brokerDrivers: DriverRow[] = [
+  { name: 'TQL', why: 'Consistent lanes, pays fast', worst: '$2.62', best: '$3.01', leaders: '$3.18', gap: '+$0.17', verdict: 'win', marketAligned: true },
+  { name: 'Coyote', why: 'High RPM on reefer loads', worst: '$2.55', best: '$2.98', leaders: '$3.10', gap: '+$0.12', verdict: 'win', marketAligned: true },
+  { name: 'Echo Global', why: 'Frequent late reloads, more idle', worst: '$2.01', best: '$2.30', leaders: '$2.66', gap: '+$0.36', verdict: 'lose', marketAligned: false },
+  { name: 'Spot market', why: 'Low RPM, detention often unpaid', worst: '$1.74', best: '$2.12', leaders: '$2.58', gap: '+$0.46', verdict: 'lose', marketAligned: false },
+]
+
 // What to improve — prioritized actions, ordered by monthly $ upside.
 export interface Recommendation {
   rank: number
@@ -289,6 +345,16 @@ export interface Recommendation {
   detail: string
   category: string
   impact: string
+  // Optional route comparison — the route you ran and its cost vs. a better
+  // route eFrouting would have planned and what it would have cost.
+  yourRoute?: string
+  yourCost?: string
+  betterRoute?: string
+  betterCost?: string
+  // Why the better route was cheaper this trip, and how it leaves the truck
+  // positioned so the *next* move costs less too.
+  whyLess?: string
+  setsUp?: string
 }
 export const recommendations: Recommendation[] = [
   { rank: 1, action: 'Cut deadhead on ATL → DAL backhauls', detail: 'Truck #7834 running 31% empty', category: 'Efficiency', impact: '+$4.2k/mo' },
@@ -299,12 +365,60 @@ export const recommendations: Recommendation[] = [
 ]
 
 // Plan fixes — how a different plan would have gone better. Together they add
-// up to the "Ignored recommendations" leak ($3,700 this period).
+// up to the "Poor Planning" leak ($3,700 this period).
 export const planFixes: Recommendation[] = [
-  { rank: 1, action: 'Assign these loads to lower-cost lanes', detail: '6 loads ran on higher-cost lanes', category: 'Planning', impact: '+$1,400' },
-  { rank: 2, action: 'Plan fuel stops on the cheaper corridor', detail: '3 trucks fueled off the best corridor', category: 'Fuel', impact: '+$900' },
-  { rank: 3, action: 'Schedule earlier departure windows', detail: '8 departures planned too late', category: 'Planning', impact: '+$800' },
-  { rank: 4, action: 'Pair backhauls in the plan', detail: 'Backhauls left unpaired', category: 'Planning', impact: '+$600' },
+  {
+    rank: 1,
+    action: 'Assign these loads to lower-cost lanes',
+    detail: '6 loads ran on higher-cost lanes',
+    category: 'Planning',
+    impact: '+$1,400',
+    yourRoute: 'ATL → DAL · via I-30 premium lanes',
+    yourCost: '$8,200',
+    betterRoute: 'ATL → DAL · via I-20 lower-cost lanes',
+    betterCost: '$6,800',
+    whyLess: 'I-20 skips the toll corridor and runs 40 fewer loaded miles at a lower cost-per-mile.',
+    setsUp: 'Drops you at the DAL freight hub where your next load is already booked. The I-30 plan would have left you 60 mi out — another ~$220 of deadhead just to start the next trip.',
+  },
+  {
+    rank: 2,
+    action: 'Plan fuel stops into the route',
+    detail: '3 trucks fueled off the planned corridor',
+    category: 'Planning',
+    impact: '+$900',
+    yourRoute: 'JAX → NSH · fueled off-corridor at retail',
+    yourCost: '$4,300',
+    betterRoute: 'JAX → NSH · stops planned on-corridor',
+    betterCost: '$3,400',
+    whyLess: 'Planned stops sit on discounted network pumps ~$0.30/gal below the retail stations you diverted to.',
+    setsUp: 'No detour means you reach NSH on schedule, so the next dispatch departs on time instead of paying a late-reload premium.',
+  },
+  {
+    rank: 3,
+    action: 'Schedule earlier departure windows',
+    detail: '8 departures planned too late',
+    category: 'Planning',
+    impact: '+$800',
+    yourRoute: 'CHI → ATL · departed in peak traffic',
+    yourCost: '$5,600',
+    betterRoute: 'CHI → ATL · depart ~90 min earlier, off-peak',
+    betterCost: '$4,800',
+    whyLess: 'Leaving off-peak skips 2+ hrs of stop-and-go, cutting idle burn and hours on the clock.',
+    setsUp: 'Arrives before the ATL window closes, freeing the truck for a same-day backhaul instead of sitting overnight — about $300 in idle and a missed load.',
+  },
+  {
+    rank: 4,
+    action: 'Pair backhauls in the plan',
+    detail: 'Backhauls left unpaired',
+    category: 'Planning',
+    impact: '+$600',
+    yourRoute: 'ATL → DAL · returned empty',
+    yourCost: '$3,900',
+    betterRoute: 'ATL → DAL · paired with DAL → ATL backhaul',
+    betterCost: '$3,300',
+    whyLess: 'The paired load covers the return miles with paying freight instead of running deadhead.',
+    setsUp: 'Leaves the truck back at home base loaded and on-cycle, so the next week starts without a repositioning leg.',
+  },
 ]
 
 export interface Trip {

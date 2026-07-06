@@ -9,6 +9,13 @@ const classNames = ['Class A', 'Class B', 'Class C', 'Class D']
 
 const criteria = ['Money leaks', 'Profitability', 'Efficiency']
 
+// Short explanation of what each criterion ranks assets by.
+const criteriaInfo: Record<string, string> = {
+  'Money leaks': 'Ranks assets by how much revenue is lost to unbilled or leaking charges.',
+  Profitability: 'Ranks assets by their net margin contribution.',
+  Efficiency: 'Ranks assets by utilization and operational output.',
+}
+
 // Each criterion keeps its own set of class thresholds.
 const defaultThresholds: Record<string, Record<string, string>> = {
   'Money leaks': { 'Class A': '0,25', 'Class B': '0,50', 'Class C': '0,75', 'Class D': '1,00' },
@@ -89,6 +96,20 @@ export default function ClassFilter() {
                 </span>
               </div>
 
+              <div className="cf-section-label">Criteria</div>
+              <div className="cf-criteria">
+                {criteria.map((c) => (
+                  <button
+                    key={c}
+                    className={`cf-crit ${activeCriteria === c ? 'active' : ''}`}
+                    onClick={() => setActiveCriteria(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              <p className="cf-crit-desc">{criteriaInfo[activeCriteria]}</p>
+
               <div className="cf-section-label">Define Thresholds</div>
               <div className="cf-thresholds">
                 {classNames.map((name) => (
@@ -108,19 +129,6 @@ export default function ClassFilter() {
                       }
                     />
                   </div>
-                ))}
-              </div>
-
-              <div className="cf-section-label">Criteria</div>
-              <div className="cf-criteria">
-                {criteria.map((c) => (
-                  <button
-                    key={c}
-                    className={`cf-crit ${activeCriteria === c ? 'active' : ''}`}
-                    onClick={() => setActiveCriteria(c)}
-                  >
-                    {c}
-                  </button>
                 ))}
               </div>
 

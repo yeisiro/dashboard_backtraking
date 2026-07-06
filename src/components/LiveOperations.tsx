@@ -1,4 +1,4 @@
-import { ArrowUpRight, AlertTriangle, Truck, TrendingDown } from 'lucide-react'
+import { ArrowUpRight, AlertTriangle, Truck, TrendingDown, Info } from 'lucide-react'
 import { trips } from '../data'
 import EmptyState from './EmptyState'
 
@@ -9,6 +9,12 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
         <div className="title">
           <i className="dot green" />
           <span className="eyebrow">Live Operation Monitoring</span>
+          <span className="info-tip" tabIndex={0}>
+            <Info size={14} color="var(--text-muted)" />
+            <span className="info-tip-bubble" role="tooltip">
+              Real-time view of active trips and the money leaking right now across your fleet.
+            </span>
+          </span>
         </div>
         {!noData && (
           <button className="btn-ghost">

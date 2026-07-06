@@ -7,7 +7,7 @@ import RecommendationsModal from './RecommendationsModal'
 import EmptyState from './EmptyState'
 
 const ticks = ['$0', '$2k', '$4k', '$6k', '$8k', '$10k']
-const AVOIDABLE_NAME = 'Ignored recommendations'
+const AVOIDABLE_NAME = 'Poor Planning'
 
 function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: number }) {
   if (trend === 'up') return <TrendingUp size={size} style={{ verticalAlign: '-1px' }} />
@@ -23,7 +23,6 @@ export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
   const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
 
   const avoidable = leakBars.find((b) => b.name === AVOIDABLE_NAME)
-  const bars = leakBars.filter((b) => b.name !== AVOIDABLE_NAME)
 
   return (
     <section className="card">
@@ -69,34 +68,51 @@ export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
               </span>
             </span>
           </div>
-
-          {avoidable && (
-            <button className="leak-avoidable" onClick={() => setRecsOpen(true)}>
-              You could've saved an extra{' '}
-              <strong>{avoidable.amount.replace('-', '')}</strong> with a better plan
-              <span className="la-link">
-                See how <ArrowRight size={11} />
-              </span>
-            </button>
-          )}
         </div>
 
         <div className="bars">
-          {bars.map((b) => (
-            <div className="bar-row" key={b.name}>
-              <div className="bar-label">
-                <div className="name">{b.name}</div>
-                <div className="pct">{b.pct}%</div>
+          {leakBars.map((b) =>
+            b.name === AVOIDABLE_NAME ? (
+              <div className="bar-row avoidable" key={b.name}>
+                <div className="bar-label">
+                  <div className="name">
+                    {b.name}
+                    <span className="info-tip" tabIndex={0}>
+                      <Info size={12} color="var(--orange)" />
+                      <span className="info-tip-bubble" role="tooltip">
+                        Lost to suboptimal planning — a better plan would have avoided it.
+                      </span>
+                    </span>
+                  </div>
+                  <div className="pct">{b.pct}%</div>
+                </div>
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{ width: `${b.width}%`, background: b.color }}
+                  />
+                  <span className="bar-value">{b.amount}</span>
+                  <button className="leak-seehow" onClick={() => setRecsOpen(true)}>
+                    See what could've been better <ArrowRight size={12} />
+                  </button>
+                </div>
               </div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${b.width}%`, background: b.color }}
-                />
-                <span className="bar-value">{b.amount}</span>
+            ) : (
+              <div className="bar-row" key={b.name}>
+                <div className="bar-label">
+                  <div className="name">{b.name}</div>
+                  <div className="pct">{b.pct}%</div>
+                </div>
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{ width: `${b.width}%`, background: b.color }}
+                  />
+                  <span className="bar-value">{b.amount}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
 
         <div className="axis">
