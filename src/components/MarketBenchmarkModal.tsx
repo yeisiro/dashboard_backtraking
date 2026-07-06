@@ -1,11 +1,13 @@
 import { X, BarChart3 } from 'lucide-react'
-import { benchmarkAttrs, zoneDrivers, brokerDrivers } from '../data'
+import { benchmarkAttrs, brokerDrivers } from '../data'
 
 const names = (rows: { name: string; verdict: 'win' | 'lose' }[], v: 'win' | 'lose') =>
   rows.filter((r) => r.verdict === v).map((r) => r.name).join(' · ')
 
-const originsWorst = names(zoneDrivers, 'lose')
-const originsBest = names(zoneDrivers, 'win')
+// Origin = the state your trips departed from (worst 3 vs best 3). Best matches
+// the market leaders' hot states, so that column mirrors "best".
+const originsWorst = 'Colorado · Florida'
+const originsBest = 'Georgia · Texas'
 const brokersWorst = names(brokerDrivers, 'lose')
 const brokersBest = names(brokerDrivers, 'win')
 
