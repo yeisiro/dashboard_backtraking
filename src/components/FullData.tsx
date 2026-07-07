@@ -25,19 +25,11 @@ function scoreColor(n: number): string {
 }
 
 // ── Sorting ───────────────────────────────────────────────────────────────
-type SortKey =
-  | 'score' | 'truck' | 'date' | 'lane' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate'
+// Truck, Date, and Lane are plain (unsortable) — only the metric columns sort.
+type SortKey = 'score' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate'
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const dateKey = (s: string) => {
-  const [mon, day] = s.split(' ')
-  return MONTHS.indexOf(mon) * 100 + (parseInt(day, 10) || 0)
-}
-const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number | string> = {
+const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   score: (r) => r.score,
-  truck: (r) => r.truck,
-  date: (r) => dateKey(r.startDate),
-  lane: (r) => r.lane,
   distance: (r) => r.totalMiles,
   income: (r) => r.income,
   cost: (r) => r.cost,
@@ -46,10 +38,13 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number | string> = {
   wastedRate: (r) => r.wastedRate,
 }
 
-const COLUMNS: { key: SortKey; label: string; left?: boolean }[] = [
-  { key: 'truck', label: 'Truck', left: true },
-  { key: 'date', label: 'Date', left: true },
-  { key: 'lane', label: 'Lane', left: true },
+const PLAIN_COLUMNS = [
+  { label: 'Truck', left: true },
+  { label: 'Date', left: true },
+  { label: 'Lane', left: true },
+]
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'score', label: 'Score' },
   { key: 'distance', label: 'Distance' },
   { key: 'income', label: 'Income' },
@@ -138,10 +133,7 @@ function TripsTable({
 
   const rows = sortKey
     ? [...filtered].sort((a, b) => {
-        const av = SORT_ACCESSOR[sortKey](a)
-        const bv = SORT_ACCESSOR[sortKey](b)
-        const cmp =
-          typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+        const cmp = SORT_ACCESSOR[sortKey](a) - SORT_ACCESSOR[sortKey](b)
         return sortDir === 'asc' ? cmp : -cmp
       })
     : filtered
@@ -174,8 +166,13 @@ function TripsTable({
         <table className="fd-table">
           <thead>
             <tr>
-              {COLUMNS.map((c) => (
-                <th key={c.key} className={c.left ? 'fd-left' : ''}>
+              {PLAIN_COLUMNS.map((c) => (
+                <th key={c.label} className={c.left ? 'fd-left' : ''}>
+                  {c.label}
+                </th>
+              ))}
+              {SORT_COLUMNS.map((c) => (
+                <th key={c.key}>
                   <button
                     className={`fd-sort ${sortKey === c.key ? 'active' : ''}`}
                     onClick={() => toggleSort(c.key)}
@@ -195,7 +192,7 @@ function TripsTable({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td className="fd-no-results" colSpan={COLUMNS.length + 1}>
+                <td className="fd-no-results" colSpan={PLAIN_COLUMNS.length + SORT_COLUMNS.length + 1}>
                   No trips match "{query}"
                 </td>
               </tr>
@@ -243,8 +240,18 @@ function TripsTable({
               <td className="fd-strong">{usd(totalIncome)}</td>
               <td className="fd-dim">{usd(totalCost)}</td>
               <td className="fd-strong">{usd(totalProfit)}</td>
-              <td className="fd-dim">{pct(avgAdherence)}</td>
-              <td className="fd-dim">{pct(avgWastedRate)}</td>
+              <td className="fd-dim">
+                {pct(avgAdherence)}{' '}
+                <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
+                  avg
+                </span>
+              </td>
+              <td className="fd-dim">
+                {pct(avgWastedRate)}{' '}
+                <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
+                  avg
+                </span>
+              </td>
               <td />
             </tr>
           </tfoot>

@@ -2056,6 +2056,14 @@ button {
   text-transform: uppercase;
   color: var(--text);
 }
+.fd-avg-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  vertical-align: 1px;
+}
 .fd-dim { color: var(--text-dim); }
 .fd-strong { font-weight: 700; }
 .fd-neg { color: var(--red); }
@@ -3747,10 +3755,7 @@ button {
   background: #0b1116;
   min-height: 400px;
 }
-.ld-map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.9; }
-.ld-route-dash { fill: none; stroke: #4d9dff; stroke-width: 3; stroke-dasharray: 3 6; stroke-linecap: round; }
-.ld-route-stop { fill: #0b1116; stroke: #4d9dff; stroke-width: 3; }
-.ld-route-truck { fill: #7CC8CF; stroke: #0b1116; stroke-width: 3; }
+.ld-map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ld-map-controls {
   position: absolute;
   top: 14px;
@@ -3765,63 +3770,18 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  background: rgba(14, 20, 26, 0.9);
-  color: #E6E6E6;
-  font-size: 14px;
-  font-weight: 600;
-  backdrop-filter: blur(6px);
-}
-.ld-map-round { padding: 10px; border-radius: 50%; }
-.ld-map-view { position: relative; }
-.ld-map-badge {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: #F33A3A;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ld-map-full { margin-left: auto; }
-.ld-map-eld {
-  position: absolute;
-  left: 16px;
-  bottom: 58px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  z-index: 2;
-}
-.ld-eld-title { font-size: 15px; font-weight: 700; color: #E6E6E6; }
-.ld-eld-sub { font-size: 12px; color: #9A9A9A; }
-.ld-eld-synced {
-  padding: 8px 14px;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 13px;
-  font-weight: 600;
+  padding: 8px 16px 8px 24px;
+  border-radius: 48px;
+  background: #0E141A;
+  border: 2px solid #233340;
   color: #CDCDCD;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
-.ld-eld-update {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border-radius: 9px;
-  background: #162028;
-  color: #7CC8CF;
-  font-size: 13px;
-  font-weight: 600;
-}
+.ld-map-round { padding: 8px; border-radius: 50%; color: #9A9A9A; }
+.ld-map-zoom { display: flex; gap: 6px; }
+.ld-map-full { margin-left: auto; }
 .ld-map-scrub {
   position: absolute;
   left: 16px;
@@ -3844,11 +3804,70 @@ button {
   flex: 0 0 auto;
 }
 .ld-scrub-track {
+  position: relative;
   flex: 1;
   height: 3px;
   border-radius: 2px;
   background: repeating-linear-gradient(90deg, rgba(255,255,255,0.25) 0 6px, transparent 6px 13px);
+  cursor: pointer;
 }
+.ld-scrub-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: #4d9dff;
+  pointer-events: none;
+}
+.ld-scrub-thumb {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px #4d9dff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Full-screen map overlay */
+.ld-fullmap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(4, 6, 10, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.ld-fullmap {
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  background: #0E141A;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ld-fullmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 28px;
+  border-bottom: 1px solid #253643;
+  flex: 0 0 auto;
+}
+.ld-fullmap-title { font-size: 20px; font-weight: 600; color: #E6E6E6; }
+.ld-fullmap-body {
+  position: relative;
+  flex: 1;
+  background: #0b1116;
+}
+.ld-fullmap-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* Outcome */
 .ld-outcome-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
