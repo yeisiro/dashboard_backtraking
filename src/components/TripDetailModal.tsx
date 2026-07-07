@@ -167,6 +167,21 @@ function pointAtFraction(
   return { pos: points[points.length - 1], heading: 0 }
 }
 
+// Cumulative arc-length fraction (0..1) at each point of a polyline — used to
+// splice a deviation into the middle of a route while keeping any original
+// points that fall outside the spliced window.
+function cumulativeFractions(points: [number, number][]): number[] {
+  const segLens = points.slice(0, -1).map((p, i) => Math.hypot(points[i + 1][0] - p[0], points[i + 1][1] - p[1]))
+  const total = segLens.reduce((a, b) => a + b, 0) || 1
+  const fracs = [0]
+  let acc = 0
+  for (const len of segLens) {
+    acc += len
+    fracs.push(acc / total)
+  }
+  return fracs
+}
+
 // A map pin: a small diamond badge by default, expanding into a labeled
 // pill on hover (Google Maps-style "Route start"/"Route end" markers).
 function MapPinMarker({
@@ -441,6 +456,38 @@ export default function TripDetailModal({
   const vbW = halfW * 2
   const vbH = halfH * 2
 
+  // Route deviation — a real detour off the planned/executed line, scaled by
+  // this trip's actual deadhead share (worse trips drift further and for
+  // longer before rejoining the main route). Seeded so it's stable per trip.
+  const devRand = seededRandom(routeSeed + 4242)
+  const devStart = 0.22 + devRand() * 0.28
+  const devSpan = 0.1 + devRand() * 0.1
+  const devEnd = Math.min(devStart + devSpan, 0.92)
+  const devStartPt = pointAtFraction(routePoints, devStart)
+  const devMidPt = pointAtFraction(routePoints, (devStart + devEnd) / 2)
+  const devEndPt = pointAtFraction(routePoints, devEnd)
+  const devHeadingRad = (devMidPt.heading * Math.PI) / 180
+  const devPerpX = Math.sin(devHeadingRad)
+  const devPerpY = -Math.cos(devHeadingRad)
+  const devMagnitude = (trip.deadheadPct / 100) * Math.max(spanX, spanY) * 2.1
+  const devBulge: [number, number] = [
+    devMidPt.pos[0] + devPerpX * devMagnitude,
+    devMidPt.pos[1] + devPerpY * devMagnitude,
+  ]
+  const deviationStr = [devStartPt.pos, devBulge, devEndPt.pos].map(([x, y]) => `${x},${y}`).join(' ')
+
+  // The truck's actual driven path for playback: the main route with the
+  // deviation window swapped out for the detour itself, so scrubbing through
+  // that stretch visibly sends the truck off onto the red line and back.
+  const routeFracs = cumulativeFractions(routePoints)
+  const drivenPoints: [number, number][] = [
+    ...routePoints.filter((_, i) => routeFracs[i] < devStart),
+    devStartPt.pos,
+    devBulge,
+    devEndPt.pos,
+    ...routePoints.filter((_, i) => routeFracs[i] > devEnd),
+  ]
+
   // Scroll to zoom in/out around the auto-fit crop above. Marker/text sizes
   // stay tied to the base vbW (not the zoomed-in one), so zooming in also
   // makes everything read bigger — which is the point.
@@ -571,7 +618,7 @@ export default function TripDetailModal({
   }, [scrubbing])
 
   // "Where I am" — the truck's position along the driven route right now.
-  const [curX, curY] = pointAtFraction(routePoints, progress).pos
+  const [curX, curY] = pointAtFraction(drivenPoints, progress).pos
 
   // Fuel stops — roughly one every ~400 mi. Each planned stop either landed
   // exactly on the optimal station (one marker: optimal + executed), or it
@@ -647,6 +694,15 @@ export default function TripDetailModal({
         fill="none"
         stroke="#4d9dff"
         strokeWidth={vbW * 0.006}
+        strokeDasharray={`${vbW * 0.012} ${vbW * 0.024}`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <polyline
+        points={deviationStr}
+        fill="none"
+        stroke="#f2585d"
+        strokeWidth={vbW * 0.005}
         strokeDasharray={`${vbW * 0.012} ${vbW * 0.024}`}
         strokeLinecap="round"
         strokeLinejoin="round"

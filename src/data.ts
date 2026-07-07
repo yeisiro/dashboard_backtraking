@@ -273,17 +273,18 @@ export const topSmall: RankRow[] = [
   { rank: '02', name: '#1188', issue: 'Good plan adherence', weekly: 90, tone: 'green' },
   { rank: '03', name: '#1201', issue: 'On-corridor fueling', weekly: 60, tone: 'green' },
 ]
-// Single-truck fleet: no ranking makes sense, so show that one truck's own
-// weak spots and strengths (name = the aspect, issue = the detail).
+// Single-truck fleet: no ranking across trucks makes sense, so mirror the
+// full-fleet layout (identifier + cause) one level down — name = the load
+// this truck ran, issue = why that load lost or gained money.
 export const bottomSingle: RankRow[] = [
-  { rank: '01', name: 'Idle time', issue: '18 min/day above target', weekly: -70, tone: 'red' },
-  { rank: '02', name: 'Route drift', issue: '2 minor deviations', weekly: -45, tone: 'red' },
-  { rank: '03', name: 'Fuel stops', issue: '1 off-corridor refuel', weekly: -30, tone: 'red' },
+  { rank: '01', name: 'Load #48213', issue: 'Idle 18 min/day above target', weekly: -70, tone: 'red' },
+  { rank: '02', name: 'Load #48207', issue: 'Route drift, 2 minor deviations', weekly: -45, tone: 'red' },
+  { rank: '03', name: 'Load #48191', issue: 'Fuel stop off-corridor', weekly: -30, tone: 'red' },
 ]
 export const topSingle: RankRow[] = [
-  { rank: '01', name: 'Plan adherence', issue: '98% on plan', weekly: 120, tone: 'green' },
-  { rank: '02', name: 'Fuel economy', issue: '6.4 mpg, top decile', weekly: 60, tone: 'green' },
-  { rank: '03', name: 'On-time delivery', issue: 'no late loads', weekly: 40, tone: 'green' },
+  { rank: '01', name: 'Load #48219', issue: 'Plan adherence, 98% on plan', weekly: 120, tone: 'green' },
+  { rank: '02', name: 'Load #48213', issue: 'Fuel economy, 6.4 mpg top decile', weekly: 60, tone: 'green' },
+  { rank: '03', name: 'Load #48207', issue: 'On-time delivery, no late loads', weekly: 40, tone: 'green' },
 ]
 
 // Market benchmark ranking — where your best truck sits against the market.
