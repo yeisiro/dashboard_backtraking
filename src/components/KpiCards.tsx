@@ -12,13 +12,22 @@ import { usePeriod } from '../PeriodContext'
 import KpiDetailModal from './KpiDetailModal'
 import EmptyState from './EmptyState'
 
-export default function KpiCards({ noData = false }: { noData?: boolean }) {
+export default function KpiCards({
+  noData = false,
+  hideMarketPosition = false,
+}: {
+  noData?: boolean
+  hideMarketPosition?: boolean
+}) {
   const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
+  const cards = hideMarketPosition
+    ? kpiCards.filter((c) => c.label !== 'Market Position')
+    : kpiCards
 
   return (
-    <div className="kpi-row">
-      {kpiCards.map((card) => (
+    <div className={`kpi-row ${cards.length === 4 ? 'kpi-row-4' : ''}`}>
+      {cards.map((card) => (
         <div className="card kpi" key={card.label}>
           <div className="kpi-head">
             <span className="eyebrow">{card.label}</span>
@@ -52,6 +61,7 @@ export default function KpiCards({ noData = false }: { noData?: boolean }) {
         <KpiDetailModal
           card={openCard}
           compareLabel={compareLabel}
+          summary={hideMarketPosition}
           onClose={() => setOpenCard(null)}
         />
       )}

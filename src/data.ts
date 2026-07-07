@@ -57,6 +57,9 @@ export interface KpiCard {
   metrics: KpiMetric[]
   wide?: boolean
   details?: DetailMetric[]
+  // V1 (summary) override: a trimmed detail set shown in the summary view's
+  // detail modal. Falls back to `details` when absent.
+  detailsSummary?: DetailMetric[]
 }
 
 // Deterministic mock time-series shapes (10 points each).
@@ -151,6 +154,15 @@ export const kpiCards: KpiCard[] = [
       { label: 'Fuel missed sav', value: '$25,710', delta: '+820', goal: 'low', hint: 'Savings missed vs optimal fueling', series: ts(25710, 1) },
       { label: 'CPG: actual vs optimal', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon paid vs best achievable', series: ts(3.6, 2), seriesLabel: 'Actual', compare: { label: 'Optimal', value: '$3.42', delta: '+0.02', series: ts(3.42, 0) } },
       { label: 'Diesel cost', value: '$604,411', delta: '+9.1K', goal: 'neutral', hint: 'Total diesel spend vs the share bought on planned routes', series: ts(604411, 3), seriesLabel: 'Total', compare: { label: 'In routes', value: '$427,923', delta: '+6.2K', series: ts(427923, 3) } },
+    ],
+    // V1 drops the standalone "CPG vs optimal" card (it duplicates the gap between
+    // actual and optimal), folding that overpay into a Gap row on the actual-vs-optimal
+    // card, shown first.
+    detailsSummary: [
+      { label: 'CPG: actual vs optimal', value: '$3.60', delta: '+0.06', goal: 'low', hint: 'Cost per gallon paid vs best achievable, and the overpay gap between them', series: ts(3.6, 2), seriesLabel: 'Actual', compare: { label: 'Optimal', value: '$3.42', delta: '+0.02', gap: '+$0.18', gapDelta: '+0.04', series: ts(3.42, 0) } },
+      { label: 'Diesel cost', value: '$604,411', delta: '+9.1K', goal: 'neutral', hint: 'Total diesel spend vs the share bought on planned routes', series: ts(604411, 3), seriesLabel: 'Total', compare: { label: 'In routes', value: '$427,923', delta: '+6.2K', series: ts(427923, 3) } },
+      { label: 'Gallons refueled', value: '142,830', delta: '+1.2K', goal: 'neutral', hint: 'Total gallons refueled in the period', series: ts(142830, 3) },
+      { label: 'Fuel missed sav', value: '$25,710', delta: '+820', goal: 'low', hint: 'Savings missed vs optimal fueling', series: ts(25710, 1) },
     ],
   },
   {
@@ -516,6 +528,152 @@ export const trips: Trip[] = [
   { id: '#4521', cls: 'C', alert: 'HOS limit approaching', alertTone: 'yellow', route: 'CHI → ATL', leakLabel: '', leakValue: 'no leak yet', leakTone: 'gray' },
   { id: '#4521', cls: 'C', alert: 'no current alert', alertTone: 'gray', route: 'CHI → MEM', leakLabel: 'Leak wk:', leakValue: '-$310', leakTone: 'red' },
 ]
+
+// Full Data → Trips table. One row per completed trip. Values are numeric so the
+// table can sort exactly and format at render. Several fields are derived from a
+// smaller base (see TRIP_BASE + buildTrip) to keep the data honest and compact.
+export interface TripRow {
+  // Weighted 0..100 quality score — the composite that ranks trips and drives
+  // the best/worst classification (see computeScores).
+  score: number
+  truck: string
+  cls: 'A' | 'B' | 'C' | 'D'
+  startDate: string // pickup
+  endDate: string // delivery
+  lane: string
+  band?: 'best' | 'worst'
+  // Revenue
+  income: number
+  negotiatedRpm: number
+  executedRpm: number
+  effectiveRpm: number
+  wastedRpmPct: number
+  // Cost & savings
+  cost: number
+  totalCost: number
+  optimalCost: number
+  totalExcessCost: number
+  excessMilesCost: number
+  missedFuelSavings: number // negative
+  actualSaving: number // positive
+  profit: number
+  // Distance
+  totalMiles: number
+  loadedMiles: number
+  dhMilesPct: number
+  deadheadPct: number
+  // Efficiency
+  effectiveHours: number
+  idleHours: number
+  idlePct: number
+  mpg: number
+  adherence: number // %
+  planAdherence: number // %
+  wastedRate: number // %
+}
+
+interface TripBase {
+  truck: string
+  cls: TripRow['cls']
+  startDate: string
+  endDate: string
+  lane: string
+  band?: 'best' | 'worst'
+  income: number
+  negotiatedRpm: number
+  executedRpm: number
+  effectiveRpm: number
+  cost: number
+  optimalCost: number
+  totalMiles: number
+  loadedMiles: number
+  effectiveHours: number
+  idleHours: number
+  mpg: number
+  missedFuelSavings: number
+  actualSaving: number
+  adherence: number
+  planAdherence: number
+  wastedRate: number
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+function buildTrip(b: TripBase): TripRow {
+  const dhPct = round1(((b.totalMiles - b.loadedMiles) / b.totalMiles) * 100)
+  const totalCost = Math.round(b.cost * 1.08)
+  const totalExcessCost = totalCost - b.optimalCost
+  return {
+    ...b,
+    score: 0, // filled in by computeScores once the full set is known
+    profit: b.income - b.cost,
+    wastedRpmPct: round1(((b.negotiatedRpm - b.effectiveRpm) / b.negotiatedRpm) * 100),
+    totalCost,
+    totalExcessCost,
+    excessMilesCost: Math.round(totalExcessCost * 0.6),
+    dhMilesPct: dhPct,
+    deadheadPct: dhPct,
+    idlePct: round1((b.idleHours / (b.effectiveHours + b.idleHours)) * 100),
+  }
+}
+
+// Weighted quality score (0..100). Each driver is min-max normalized across the
+// set, then combined by weight. "Lower is better" metrics are inverted so a
+// higher score always means a better trip. The score then decides best/worst.
+function computeScores(rows: TripRow[]): TripRow[] {
+  const norm = (get: (r: TripRow) => number, invert = false) => {
+    const vals = rows.map(get)
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    return (r: TripRow) => {
+      const t = max === min ? 0.5 : (get(r) - min) / (max - min)
+      return invert ? 1 - t : t
+    }
+  }
+  const margin = norm((r) => (r.income ? r.profit / r.income : 0))
+  const adherence = norm((r) => r.adherence)
+  const rpm = norm((r) => r.effectiveRpm)
+  const wasted = norm((r) => r.wastedRate, true)
+  const deadhead = norm((r) => r.deadheadPct, true)
+  const idle = norm((r) => r.idlePct, true)
+  const mpg = norm((r) => r.mpg)
+
+  rows.forEach((r) => {
+    const s =
+      margin(r) * 0.25 +
+      adherence(r) * 0.2 +
+      rpm(r) * 0.2 +
+      wasted(r) * 0.15 +
+      deadhead(r) * 0.1 +
+      idle(r) * 0.05 +
+      mpg(r) * 0.05
+    r.score = Math.round(s * 100)
+  })
+
+  // Classify by score: top third = best, bottom third = worst.
+  const ranked = [...rows].sort((a, b) => b.score - a.score)
+  const cut = Math.max(1, Math.round(ranked.length / 3))
+  const best = new Set(ranked.slice(0, cut))
+  const worst = new Set(ranked.slice(-cut))
+  rows.forEach((r) => {
+    r.band = best.has(r) ? 'best' : worst.has(r) ? 'worst' : undefined
+  })
+  return rows
+}
+
+const TRIP_BASE: TripBase[] = [
+  { truck: '#5007', cls: 'A', startDate: 'May 14', endDate: 'May 15', lane: 'Atlanta, GA → Orlando, FL', band: 'best', income: 1180, negotiatedRpm: 3.02, executedRpm: 2.88, effectiveRpm: 2.72, cost: 480, optimalCost: 440, totalMiles: 415, loadedMiles: 372, effectiveHours: 9.4, idleHours: 0.5, mpg: 6.5, missedFuelSavings: -30, actualSaving: 720, adherence: 94.2, planAdherence: 90.1, wastedRate: 3.8 },
+  { truck: '#5012', cls: 'A', startDate: 'May 14', endDate: 'May 14', lane: 'Dallas, TX → Houston, TX', band: 'best', income: 690, negotiatedRpm: 2.95, executedRpm: 2.82, effectiveRpm: 2.68, cost: 300, optimalCost: 280, totalMiles: 239, loadedMiles: 220, effectiveHours: 5.1, idleHours: 0.3, mpg: 6.6, missedFuelSavings: -18, actualSaving: 540, adherence: 92.8, planAdherence: 89.0, wastedRate: 4.1 },
+  { truck: '#4408', cls: 'B', startDate: 'May 13', endDate: 'May 13', lane: 'Chicago, IL → Indianapolis, IN', band: 'best', income: 540, negotiatedRpm: 2.90, executedRpm: 2.78, effectiveRpm: 2.64, cost: 250, optimalCost: 232, totalMiles: 182, loadedMiles: 168, effectiveHours: 3.9, idleHours: 0.2, mpg: 6.5, missedFuelSavings: -22, actualSaving: 480, adherence: 90.1, planAdherence: 87.2, wastedRate: 4.4 },
+  { truck: '#6120', cls: 'B', startDate: 'May 13', endDate: 'May 13', lane: 'Memphis, TN → Nashville, TN', income: 620, negotiatedRpm: 2.75, executedRpm: 2.60, effectiveRpm: 2.45, cost: 300, optimalCost: 270, totalMiles: 210, loadedMiles: 182, effectiveHours: 4.6, idleHours: 0.7, mpg: 6.2, missedFuelSavings: -35, actualSaving: 450, adherence: 84.6, planAdherence: 80.3, wastedRate: 5.6 },
+  { truck: '#3301', cls: 'C', startDate: 'May 12', endDate: 'May 12', lane: 'Kansas City, MO → St. Louis, MO', income: 710, negotiatedRpm: 2.68, executedRpm: 2.52, effectiveRpm: 2.38, cost: 360, optimalCost: 320, totalMiles: 248, loadedMiles: 210, effectiveHours: 5.4, idleHours: 1.1, mpg: 6.0, missedFuelSavings: -60, actualSaving: 410, adherence: 81.5, planAdherence: 76.8, wastedRate: 6.4 },
+  { truck: '#2884', cls: 'C', startDate: 'May 12', endDate: 'May 12', lane: 'Charlotte, NC → Atlanta, GA', income: 700, negotiatedRpm: 2.55, executedRpm: 2.40, effectiveRpm: 2.28, cost: 370, optimalCost: 330, totalMiles: 245, loadedMiles: 205, effectiveHours: 5.6, idleHours: 1.3, mpg: 5.9, missedFuelSavings: -70, actualSaving: 380, adherence: 79.2, planAdherence: 74.1, wastedRate: 7.1 },
+  { truck: '#7834', cls: 'D', startDate: 'May 11', endDate: 'May 12', lane: 'Atlanta, GA → Dallas, TX', band: 'worst', income: 2240, negotiatedRpm: 2.30, executedRpm: 2.05, effectiveRpm: 1.79, cost: 1500, optimalCost: 1200, totalMiles: 781, loadedMiles: 540, effectiveHours: 15.8, idleHours: 3.9, mpg: 5.4, missedFuelSavings: -310, actualSaving: 180, adherence: 63.4, planAdherence: 58.2, wastedRate: 11.2 },
+  { truck: '#3390', cls: 'D', startDate: 'May 11', endDate: 'May 12', lane: 'Jacksonville, FL → Nashville, TN', band: 'worst', income: 1360, negotiatedRpm: 2.42, executedRpm: 2.18, effectiveRpm: 1.95, cost: 900, optimalCost: 720, totalMiles: 476, loadedMiles: 330, effectiveHours: 9.9, idleHours: 2.6, mpg: 5.6, missedFuelSavings: -280, actualSaving: 150, adherence: 66.1, planAdherence: 60.5, wastedRate: 9.8 },
+  { truck: '#2210', cls: 'D', startDate: 'May 11', endDate: 'May 13', lane: 'Miami, FL → Houston, TX', band: 'worst', income: 3410, negotiatedRpm: 2.33, executedRpm: 2.10, effectiveRpm: 1.88, cost: 2300, optimalCost: 1900, totalMiles: 1188, loadedMiles: 820, effectiveHours: 23.5, idleHours: 5.2, mpg: 5.5, missedFuelSavings: -260, actualSaving: 210, adherence: 68.9, planAdherence: 62.0, wastedRate: 8.9 },
+]
+
+export const tripRows: TripRow[] = computeScores(TRIP_BASE.map(buildTrip))
 
 export interface MapTruck {
   id: string

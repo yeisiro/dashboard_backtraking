@@ -15,12 +15,21 @@ function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: numb
   return <Minus size={size} style={{ verticalAlign: '-1px' }} />
 }
 
-export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
+export default function MoneyLeakage({
+  noData = false,
+  hidePoorPlanning = false,
+}: {
+  noData?: boolean
+  hidePoorPlanning?: boolean
+}) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [recsOpen, setRecsOpen] = useState(false)
   const { compareLabel, compareRange } = usePeriod()
   const tone = deltaTone(leakDelta, 'low')
   const toneClass = tone === 'green' ? 'pos' : tone === 'red' ? 'neg' : 'warn'
+  const bars = hidePoorPlanning
+    ? leakBars.filter((b) => b.name !== AVOIDABLE_NAME)
+    : leakBars
 
   return (
     <section className="card">
@@ -69,7 +78,7 @@ export default function MoneyLeakage({ noData = false }: { noData?: boolean }) {
         </div>
 
         <div className="bars">
-          {leakBars.map((b) =>
+          {bars.map((b) =>
             b.name === AVOIDABLE_NAME ? (
               <div className="bar-row avoidable" key={b.name}>
                 <div className="bar-label">

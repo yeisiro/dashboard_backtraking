@@ -38,7 +38,17 @@ const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders
   empty: { bottom: [], top: [], leaders: [] },
 }
 
-export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: FleetMode }) {
+export default function PotentialRecovery({
+  fleetMode = 'full',
+  hideLeaders = false,
+  hideCompare = false,
+  onViewTrips,
+}: {
+  fleetMode?: FleetMode
+  hideLeaders?: boolean
+  hideCompare?: boolean
+  onViewTrips?: (band: 'best' | 'worst') => void
+}) {
   const [showMarket, setShowMarket] = useState(false)
   const { rangeDays, rangeEnd } = usePeriod()
   const data = FLEET_DATA[fleetMode]
@@ -59,7 +69,7 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
             <Info size={14} color="var(--text-muted)" />
           </span>
         </div>
-        {!noData && (
+        {!noData && !hideCompare && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button className="btn-teal" onClick={() => setShowMarket(true)}>
               <BarChart3 size={13} /> Compare to market
@@ -69,7 +79,7 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
       </div>
 
       <div className="recovery-body">
-        <div className="recovery-cards">
+        <div className={`recovery-cards ${hideLeaders ? 'two' : ''}`}>
           <RankCard
             title={bottomTitle}
             icon={<ArrowDown size={13} color="var(--red)" />}
@@ -84,17 +94,21 @@ export default function PotentialRecovery({ fleetMode = 'full' }: { fleetMode?: 
             days={rangeDays}
             rangeLabel={rangeLabel}
           />
-          <RankCard
-            title="Market Leaders"
-            icon={<Trophy size={13} color="var(--yellow)" />}
-            rows={data.leaders}
-            days={rangeDays}
-            rangeLabel={rangeLabel}
-          />
+          {!hideLeaders && (
+            <RankCard
+              title="Market Leaders"
+              icon={<Trophy size={13} color="var(--yellow)" />}
+              rows={data.leaders}
+              days={rangeDays}
+              rangeLabel={rangeLabel}
+            />
+          )}
         </div>
       </div>
 
-      {showMarket && <MarketBenchmarkModal onClose={() => setShowMarket(false)} />}
+      {showMarket && (
+        <MarketBenchmarkModal onClose={() => setShowMarket(false)} onViewTrips={onViewTrips} />
+      )}
     </section>
   )
 }

@@ -23,10 +23,15 @@ const defaultThresholds: Record<string, Record<string, string>> = {
   Efficiency: { 'Class A': '0,20', 'Class B': '0,40', 'Class C': '0,70', 'Class D': '0,95' },
 }
 
-export default function ClassFilter() {
-  const [mode, setMode] = useState<Mode>('closed')
+export default function ClassFilter({
+  selected = [],
+  onChange,
+}: {
   // Empty array = "All". Otherwise a multi-selection of class letters.
-  const [selected, setSelected] = useState<string[]>([])
+  selected?: string[]
+  onChange?: (next: string[]) => void
+}) {
+  const [mode, setMode] = useState<Mode>('closed')
   const [values, setValues] = useState(defaultThresholds)
   const [activeCriteria, setActiveCriteria] = useState('Money leaks')
 
@@ -34,8 +39,8 @@ export default function ClassFilter() {
   const label = isAll ? 'All' : selected.join(', ')
 
   const toggleClass = (letter: string) =>
-    setSelected((prev) =>
-      prev.includes(letter) ? prev.filter((l) => l !== letter) : [...prev, letter],
+    onChange?.(
+      selected.includes(letter) ? selected.filter((l) => l !== letter) : [...selected, letter],
     )
 
   return (
@@ -57,7 +62,7 @@ export default function ClassFilter() {
             <div className="cf-menu cf-list">
               <button
                 className={`cf-item ${isAll ? 'active' : ''}`}
-                onClick={() => setSelected([])}
+                onClick={() => onChange?.([])}
               >
                 All class
                 {isAll && <Check size={17} className="cf-check" />}

@@ -1,16 +1,29 @@
-import { Home, Truck, Map } from 'lucide-react'
+import { Home } from 'lucide-react'
 
-export default function Sidebar() {
+export type View = 'summary' | 'dashboard'
+
+export default function Sidebar({
+  view,
+  onViewChange,
+}: {
+  view: View
+  onViewChange: (v: View) => void
+}) {
   return (
     <aside className="sidebar">
-      <button className="side-btn active" aria-label="Dashboard">
-        <Home size={20} />
+      <button
+        className={`side-btn ${view === 'summary' ? 'active' : ''}`}
+        aria-label="V1"
+        onClick={() => onViewChange('summary')}
+      >
+        V1
       </button>
-      <button className="side-btn" aria-label="Fleet">
-        <Truck size={20} />
-      </button>
-      <button className="side-btn" aria-label="Map">
-        <Map size={20} />
+      <button
+        className={`side-btn ${view === 'dashboard' ? 'active' : ''}`}
+        aria-label="V2"
+        onClick={() => onViewChange('dashboard')}
+      >
+        V2
       </button>
 
       <div className="spacer" />

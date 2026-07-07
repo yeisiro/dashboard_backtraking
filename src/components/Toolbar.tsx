@@ -5,17 +5,39 @@ import TrucksFilter from './TrucksFilter'
 import DateFilter from './DateFilter'
 import ConnectFleetModal from './ConnectFleetModal'
 
-export default function Toolbar() {
+export type DataTab = 'overview' | 'full'
+
+export default function Toolbar({
+  tab = 'overview',
+  onTabChange,
+  classFilter = [],
+  onClassFilterChange,
+}: {
+  tab?: DataTab
+  onTabChange?: (t: DataTab) => void
+  classFilter?: string[]
+  onClassFilterChange?: (next: string[]) => void
+}) {
   const [showConnect, setShowConnect] = useState(false)
 
   return (
     <div className="toolbar">
       <div className="tabs">
-        <button className="tab active">Overview</button>
-        <button className="tab">Full Data</button>
+        <button
+          className={`tab ${tab === 'overview' ? 'active' : ''}`}
+          onClick={() => onTabChange?.('overview')}
+        >
+          Overview
+        </button>
+        <button
+          className={`tab ${tab === 'full' ? 'active' : ''}`}
+          onClick={() => onTabChange?.('full')}
+        >
+          Full Data
+        </button>
       </div>
       <div className="filters">
-        <ClassFilter />
+        <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
         <TrucksFilter />
         <DateFilter />
         <button className="btn-primary" onClick={() => setShowConnect(true)}>

@@ -6,6 +6,7 @@ import { usePeriod } from '../PeriodContext'
 interface Props {
   card: KpiCard
   compareLabel: string
+  summary?: boolean
   onClose: () => void
 }
 
@@ -26,9 +27,9 @@ function defaultRangeIdx(rangeDays: number): number {
   return idx === -1 ? TIMELINE_RANGES.length - 1 : idx
 }
 
-export default function KpiDetailModal({ card, compareLabel, onClose }: Props) {
+export default function KpiDetailModal({ card, compareLabel, summary = false, onClose }: Props) {
   const { rangeEnd, rangeDays } = usePeriod()
-  const metrics = card.details ?? []
+  const metrics = (summary && card.detailsSummary) || card.details || []
   const [selected, setSelected] = useState(0)
   // Each card remembers its own timeline range (index into TIMELINE_RANGES).
   const [ranges, setRanges] = useState<Record<number, number>>({})
