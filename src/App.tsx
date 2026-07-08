@@ -46,7 +46,7 @@ export default function App() {
               onClassFilterChange={setClassFilter}
             />
             {dataTab === 'full' ? (
-              <FullData band={tripsBand} classFilter={classFilter} />
+              <FullData band={tripsBand} classFilter={classFilter} view={view} />
             ) : (
               <>
                 <KpiCards noData={noData} hideMarketPosition={view === 'summary'} />

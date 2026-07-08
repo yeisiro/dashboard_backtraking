@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { X, RefreshCw, Copy, ChevronDown, Download } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { X, RefreshCw, Copy, ChevronDown, Download, Search, Maximize2, Minimize2, Plus, Minus, RotateCcw } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { select } from 'd3-selection'
 import { zoom, zoomIdentity } from 'd3-zoom'
@@ -206,6 +206,55 @@ const H = 520
 export default function MarketMap() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [selected, setSelected] = useState<Truck | null>(null)
+  const [search, setSearch] = useState('')
+  const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState(false)
+
+  // Refs so the pin/zoom effects (which re-run on filter changes) can reach
+  // the projection, pins layer, and zoom behavior built by the mount effect
+  // without rebuilding the whole map (that would reset pan/zoom every keystroke).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const projectionRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pinsGroupRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const zoomBehaviorRef = useRef<any>(null)
+  // Current zoom scale (k) — pins/labels counter-scale by 1/k so they stay a
+  // constant on-screen size instead of ballooning when the map zooms in.
+  const zoomKRef = useRef(1)
+  const hiddenClassesRef = useRef(hiddenClasses)
+  hiddenClassesRef.current = hiddenClasses
+
+  const q = search.trim().toLowerCase()
+  const filteredTrucks = useMemo(
+    () => TRUCKS.filter((t) => !hiddenClasses.has(t.class) && (q === '' || t.id.toLowerCase().includes(q))),
+    [q, hiddenClasses],
+  )
+
+  const toggleClass = (cls: string) => {
+    setHiddenClasses((prev) => {
+      const next = new Set(prev)
+      if (next.has(cls)) next.delete(cls)
+      else next.add(cls)
+      return next
+    })
+  }
+
+  const zoomBy = (factor: number) => {
+    const svgEl = svgRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !zoomBehavior) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(select(svgEl) as any).transition().duration(200).call(zoomBehavior.scaleBy, factor)
+  }
+
+  const resetZoom = () => {
+    const svgEl = svgRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !zoomBehavior) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(select(svgEl) as any).transition().duration(300).call(zoomBehavior.transform, zoomIdentity)
+  }
 
   useEffect(() => {
     const svgEl = svgRef.current
@@ -213,6 +262,7 @@ export default function MarketMap() {
 
     const projection = geoAlbersUsa().scale(1280).translate([W / 2, H / 2])
     const path = geoPath().projection(projection)
+    projectionRef.current = projection
 
     const svg = select(svgEl)
     // Clear any previous render (e.g. hot reload / re-mount).
@@ -293,19 +343,53 @@ export default function MarketMap() {
         .on('mouseleave', () => label.style('opacity', 0))
     })
 
-    // Truck pins — teardrop markers colored by class.
-    const pins = zoomGroup.append('g')
-    TRUCKS.forEach((t) => {
+    // Truck pins live in their own group, drawn/updated by a separate effect
+    // below so filtering by search/class doesn't require rebuilding the base map.
+    pinsGroupRef.current = zoomGroup.append('g')
+
+    // Zoom & pan
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([1, 8])
+      .translateExtent([[0, 0], [W, H]])
+      .on('zoom', (event) => {
+        zoomGroup.attr('transform', event.transform.toString())
+        zoomKRef.current = event.transform.k
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pinsGroupRef.current?.selectAll('g.truck-pin').attr('transform', (d: any) =>
+          `translate(${d.px},${d.py}) scale(${0.9 / event.transform.k})`,
+        )
+      })
+    svg.call(zoomBehavior).on('dblclick.zoom', null)
+    zoomBehaviorRef.current = zoomBehavior
+
+    return () => {
+      svg.on('.zoom', null)
+      svg.call(zoomBehavior.transform, zoomIdentity)
+    }
+  }, [])
+
+  // Draw/refresh truck pins whenever the search text or class visibility
+  // changes — keeps the base map (topology, zoom state) intact.
+  useEffect(() => {
+    const pins = pinsGroupRef.current
+    const projection = projectionRef.current
+    if (!pins || !projection) return
+    pins.selectAll('*').remove()
+
+    filteredTrucks.forEach((t: Truck) => {
       const p = projection([t.lon, t.lat])
       if (!p) return
       const [px, py] = p
       const color = CLASS_COLOR[t.class]
-      // Pin tip sits exactly on the projected point.
+      // Pin tip sits exactly on the projected point. Counter-scale by the
+      // current zoom level so the pin/label stay a constant on-screen size.
       const g = pins
         .append('g')
-        .attr('transform', `translate(${px},${py}) scale(0.9)`)
+        .datum({ px, py })
+        .attr('class', 'truck-pin')
+        .attr('transform', `translate(${px},${py}) scale(${0.9 / zoomKRef.current})`)
         .style('cursor', 'pointer')
-        .on('click', (event) => {
+        .on('click', (event: Event) => {
           event.stopPropagation()
           setSelected(t)
         })
@@ -322,29 +406,94 @@ export default function MarketMap() {
       g.append('circle')
         .attr('cx', 0).attr('cy', -16).attr('r', 3.2)
         .attr('fill', '#fff')
+
+      // Truck ID label — always visible above the pin.
+      g.append('text')
+        .attr('x', 0).attr('y', -32)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#fff')
+        .attr('font-size', 9)
+        .attr('font-family', 'sans-serif')
+        .attr('font-weight', 700)
+        .attr('stroke', 'rgba(0,0,0,0.65)')
+        .attr('stroke-width', 3)
+        .style('paint-order', 'stroke')
+        .style('pointer-events', 'none')
+        .text(t.id)
     })
+  }, [filteredTrucks])
 
-    // Zoom & pan
-    const zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 8])
-      .translateExtent([[0, 0], [W, H]])
-      .on('zoom', (event) => {
-        zoomGroup.attr('transform', event.transform.toString())
-      })
-    svg.call(zoomBehavior).on('dblclick.zoom', null)
+  // Searching zooms/pans to the matching truck(s) and opens the same detail
+  // panel a click would — so a search result behaves just like clicking a pin.
+  useEffect(() => {
+    const svgEl = svgRef.current
+    const projection = projectionRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !projection || !zoomBehavior) return
+    const svg = select(svgEl)
 
-    return () => {
-      svg.on('.zoom', null)
-      svg.call(zoomBehavior.transform, zoomIdentity)
+    if (q === '') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(svg as any).transition().duration(400).call(zoomBehavior.transform, zoomIdentity)
+      return
     }
-  }, [])
+
+    const matches = TRUCKS.filter(
+      (t) => !hiddenClassesRef.current.has(t.class) && t.id.toLowerCase().includes(q),
+    )
+    if (matches.length === 0) return
+
+    setSelected(matches[0])
+
+    const pts = matches
+      .map((t) => projection([t.lon, t.lat]))
+      .filter((p): p is [number, number] => p !== null)
+    if (pts.length === 0) return
+
+    const xs = pts.map((p) => p[0])
+    const ys = pts.map((p) => p[1])
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    const spanX = Math.max(maxX - minX, 1)
+    const spanY = Math.max(maxY - minY, 1)
+    const padding = 140
+    const scale = Math.min(8, Math.max(2.5, Math.min((W - padding) / spanX, (H - padding) / spanY)))
+    const transform = zoomIdentity.translate(W / 2, H / 2).scale(scale).translate(-cx, -cy)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(svg as any).transition().duration(500).call(zoomBehavior.transform, transform)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q])
 
   return (
     <section className="card market-map-card">
       <div className="card-head">
         <span className="eyebrow">Fleet Monitor</span>
+        <div className="mm-search-box">
+          <Search size={14} color="var(--text-muted)" />
+          <input
+            type="text"
+            placeholder="Search truck ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              type="button"
+              className="mm-search-clear"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="market-map-wrap">
+      {expanded && <div className="mm-expand-backdrop" onClick={() => setExpanded(false)} />}
+      <div className={`market-map-wrap ${expanded ? 'expanded' : ''}`}>
         <svg
           ref={svgRef}
           className="market-map-svg"
@@ -352,15 +501,46 @@ export default function MarketMap() {
           role="img"
           aria-label="US market map"
         />
+
+        <button
+          type="button"
+          className="mm-expand-btn"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? 'Collapse map' : 'Expand map'}
+        >
+          {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+
+        <div className="mm-zoom-controls">
+          <button type="button" onClick={() => zoomBy(1.4)} aria-label="Zoom in">
+            <Plus size={16} />
+          </button>
+          <button type="button" onClick={() => zoomBy(1 / 1.4)} aria-label="Zoom out">
+            <Minus size={16} />
+          </button>
+          <button type="button" onClick={resetZoom} aria-label="Reset view">
+            <RotateCcw size={14} />
+          </button>
+        </div>
+
         <div className="market-map-legend">
-          <div className="mm-legend-label">My trucks</div>
+          <div className="mm-legend-label">My trucks (click to hide/show)</div>
           {(['A', 'B', 'C', 'D'] as const).map((cls) => (
-            <span key={cls}>
+            <button
+              key={cls}
+              type="button"
+              className={`mm-legend-item ${hiddenClasses.has(cls) ? 'inactive' : ''}`}
+              onClick={() => toggleClass(cls)}
+            >
               <i style={{ background: CLASS_COLOR[cls] }} />
               Class {cls}
-            </span>
+            </button>
           ))}
         </div>
+
+        {filteredTrucks.length === 0 && (
+          <div className="mm-empty">No trucks match your search/filters</div>
+        )}
 
         {selected && (
           <TruckDetailPanel

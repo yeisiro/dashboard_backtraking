@@ -6,6 +6,10 @@ import TripDetailModal from './TripDetailModal'
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel & Savings', 'Rewards'] as const
 type SubTab = (typeof SUBTABS)[number]
 
+// V1 ("summary") drops the Rewards subtab; V2 ("dashboard") keeps the full set.
+const subtabsForView = (view: 'summary' | 'dashboard'): readonly SubTab[] =>
+  view === 'summary' ? SUBTABS.filter((t) => t !== 'Rewards') : SUBTABS
+
 const CLASS_COLOR: Record<TripRow['cls'], string> = {
   A: 'var(--green)',
   B: 'var(--blue)',
@@ -61,16 +65,19 @@ const dateRange = (r: TripRow) =>
 export default function FullData({
   band = null,
   classFilter = [],
+  view = 'dashboard',
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
+  view?: 'summary' | 'dashboard'
 }) {
   const [tab, setTab] = useState<SubTab>('Trips')
+  const subtabs = subtabsForView(view)
 
   return (
     <div className="fd">
       <div className="fd-tabs">
-        {SUBTABS.map((t) => (
+        {subtabs.map((t) => (
           <button key={t} className={`fd-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t}
           </button>

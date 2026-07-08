@@ -2133,6 +2133,73 @@ button {
   background: #131619;
   height: 460px;
 }
+.market-map-wrap.expanded {
+  position: fixed;
+  inset: 28px;
+  z-index: 50;
+  margin-top: 0;
+  height: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.mm-expand-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(0, 0, 0, 0.6);
+}
+.mm-expand-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: rgba(18, 24, 27, 0.85);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.mm-expand-btn:hover {
+  color: #fff;
+  background: rgba(28, 34, 38, 0.95);
+}
+.mm-zoom-controls {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 24, 27, 0.85);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.mm-zoom-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.mm-zoom-controls button:last-child {
+  border-bottom: none;
+}
+.mm-zoom-controls button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
 .market-map-svg {
   width: 100%;
   height: 100%;
@@ -2159,18 +2226,83 @@ button {
   letter-spacing: 0.5px;
   margin-bottom: 2px;
 }
-.market-map-legend span {
+.market-map-legend .mm-legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.6);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.market-map-legend .mm-legend-item:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.market-map-legend .mm-legend-item.inactive {
+  opacity: 0.35;
+  text-decoration: line-through;
 }
 .market-map-legend i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.mm-search-box {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 10px;
+  width: 200px;
+}
+.mm-search-box input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.mm-search-box input::placeholder {
+  color: var(--text-muted);
+}
+.mm-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mm-search-clear:hover {
+  color: var(--text);
+}
+
+.mm-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  background: rgba(18, 24, 27, 0.9);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
 }
 
 /* ---------- Truck detail panel (Fleet Monitor map) ---------- */
