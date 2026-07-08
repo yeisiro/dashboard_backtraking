@@ -7,7 +7,6 @@ import {
   Maximize2,
   Play,
   Pause,
-  ArrowUpRight,
   Minus,
   Plus,
   Check,
@@ -37,6 +36,8 @@ function splitLane(lane: string): [string, string] {
 // Geometry is computed once at module load — it never changes between trips.
 const MAP_W = 960
 const MAP_H = 520
+const MIN_ZOOM = 0.4
+const MAX_ZOOM = 5
 const mapProjection = geoAlbersUsa().scale(1280).translate([MAP_W / 2, MAP_H / 2])
 const mapPathGen = geoPath().projection(mapProjection)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -361,10 +362,16 @@ const TONE_VAR: Record<Tone, string> = {
 // ── Timeline nodes ──────────────────────────────────────────────────────────
 type NodeKind = 'radio-teal' | 'minus' | 'x' | 'check' | 'radio-empty'
 interface TlEvent {
+  t: number
   kind: NodeKind
-  callout?: { label: string; tone: Tone }
-  status: string
+  calloutTone: Tone
   badgeTone: Tone | 'gray'
+  action: string // very brief, shown above the node
+  status: string // Completed / Executed / Skipped / Deviated
+  place: string // shown below the node
+  time?: string // omitted for stops that were never actually visited (e.g. Skipped)
+  cost?: string // shown below, only when a $ figure applies
+  fuelIndex?: number // index into `fuelStops`, so a click can highlight the matching map pin
 }
 
 function NodeIcon({ kind }: { kind: NodeKind }) {
@@ -389,7 +396,7 @@ function NodeIcon({ kind }: { kind: NodeKind }) {
   if (kind === 'radio-empty')
     return (
       <span className="ld-node ld-node-radio" style={{ background: '#0E141A' }}>
-        <span className="ld-radio-ring" style={{ borderColor: '#9A9A9A' }} />
+        <span className="ld-radio-ring" style={{ borderColor: '#CDCDCD' }} />
       </span>
     )
   return (
@@ -420,6 +427,7 @@ export default function TripDetailModal({
   const [hoverStart, setHoverStart] = useState(false)
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
+  const [hoverDev, setHoverDev] = useState(false)
   const [fullMap, setFullMap] = useState(false)
 
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
@@ -503,7 +511,7 @@ export default function TripDetailModal({
 
   const handleMapWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault()
-    setZoomLevel((z) => Math.min(5, Math.max(1, z + (e.deltaY < 0 ? 0.2 : -0.2))))
+    setZoomLevel((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + (e.deltaY < 0 ? 0.2 : -0.2))))
   }
   const resetMapView = () => {
     setZoomLevel(1)
@@ -634,6 +642,7 @@ export default function TripDetailModal({
   const mismatchChance = Math.min(0.85, Math.abs(trip.missedFuelSavings) / Math.max(fuelCostTotal, 1) + 0.15)
 
   type FuelStop = {
+    t: number
     pos: [number, number]
     mile: number
     station: string
@@ -651,6 +660,7 @@ export default function TripDetailModal({
       const tExec = Math.min(Math.max(baseT - 0.045, 0.05), 0.95)
       const tOpt = Math.min(Math.max(baseT + 0.045, 0.05), 0.95)
       fuelStops.push({
+        t: tExec,
         pos: pointAtFraction(routePoints, tExec).pos,
         mile: Math.round(trip.totalMiles * tExec),
         station: fakeStation(fuelRand),
@@ -660,6 +670,7 @@ export default function TripDetailModal({
         status: 'executed-only',
       })
       fuelStops.push({
+        t: tOpt,
         pos: pointAtFraction(routePoints, tOpt).pos,
         mile: Math.round(trip.totalMiles * tOpt),
         station: fakeStation(fuelRand),
@@ -671,6 +682,7 @@ export default function TripDetailModal({
     } else {
       const price = round2(3.35 + fuelRand() * 0.3)
       fuelStops.push({
+        t: baseT,
         pos: pointAtFraction(routePoints, baseT).pos,
         mile: Math.round(trip.totalMiles * baseT),
         station: fakeStation(fuelRand),
@@ -707,30 +719,6 @@ export default function TripDetailModal({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {fuelStops.map((s, i) => {
-        const title =
-          s.status === 'optimal-executed'
-            ? 'Fuel stop — optimal, executed'
-            : s.status === 'executed-only'
-            ? 'Fuel stop — executed, not optimal'
-            : 'Fuel stop — optimal, not executed'
-        const line3 =
-          s.status === 'optimal-only' ? `$${s.pricePerGal}/gal` : `$${s.pricePerGal}/gal — $${s.amount} spent`
-        return (
-          <FuelStopMarker
-            key={i}
-            x={s.pos[0]} y={s.pos[1]} vbW={vbW}
-            icon={Fuel}
-            color={s.status === 'executed-only' ? '#F5C84B' : '#33DB9E'}
-            dashed={s.status === 'optimal-only'}
-            title={title}
-            line2={s.station}
-            line3={line3}
-            hovered={hoverFuel === i}
-            onHoverChange={(v) => setHoverFuel(v ? i : null)}
-          />
-        )
-      })}
       <g>
         <circle
           cx={curX} cy={curY} r={vbW * 0.028}
@@ -740,28 +728,93 @@ export default function TripDetailModal({
           <Truck size={vbW * 0.038} color="#0b1524" strokeWidth={2.6} />
         </g>
       </g>
-      <MapPinMarker
-        x={ox} y={oy} vbW={vbW}
-        label="Route start"
-        icon={MapPin}
-        bg="#7CC8CF" fg="#fff" iconBadge="#0b1524"
-        hovered={hoverStart}
-        onHoverChange={setHoverStart}
-        city={origin}
-        address={CITY_DETAILS[origin]?.address ?? ''}
-        zip={CITY_DETAILS[origin]?.zip ?? ''}
-      />
-      <MapPinMarker
-        x={dx} y={dy} vbW={vbW}
-        label="Route end"
-        icon={Flag}
-        bg="#4d9dff" fg="#fff"
-        hovered={hoverEnd}
-        onHoverChange={setHoverEnd}
-        city={dest}
-        address={CITY_DETAILS[dest]?.address ?? ''}
-        zip={CITY_DETAILS[dest]?.zip ?? ''}
-      />
+      {/* Markers are drawn in a plain <svg>, which paints strictly in DOM
+          order — whichever hover tooltip opened last would otherwise sit
+          behind markers drawn after it. Sorting the hovered one to the end
+          keeps its tooltip on top no matter where it sits on the route. */}
+      {[
+        {
+          key: 'dev',
+          hovered: hoverDev,
+          node: (
+            <FuelStopMarker
+              x={devMidPt.pos[0]} y={devMidPt.pos[1]} vbW={vbW}
+              icon={Route}
+              color="#f2585d"
+              title="Route deviation"
+              line2="Off-route detour"
+              line3={`$${Math.round(trip.excessMilesCost)} excess cost`}
+              hovered={hoverDev}
+              onHoverChange={setHoverDev}
+            />
+          ),
+        },
+        ...fuelStops.map((s, i) => {
+          const title =
+            s.status === 'optimal-executed'
+              ? 'Fuel stop — optimal, executed'
+              : s.status === 'executed-only'
+              ? 'Fuel stop — executed, not optimal'
+              : 'Fuel stop — optimal, not executed'
+          const line3 =
+            s.status === 'optimal-only' ? `$${s.pricePerGal}/gal` : `$${s.pricePerGal}/gal — $${s.amount} spent`
+          return {
+            key: `fuel-${i}`,
+            hovered: hoverFuel === i,
+            node: (
+              <FuelStopMarker
+                x={s.pos[0]} y={s.pos[1]} vbW={vbW}
+                icon={Fuel}
+                color={s.status === 'executed-only' ? '#F5C84B' : '#33DB9E'}
+                dashed={s.status === 'optimal-only'}
+                title={title}
+                line2={s.station}
+                line3={line3}
+                hovered={hoverFuel === i}
+                onHoverChange={(v) => setHoverFuel(v ? i : null)}
+              />
+            ),
+          }
+        }),
+        {
+          key: 'start',
+          hovered: hoverStart,
+          node: (
+            <MapPinMarker
+              x={ox} y={oy} vbW={vbW}
+              label="Route start"
+              icon={MapPin}
+              bg="#7CC8CF" fg="#fff" iconBadge="#0b1524"
+              hovered={hoverStart}
+              onHoverChange={setHoverStart}
+              city={origin}
+              address={CITY_DETAILS[origin]?.address ?? ''}
+              zip={CITY_DETAILS[origin]?.zip ?? ''}
+            />
+          ),
+        },
+        {
+          key: 'end',
+          hovered: hoverEnd,
+          node: (
+            <MapPinMarker
+              x={dx} y={dy} vbW={vbW}
+              label="Route end"
+              icon={Flag}
+              bg="#4d9dff" fg="#fff"
+              hovered={hoverEnd}
+              onHoverChange={setHoverEnd}
+              city={dest}
+              address={CITY_DETAILS[dest]?.address ?? ''}
+              zip={CITY_DETAILS[dest]?.zip ?? ''}
+            />
+          ),
+        },
+      ]
+        .sort((a, b) => Number(a.hovered) - Number(b.hovered))
+        .map((m) => (
+          <g key={m.key}>{m.node}</g>
+        ))}
     </>
   )
 
@@ -824,15 +877,112 @@ export default function TripDetailModal({
     },
   ]
 
-  const events: TlEvent[] = [
-    { kind: 'radio-teal', status: 'Completed', badgeTone: 'teal' },
-    { kind: 'minus', callout: { label: 'Desvío', tone: 'orange' }, status: 'Completed', badgeTone: 'orange' },
-    { kind: 'x', callout: { label: 'Outcome malo', tone: 'red' }, status: 'Completed', badgeTone: 'red' },
-    { kind: 'check', callout: { label: 'Outcome bueno', tone: 'green' }, status: 'Completed', badgeTone: 'green' },
-    { kind: 'radio-empty', callout: { label: 'No ejecutado', tone: 'orange' }, status: 'Skipped', badgeTone: 'gray' },
-    { kind: 'radio-teal', status: 'Completed', badgeTone: 'teal' },
-    { kind: 'radio-teal', status: 'Completed', badgeTone: 'teal' },
-  ]
+  // Timeline events — the same story the map tells (departure, fuel stops,
+  // the deviation, arrival), just laid out on a single line instead of a
+  // route. Deterministic per trip so it matches the map exactly.
+  const tlRand = seededRandom(routeSeed + 99)
+  // Just the chain name for the timeline card — the exit/highway detail is
+  // one tap away in the map's own tooltip and only added wrapping here.
+  const chainName = (station: string) => station.split(' · ')[0]
+  const dateForT = (t: number) => (trip.startDate === trip.endDate ? trip.startDate : t < 0.5 ? trip.startDate : trip.endDate)
+  const timeForT = (t: number) => {
+    const totalMinutes = Math.max(0, Math.min(23 * 60 + 59, Math.round(360 + t * 600 + (tlRand() - 0.5) * 40)))
+    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
+    const mm = String(totalMinutes % 60).padStart(2, '0')
+    return `${hh}:${mm} - ${dateForT(t)}`
+  }
+
+  const devT = (devStart + devEnd) / 2
+  const tlItems: TlEvent[] = []
+  tlItems.push({
+    t: 0,
+    kind: 'radio-teal',
+    calloutTone: 'teal',
+    badgeTone: 'teal',
+    action: 'Pickup',
+    status: 'Completed',
+    place: origin,
+    time: timeForT(0),
+  })
+  fuelStops
+    .map((s, fuelIndex) => ({ s, fuelIndex }))
+    .sort((a, b) => a.s.t - b.s.t)
+    .forEach(({ s, fuelIndex }) => {
+      if (s.status === 'optimal-executed') {
+        // On plan and on price — the ideal case.
+        tlItems.push({
+          t: s.t,
+          kind: 'check',
+          calloutTone: 'green',
+          badgeTone: 'green',
+          action: 'Fuel stop',
+          status: 'Completed',
+          place: chainName(s.station),
+          time: timeForT(s.t),
+          cost: `$${s.pricePerGal}/gal · $${s.amount}`,
+          fuelIndex,
+        })
+      } else if (s.status === 'executed-only') {
+        // Actually refueled here, but at a worse price than the plan called for.
+        tlItems.push({
+          t: s.t,
+          kind: 'minus',
+          calloutTone: 'orange',
+          badgeTone: 'orange',
+          action: 'Fuel stop',
+          status: 'Executed',
+          place: chainName(s.station),
+          time: timeForT(s.t),
+          cost: `$${s.pricePerGal}/gal · $${s.amount}`,
+          fuelIndex,
+        })
+      } else {
+        // The cheaper station the plan called for, never actually visited —
+        // no real arrival time to show since the truck was never there.
+        tlItems.push({
+          t: s.t,
+          kind: 'radio-empty',
+          calloutTone: 'orange',
+          badgeTone: 'gray',
+          action: 'Optimal fuel stop',
+          status: 'Skipped',
+          place: chainName(s.station),
+          cost: `$${s.pricePerGal}/gal`,
+          fuelIndex,
+        })
+      }
+    })
+  tlItems.push({
+    t: devT,
+    kind: 'x',
+    calloutTone: 'red',
+    badgeTone: 'red',
+    action: 'Route deviation',
+    status: 'Deviated',
+    place: 'Off-route detour',
+    time: timeForT(devT),
+    cost: `$${Math.round(trip.excessMilesCost)} excess cost`,
+  })
+  tlItems.push({
+    t: 1,
+    kind: 'radio-teal',
+    calloutTone: 'teal',
+    badgeTone: 'teal',
+    action: 'Delivery',
+    status: 'Completed',
+    place: dest,
+    time: timeForT(1),
+  })
+  const events: TlEvent[] = tlItems.sort((a, b) => a.t - b.t)
+
+  // Clicking a timeline node highlights the matching pin on the map above —
+  // same tooltip the pin already shows on hover, just triggered by tap too.
+  const selectEvent = (e: TlEvent) => {
+    setHoverStart(e.action === 'Pickup')
+    setHoverEnd(e.action === 'Delivery')
+    setHoverFuel(e.fuelIndex ?? null)
+    setHoverDev(e.kind === 'x')
+  }
 
   // Cost breakdown segments (share of total lane cost), sorted largest first.
   const COST_SEGMENTS = [
@@ -871,7 +1021,6 @@ export default function TripDetailModal({
               <div className="ld-hub-name">{origin}</div>
             </div>
             <div className="ld-route-mid">
-              <span className="ld-distance">{trip.loadedMiles.toLocaleString()} mi</span>
               <span className="ld-route-track">
                 <span className="ld-route-dot" />
                 <span className="ld-route-arrow">→</span>
@@ -993,14 +1142,14 @@ export default function TripDetailModal({
                   <button
                     className="ld-map-btn ld-map-round"
                     aria-label="Zoom in"
-                    onClick={() => setZoomLevel((z) => Math.min(5, z + 0.5))}
+                    onClick={() => setZoomLevel((z) => Math.min(MAX_ZOOM, z + 0.5))}
                   >
                     <Plus size={16} />
                   </button>
                   <button
                     className="ld-map-btn ld-map-round"
                     aria-label="Zoom out"
-                    onClick={() => setZoomLevel((z) => Math.max(1, z - 0.5))}
+                    onClick={() => setZoomLevel((z) => Math.max(MIN_ZOOM, z - 0.5))}
                   >
                     <Minus size={16} />
                   </button>
@@ -1026,44 +1175,48 @@ export default function TripDetailModal({
                 <button className="ld-scrub-play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
                   {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
                 </button>
-                <div className="ld-scrub-track" ref={scrubTrackRef} onMouseDown={handleScrubMouseDown}>
+                <div
+                  className="ld-scrub-track"
+                  ref={!fullMap ? scrubTrackRef : undefined}
+                  onMouseDown={handleScrubMouseDown}
+                >
                   <div className="ld-scrub-fill" style={{ width: `${progress * 100}%` }} />
                   <div className="ld-scrub-thumb" style={{ left: `${progress * 100}%` }} />
                 </div>
+                <span className="ld-scrub-end" aria-hidden="true">
+                  <Flag size={12} />
+                </span>
               </div>
             </section>
           </div>
 
           {/* Timeline */}
           <div className="ld-timeline">
-            <div className="ld-tl-line" />
+            <div className="ld-tl-line" style={{ left: `${50 / events.length}%`, right: `${50 / events.length}%` }} />
             {events.map((e, i) => {
               const badge = BADGE_STYLE[e.badgeTone]
               return (
                 <div className="ld-tl-col" key={i}>
                   <div className="ld-tl-callout-slot">
-                    {e.callout && (
-                      <div className="ld-tl-callout-wrap">
-                        <div className="ld-tl-callout">
-                          <div className="ld-callout-txt">
-                            <span className="ld-callout-head" style={{ color: TONE_VAR[e.callout.tone] }}>
-                              {e.callout.label}
-                            </span>
-                            <span className="ld-callout-sub">Muy breve explicación</span>
-                          </div>
-                          <span className="ld-callout-arrow">
-                            <ArrowUpRight size={14} color="#9A9A9A" />
-                          </span>
-                        </div>
-                        <span className="ld-callout-stem" />
+                    <div className="ld-tl-callout-wrap">
+                      <div className="ld-tl-callout">
+                        <span className="ld-callout-head" style={{ color: TONE_VAR[e.calloutTone] }}>
+                          {e.action}
+                        </span>
                       </div>
-                    )}
+                      <span className="ld-callout-stem" />
+                    </div>
                   </div>
-                  <div className="ld-tl-node-slot">
+                  <button
+                    type="button"
+                    className="ld-tl-node-slot"
+                    aria-label={`Show ${e.action} on the map`}
+                    onClick={() => selectEvent(e)}
+                  >
                     <NodeIcon kind={e.kind} />
-                  </div>
+                  </button>
                   <div className="ld-tl-info">
-                    <div className="ld-tl-name">Nombre evento aquí simple</div>
+                    <div className="ld-tl-name">{e.place}</div>
                     <span
                       className="ld-tl-badge"
                       style={{
@@ -1074,8 +1227,10 @@ export default function TripDetailModal({
                     >
                       {e.status}
                     </span>
-                    <div className="ld-tl-desc">Aquí se puede explicar un poquito más del evento</div>
-                    <div className="ld-tl-time">16:44 - 12/06/26</div>
+                    <div className="ld-tl-desc">
+                      <div className="ld-tl-time">{e.time ?? 'Not visited'}</div>
+                      {e.cost && <div className="ld-tl-cost">{e.cost}</div>}
+                    </div>
                   </div>
                 </div>
               )
@@ -1105,14 +1260,14 @@ export default function TripDetailModal({
                 <button
                   className="ld-map-btn ld-map-round"
                   aria-label="Zoom in"
-                  onClick={() => setZoomLevel((z) => Math.min(5, z + 0.5))}
+                  onClick={() => setZoomLevel((z) => Math.min(MAX_ZOOM, z + 0.5))}
                 >
                   <Plus size={16} />
                 </button>
                 <button
                   className="ld-map-btn ld-map-round"
                   aria-label="Zoom out"
-                  onClick={() => setZoomLevel((z) => Math.max(1, z - 0.5))}
+                  onClick={() => setZoomLevel((z) => Math.max(MIN_ZOOM, z - 0.5))}
                 >
                   <Minus size={16} />
                 </button>
@@ -1129,6 +1284,23 @@ export default function TripDetailModal({
             >
               {mapLayers}
             </svg>
+
+            <div className="ld-map-scrub">
+              <button className="ld-scrub-play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+                {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+              </button>
+              <div
+                className="ld-scrub-track"
+                ref={fullMap ? scrubTrackRef : undefined}
+                onMouseDown={handleScrubMouseDown}
+              >
+                <div className="ld-scrub-fill" style={{ width: `${progress * 100}%` }} />
+                <div className="ld-scrub-thumb" style={{ left: `${progress * 100}%` }} />
+              </div>
+              <span className="ld-scrub-end" aria-hidden="true">
+                <Flag size={12} />
+              </span>
+            </div>
           </div>
         </div>
       </div>

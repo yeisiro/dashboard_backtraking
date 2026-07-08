@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronUp, ChevronDown, Eye, Search, X } from 'lucide-react'
 import { tripRows, type TripRow } from '../data'
 import TripDetailModal from './TripDetailModal'
@@ -18,15 +18,12 @@ const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 const pct = (n: number) => n.toFixed(1) + '%'
 const miles = (n: number) => n.toLocaleString() + ' mi'
 
-function scoreColor(n: number): string {
-  if (n >= 70) return 'var(--green)'
-  if (n >= 45) return 'var(--yellow)'
-  return 'var(--red)'
-}
-
 // ── Sorting ───────────────────────────────────────────────────────────────
 // Truck, Date, and Lane are plain (unsortable) — only the metric columns sort.
-type SortKey = 'score' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate'
+// 'score' has no column of its own but stays sortable internally — arriving
+// from a "Worst trips"/"Best trips" link ranks rows by it without showing it.
+type SortKey =
+  | 'score' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
 
 const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   score: (r) => r.score,
@@ -36,6 +33,7 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   profit: (r) => r.profit,
   adherence: (r) => r.adherence,
   wastedRate: (r) => r.wastedRate,
+  leakage: (r) => r.totalExcessCost,
 }
 
 const PLAIN_COLUMNS = [
@@ -45,13 +43,13 @@ const PLAIN_COLUMNS = [
 ]
 
 const SORT_COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'score', label: 'Score' },
-  { key: 'distance', label: 'Distance' },
+  { key: 'distance', label: 'Total Miles' },
   { key: 'income', label: 'Income' },
   { key: 'cost', label: 'Cost' },
   { key: 'profit', label: 'Profit' },
   { key: 'adherence', label: 'Adherence' },
   { key: 'wastedRate', label: 'Wasted Rate' },
+  { key: 'leakage', label: 'Leakage' },
 ]
 
 const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.lane}`
@@ -95,10 +93,46 @@ function TripsTable({
   band?: 'best' | 'worst' | null
   classFilter?: string[]
 }) {
-  const [sortKey, setSortKey] = useState<SortKey | null>('score')
+  const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<TripRow | null>(null)
   const [query, setQuery] = useState('')
+
+  // Drag-and-drop column reordering, scoped to the metric columns (Truck /
+  // Date / Lane stay put as the row's identity, Details stays last as the
+  // action column).
+  const [columnOrder, setColumnOrder] = useState<SortKey[]>(() => SORT_COLUMNS.map((c) => c.key))
+  const [dragOverKey, setDragOverKey] = useState<SortKey | null>(null)
+  const dragKeyRef = useRef<SortKey | null>(null)
+
+  const handleColDragStart = (key: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+    dragKeyRef.current = key
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleColDragOver = (key: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault()
+    if (dragKeyRef.current && dragKeyRef.current !== key) setDragOverKey(key)
+  }
+  const handleColDragLeave = (key: SortKey) => () => {
+    setDragOverKey((k) => (k === key ? null : k))
+  }
+  const handleColDrop = (targetKey: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault()
+    const fromKey = dragKeyRef.current
+    dragKeyRef.current = null
+    setDragOverKey(null)
+    if (!fromKey || fromKey === targetKey) return
+    setColumnOrder((order) => {
+      const next = [...order]
+      next.splice(next.indexOf(fromKey), 1)
+      next.splice(next.indexOf(targetKey), 0, fromKey)
+      return next
+    })
+  }
+  const handleColDragEnd = () => {
+    dragKeyRef.current = null
+    setDragOverKey(null)
+  }
 
   // Arriving from "Worst trips" / "Best trips" just sorts by score:
   // worst → ascending (lowest first), best → descending (highest first).
@@ -145,6 +179,63 @@ function TripsTable({
   const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
   const avgAdherence = rows.length ? rows.reduce((sum, r) => sum + r.adherence, 0) / rows.length : 0
   const avgWastedRate = rows.length ? rows.reduce((sum, r) => sum + r.wastedRate, 0) / rows.length : 0
+  const totalLeakage = rows.reduce((sum, r) => sum + r.totalExcessCost, 0)
+
+  // Cells for the metric columns, rendered in whatever order columnOrder says.
+  const metricCell = (key: SortKey, r: TripRow) => {
+    switch (key) {
+      case 'distance':
+        return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
+      case 'income':
+        return <td key={key}>{usd(r.income)}</td>
+      case 'cost':
+        return <td key={key} className="fd-dim">{usd(r.cost)}</td>
+      case 'profit':
+        return <td key={key} className="fd-strong">{usd(r.profit)}</td>
+      case 'adherence':
+        return <td key={key} className="fd-dim">{pct(r.adherence)}</td>
+      case 'wastedRate':
+        return <td key={key} className="fd-dim">{pct(r.wastedRate)}</td>
+      case 'leakage':
+        return <td key={key} className="fd-neg">{usd(r.totalExcessCost)}</td>
+      default:
+        return null
+    }
+  }
+  const metricFooterCell = (key: SortKey) => {
+    switch (key) {
+      case 'distance':
+        return <td key={key} />
+      case 'income':
+        return <td key={key} className="fd-strong">{usd(totalIncome)}</td>
+      case 'cost':
+        return <td key={key} className="fd-dim">{usd(totalCost)}</td>
+      case 'profit':
+        return <td key={key} className="fd-strong">{usd(totalProfit)}</td>
+      case 'adherence':
+        return (
+          <td key={key} className="fd-dim">
+            {pct(avgAdherence)}{' '}
+            <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
+              avg
+            </span>
+          </td>
+        )
+      case 'wastedRate':
+        return (
+          <td key={key} className="fd-dim">
+            {pct(avgWastedRate)}{' '}
+            <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
+              avg
+            </span>
+          </td>
+        )
+      case 'leakage':
+        return <td key={key} className="fd-neg">{usd(totalLeakage)}</td>
+      default:
+        return null
+    }
+  }
 
   return (
     <>
@@ -171,21 +262,33 @@ function TripsTable({
                   {c.label}
                 </th>
               ))}
-              {SORT_COLUMNS.map((c) => (
-                <th key={c.key}>
-                  <button
-                    className={`fd-sort ${sortKey === c.key ? 'active' : ''}`}
-                    onClick={() => toggleSort(c.key)}
+              {columnOrder.map((key) => {
+                const c = SORT_COLUMNS.find((col) => col.key === key)!
+                return (
+                  <th
+                    key={key}
+                    className={dragOverKey === key ? 'fd-col-dragover' : ''}
+                    draggable
+                    onDragStart={handleColDragStart(key)}
+                    onDragOver={handleColDragOver(key)}
+                    onDragLeave={handleColDragLeave(key)}
+                    onDrop={handleColDrop(key)}
+                    onDragEnd={handleColDragEnd}
                   >
-                    {c.label}
-                    {sortKey === c.key ? (
-                      sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                    ) : (
-                      <ChevronDown size={12} className="fd-sort-idle" />
-                    )}
-                  </button>
-                </th>
-              ))}
+                    <button
+                      className={`fd-sort ${sortKey === key ? 'active' : ''}`}
+                      onClick={() => toggleSort(key)}
+                    >
+                      {c.label}
+                      {sortKey === key ? (
+                        sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                      ) : (
+                        <ChevronDown size={12} className="fd-sort-idle" />
+                      )}
+                    </button>
+                  </th>
+                )
+              })}
               <th>Details</th>
             </tr>
           </thead>
@@ -207,17 +310,7 @@ function TripsTable({
                 </td>
                 <td className="fd-left fd-dim">{dateRange(r)}</td>
                 <td className="fd-left fd-dim">{r.lane}</td>
-                <td>
-                  <span className="fd-score" style={{ color: scoreColor(r.score) }}>
-                    {r.score}
-                  </span>
-                </td>
-                <td className="fd-dim">{miles(r.totalMiles)}</td>
-                <td>{usd(r.income)}</td>
-                <td className="fd-dim">{usd(r.cost)}</td>
-                <td className="fd-strong">{usd(r.profit)}</td>
-                <td className="fd-dim">{pct(r.adherence)}</td>
-                <td className="fd-dim">{pct(r.wastedRate)}</td>
+                {columnOrder.map((key) => metricCell(key, r))}
                 <td>
                   <button
                     className="fd-view"
@@ -235,23 +328,7 @@ function TripsTable({
               <td className="fd-left" colSpan={3}>
                 <span className="fd-total-label">Total</span>
               </td>
-              <td />
-              <td />
-              <td className="fd-strong">{usd(totalIncome)}</td>
-              <td className="fd-dim">{usd(totalCost)}</td>
-              <td className="fd-strong">{usd(totalProfit)}</td>
-              <td className="fd-dim">
-                {pct(avgAdherence)}{' '}
-                <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
-                  avg
-                </span>
-              </td>
-              <td className="fd-dim">
-                {pct(avgWastedRate)}{' '}
-                <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
-                  avg
-                </span>
-              </td>
+              {columnOrder.map((key) => metricFooterCell(key))}
               <td />
             </tr>
           </tfoot>

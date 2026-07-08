@@ -237,10 +237,48 @@ export function leakAmount(s: string): number {
   return Math.abs(Number(s.replace(/[^0-9.-]/g, ''))) || 0
 }
 
+// The 4 standard causes a row's savings/loss can be attributed to. Every row
+// picks one — there's no free-form "issue" text anymore.
+export type Cause = 'fuel' | 'empty' | 'deviation' | 'idle'
+
+export const CAUSE_LABEL: Record<Cause, string> = {
+  fuel: 'Missed Fuel Savings',
+  empty: 'Empty Miles',
+  deviation: 'Route Deviations',
+  idle: 'Idle Time Cost',
+}
+
+// Default text per cause — the wording is fixed; only the metric label
+// changes per row. No dollar figure here — the row's own value column
+// already shows the cost/savings, so repeating it would be redundant.
+// metricLabel arrives pre-formatted (see causeMetricLabel in PotentialRecovery)
+// since idle/deviation totals must be scaled to the selected date range first.
+export function causeText(cause: Cause, metricLabel: string): string {
+  switch (cause) {
+    case 'idle':
+      return `Idle ${metricLabel}`
+    case 'deviation':
+      return `${metricLabel} off-route`
+    case 'empty':
+      return `Deadhead ${metricLabel} of miles`
+    case 'fuel':
+      // The optimal price is the lowest available — you can only pay at or
+      // above it, never under. A small premium (green rows) just means you
+      // stayed close to optimal; a large one (red rows) means you didn't.
+      return `${metricLabel} over the optimal price`
+  }
+}
+
 export interface RankRow {
   rank: string
   name: string
-  issue?: string // what's wrong (bottom) or what's going well (top)
+  cause?: Cause // one of the 4 standard categories this row is attributed to
+  // The cause-specific quantity, same weekly-baseline convention as `weekly`:
+  // - idle: minutes/week of idle time (total, scales with the date range)
+  // - deviation: miles/week off-route (total, scales with the date range)
+  // - empty: % of miles run empty (a ratio — constant across date ranges)
+  // - fuel: ¢/gal vs. corridor price (a ratio — constant across date ranges)
+  metric?: number
   weekly: number // signed $/week baseline; scaled to the selected date window at render
   tone: Tone
   you?: boolean
@@ -248,43 +286,43 @@ export interface RankRow {
 
 // Worst offenders: which trucks are dragging the fleet and why.
 export const bottom5: RankRow[] = [
-  { rank: '01', name: '#7834', issue: 'Deadhead 31% of miles', weekly: -310, tone: 'red' },
-  { rank: '02', name: '#3390', issue: 'Fuel outside corridor', weekly: -280, tone: 'red' },
-  { rank: '03', name: '#2210', issue: 'Idle 28 min/day', weekly: -260, tone: 'red' },
-  { rank: '04', name: '#5567', issue: 'Late departures', weekly: -190, tone: 'red' },
-  { rank: '05', name: '#4521', issue: 'Off-route (I-30)', weekly: -175, tone: 'red' },
+  { rank: '01', name: '#7834', cause: 'empty', metric: 31, weekly: -310, tone: 'red' },
+  { rank: '02', name: '#3390', cause: 'fuel', metric: 18, weekly: -280, tone: 'red' },
+  { rank: '03', name: '#2210', cause: 'idle', metric: 196, weekly: -260, tone: 'red' },
+  { rank: '04', name: '#5567', cause: 'deviation', metric: 15, weekly: -190, tone: 'red' },
+  { rank: '05', name: '#4521', cause: 'deviation', metric: 22, weekly: -175, tone: 'red' },
 ]
 export const top5: RankRow[] = [
-  { rank: '01', name: '#5012', issue: 'Best route adherence', weekly: 465, tone: 'green' },
-  { rank: '02', name: '#4408', issue: 'Lowest deadhead', weekly: 390, tone: 'green' },
-  { rank: '03', name: '#6120', issue: 'On-corridor fueling', weekly: 355, tone: 'green' },
-  { rank: '04', name: '#3301', issue: 'Fewest idle minutes', weekly: 320, tone: 'green' },
-  { rank: '05', name: '#2884', issue: 'Top fuel economy', weekly: 300, tone: 'green' },
+  { rank: '01', name: '#5012', cause: 'deviation', metric: 2, weekly: 465, tone: 'green' },
+  { rank: '02', name: '#4408', cause: 'empty', metric: 9, weekly: 390, tone: 'green' },
+  { rank: '03', name: '#6120', cause: 'fuel', metric: 3, weekly: 355, tone: 'green' },
+  { rank: '04', name: '#3301', cause: 'idle', metric: 28, weekly: 320, tone: 'green' },
+  { rank: '05', name: '#2884', cause: 'fuel', metric: 2, weekly: 300, tone: 'green' },
 ]
 // Small-fleet simulation (1–5 trucks): with so few trucks, Bottom and Top end
 // up being the same trucks in reverse order — useful to preview the layout.
 export const bottomSmall: RankRow[] = [
-  { rank: '01', name: '#1201', issue: 'Deadhead 24% of miles', weekly: -210, tone: 'red' },
-  { rank: '02', name: '#1188', issue: 'Idle 22 min/day', weekly: -160, tone: 'red' },
-  { rank: '03', name: '#1150', issue: 'Occasional route drift', weekly: -45, tone: 'red' },
+  { rank: '01', name: '#1201', cause: 'empty', metric: 24, weekly: -210, tone: 'red' },
+  { rank: '02', name: '#1188', cause: 'idle', metric: 154, weekly: -160, tone: 'red' },
+  { rank: '03', name: '#1150', cause: 'deviation', metric: 8, weekly: -45, tone: 'red' },
 ]
 export const topSmall: RankRow[] = [
-  { rank: '01', name: '#1150', issue: 'Best fuel economy', weekly: 180, tone: 'green' },
-  { rank: '02', name: '#1188', issue: 'Good plan adherence', weekly: 90, tone: 'green' },
-  { rank: '03', name: '#1201', issue: 'On-corridor fueling', weekly: 60, tone: 'green' },
+  { rank: '01', name: '#1150', cause: 'fuel', metric: 4, weekly: 180, tone: 'green' },
+  { rank: '02', name: '#1188', cause: 'deviation', metric: 3, weekly: 90, tone: 'green' },
+  { rank: '03', name: '#1201', cause: 'fuel', metric: 2, weekly: 60, tone: 'green' },
 ]
 // Single-truck fleet: no ranking across trucks makes sense, so mirror the
 // full-fleet layout (identifier + cause) one level down — name = the load
-// this truck ran, issue = why that load lost or gained money.
+// this truck ran, cause/metric = why that load lost or gained money.
 export const bottomSingle: RankRow[] = [
-  { rank: '01', name: 'Load #48213', issue: 'Idle 18 min/day above target', weekly: -70, tone: 'red' },
-  { rank: '02', name: 'Load #48207', issue: 'Route drift, 2 minor deviations', weekly: -45, tone: 'red' },
-  { rank: '03', name: 'Load #48191', issue: 'Fuel stop off-corridor', weekly: -30, tone: 'red' },
+  { rank: '01', name: 'Load #48213', cause: 'idle', metric: 126, weekly: -70, tone: 'red' },
+  { rank: '02', name: 'Load #48207', cause: 'deviation', metric: 12, weekly: -45, tone: 'red' },
+  { rank: '03', name: 'Load #48191', cause: 'fuel', metric: 15, weekly: -30, tone: 'red' },
 ]
 export const topSingle: RankRow[] = [
-  { rank: '01', name: 'Load #48219', issue: 'Plan adherence, 98% on plan', weekly: 120, tone: 'green' },
-  { rank: '02', name: 'Load #48213', issue: 'Fuel economy, 6.4 mpg top decile', weekly: 60, tone: 'green' },
-  { rank: '03', name: 'Load #48207', issue: 'On-time delivery, no late loads', weekly: 40, tone: 'green' },
+  { rank: '01', name: 'Load #48219', cause: 'deviation', metric: 1, weekly: 120, tone: 'green' },
+  { rank: '02', name: 'Load #48213', cause: 'fuel', metric: 3, weekly: 60, tone: 'green' },
+  { rank: '03', name: 'Load #48207', cause: 'idle', metric: 14, weekly: 40, tone: 'green' },
 ]
 
 // Market benchmark ranking — where your best truck sits against the market.

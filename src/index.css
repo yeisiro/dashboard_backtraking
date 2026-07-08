@@ -2012,6 +2012,8 @@ button {
 }
 .fd-table th.fd-left,
 .fd-table td.fd-left { text-align: left; padding-left: 0; padding-right: 24px; }
+.fd-table th[draggable="true"] { cursor: grab; }
+.fd-table th.fd-col-dragover { box-shadow: inset 2px 0 0 var(--green); }
 .fd-sort {
   display: inline-flex;
   align-items: center;
@@ -2611,6 +2613,7 @@ button {
 .mini-row .name { color: var(--text); font-weight: 600; flex-shrink: 0; }
 .mini-row .issue {
   flex: 1;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 11.5px;
   white-space: nowrap;
@@ -3558,17 +3561,6 @@ button {
   display: flex;
   align-items: center;
 }
-.ld-distance {
-  position: absolute;
-  top: -18px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: #9A9A9A;
-  white-space: nowrap;
-}
 .ld-route-track {
   position: relative;
   width: 100%;
@@ -3803,6 +3795,17 @@ button {
   justify-content: center;
   flex: 0 0 auto;
 }
+.ld-scrub-end {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #E6E6E6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
 .ld-scrub-track {
   position: relative;
   flex: 1;
@@ -3924,51 +3927,48 @@ button {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  padding-top: 6px;
-  margin-top: 6px;
+  margin-top: 12px;
 }
+/* top = callout-slot height (95px) + half of node-slot height (20px) - half
+   of the line's own height (2px). left/right are set inline per render,
+   since they depend on the (variable) number of events. */
 .ld-tl-line {
   position: absolute;
-  left: 6%;
-  right: 6%;
-  top: 111px;
+  top: 113px;
   height: 4px;
   background: #33DB9E;
 }
 .ld-tl-col { display: flex; flex-direction: column; align-items: center; padding: 0 6px; }
 .ld-tl-callout-slot { height: 95px; display: flex; align-items: flex-start; justify-content: center; width: 100%; }
-.ld-tl-callout-wrap { position: relative; width: 100%; max-width: 150px; display: flex; flex-direction: column; align-items: center; }
+.ld-tl-callout-wrap { position: relative; width: 100%; max-width: 185px; display: flex; flex-direction: column; align-items: center; }
 .ld-tl-callout {
   background: #0E141A;
   border: 2px solid #233340;
   border-radius: 8px;
-  padding: 9px 11px;
+  padding: 11px 13px;
   width: 100%;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-.ld-callout-txt { display: flex; flex-direction: column; gap: 3px; }
-.ld-callout-head { font-size: 11px; font-weight: 600; line-height: 1; }
-.ld-callout-sub { font-size: 8px; font-weight: 300; color: #9A9A9A; line-height: 1.2; }
-.ld-callout-arrow {
-  width: 21px;
-  height: 21px;
-  border-radius: 5px;
-  background: #162028;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
 }
+.ld-callout-head { font-size: 13.5px; font-weight: 600; line-height: 1; text-align: center; }
 .ld-callout-stem {
   width: 0;
   flex: 1;
   min-height: 30px;
   border-left: 2px dashed #3B566D;
 }
-.ld-tl-node-slot { position: relative; z-index: 1; height: 40px; display: flex; align-items: center; }
+.ld-tl-node-slot {
+  position: relative;
+  z-index: 1;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
 .ld-node {
   width: 30px;
   height: 30px;
@@ -3980,16 +3980,33 @@ button {
 .ld-node-radio { border-radius: 50%; width: 36px; height: 36px; }
 .ld-radio-dot { width: 22px; height: 22px; border-radius: 50%; border: 5px solid #7CC8CF; }
 .ld-radio-ring { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #9A9A9A; }
-.ld-tl-info { text-align: center; margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.ld-tl-name { font-size: 12px; font-weight: 600; color: #9A9A9A; line-height: 1.2; max-width: 100px; }
+.ld-tl-info { text-align: center; margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 11px; }
+.ld-tl-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #CDCDCD;
+  line-height: 1.25;
+  max-width: 140px;
+  min-height: 2.5em;
+  display: flex;
+  align-items: flex-start;
+}
 .ld-tl-badge {
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
-.ld-tl-desc { font-size: 9px; font-weight: 300; color: #9A9A9A; line-height: 1.2; max-width: 115px; }
-.ld-tl-time { font-size: 8px; color: #686868; }
+.ld-tl-desc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: 150px;
+  min-height: 2.7em;
+}
+.ld-tl-time { font-size: 12px; font-weight: 400; color: #9A9A9A; line-height: 1.35; }
+.ld-tl-cost { font-size: 12px; font-weight: 600; color: #CDCDCD; line-height: 1.35; }
 
 @media (max-width: 1200px) {
   .ld-top { grid-template-columns: 1fr; }

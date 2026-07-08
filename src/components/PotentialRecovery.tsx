@@ -8,6 +8,8 @@ import {
   bottomSingle,
   topSingle,
   leaders,
+  causeText,
+  type Cause,
   type RankRow,
 } from '../data'
 import MarketBenchmarkModal from './MarketBenchmarkModal'
@@ -29,6 +31,42 @@ function periodValue(weekly: number, days: number): string {
   const total = Math.round((weekly / 7) * days)
   const sign = total >= 0 ? '+' : '-'
   return `${sign}$${Math.abs(total).toLocaleString('en-US')}`
+}
+
+// idle/deviation metrics are weekly-baseline totals, so they must scale with
+// the selected date range just like the cost does — 28 min/day of idle isn't
+// "28" over a week and "28" over a month, it's 196 min vs. 840 min.
+function scaledTotal(weeklyBase: number, days: number): number {
+  return Math.round((weeklyBase / 7) * days)
+}
+
+function idleLabel(weeklyMinutes: number, days: number): string {
+  const total = scaledTotal(weeklyMinutes, days)
+  if (total < 60) return `${total} min`
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+function milesLabel(weeklyMiles: number, days: number): string {
+  return `${scaledTotal(weeklyMiles, days)} mi`
+}
+
+// empty (% deadhead) and fuel (¢/gal premium) are ratios, not totals — they
+// don't change with the selected date range, so they pass through as-is.
+function causeMetricLabel(cause: Cause, metric: number, days: number): string {
+  switch (cause) {
+    case 'idle':
+      return idleLabel(metric, days)
+    case 'deviation':
+      return milesLabel(metric, days)
+    case 'empty':
+      return `${metric}%`
+    case 'fuel':
+      // metric is stored in cents/gal; every other $ figure in the app uses
+      // dollars, so render it that way here too instead of mixing ¢ and $.
+      return `$${(metric / 100).toFixed(2)}/gal`
+  }
 }
 
 const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders: RankRow[] }> = {
@@ -146,7 +184,11 @@ function RankCard({
                   <Star size={11} fill="var(--green)" /> Your truck
                 </span>
               )}
-              {r.issue && <span className="issue">{r.issue}</span>}
+              {r.cause && r.metric !== undefined && (
+                <span className="issue">
+                  {causeText(r.cause, causeMetricLabel(r.cause, r.metric, days))}
+                </span>
+              )}
               <span
                 className={`val cf-tip ${r.tone === 'red' ? 'neg' : 'pos'}`}
                 data-tip={rangeLabel}
