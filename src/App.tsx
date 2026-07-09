@@ -6,7 +6,6 @@ import KpiCards from './components/KpiCards'
 import MoneyLeakage from './components/MoneyLeakage'
 import PotentialRecovery, { type FleetMode } from './components/PotentialRecovery'
 import LiveOperations from './components/LiveOperations'
-import FleetMap from './components/FleetMap'
 import MarketMap from './components/MarketMap'
 import FullData from './components/FullData'
 import { PeriodContext, initialCompareRange } from './PeriodContext'
@@ -44,6 +43,7 @@ export default function App() {
               onTabChange={setDataTab}
               classFilter={classFilter}
               onClassFilterChange={setClassFilter}
+              view={view}
             />
             {dataTab === 'full' ? (
               <FullData band={tripsBand} classFilter={classFilter} view={view} />
@@ -65,7 +65,7 @@ export default function App() {
                 {view === 'dashboard' && (
                   <div className="grid-live">
                     <LiveOperations noData={noData} />
-                    <FleetMap noData={noData} />
+                    <MarketMap fill />
                   </div>
                 )}
               </>

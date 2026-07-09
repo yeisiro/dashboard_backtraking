@@ -17,6 +17,7 @@ import {
   MapPin,
   Flag,
   Truck,
+  Clock,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
@@ -1038,8 +1039,9 @@ export default function TripDetailModal({
                 <div className="ld-loadid-sub">Load id</div>
               </div>
             </div>
-            <span className="ld-status-pill">
-              <CheckCircle2 size={20} /> Completed
+            <span className={`ld-status-pill ${trip.status === 'in-progress' ? 'in-progress' : ''}`}>
+              {trip.status === 'in-progress' ? <Clock size={20} /> : <CheckCircle2 size={20} />}
+              {trip.status === 'in-progress' ? 'In Progress' : 'Completed'}
             </span>
           </div>
 

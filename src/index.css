@@ -2091,6 +2091,14 @@ button {
   gap: 10px;
   justify-content: flex-end;
 }
+.fd-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .fd-adh-bar {
   display: inline-block;
   width: 54px;
@@ -2123,6 +2131,17 @@ button {
 /* Market Overview map (third row) */
 .market-map-card {
   margin-top: 14px;
+}
+.market-map-card.mm-fill {
+  margin-top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.market-map-card.mm-fill .market-map-wrap.mm-fill-wrap {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 .market-map-wrap {
   position: relative;
@@ -2253,6 +2272,14 @@ button {
   flex-shrink: 0;
 }
 
+.mm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mm-search-wrap {
+  position: relative;
+}
 .mm-search-box {
   display: flex;
   align-items: center;
@@ -2261,7 +2288,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 7px 10px;
-  width: 200px;
+  width: 240px;
 }
 .mm-search-box input {
   flex: 1;
@@ -2288,6 +2315,90 @@ button {
 }
 .mm-search-clear:hover {
   color: var(--text);
+}
+
+.mm-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+}
+.mm-search-empty {
+  padding: 12px 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.mm-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mm-search-result + .mm-search-result {
+  margin-top: 2px;
+}
+.mm-search-result:hover {
+  background: var(--surface-3);
+}
+.mm-refresh-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.mm-refresh-all-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.mm-sr-id {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.mm-sr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+.mm-sr-row.mm-sr-muted {
+  color: var(--text-muted);
+}
+.mm-sr-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mm-sr-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .mm-empty {
@@ -2416,6 +2527,12 @@ button {
   color: rgba(255, 255, 255, 0.45);
   flex-shrink: 0;
 }
+.tdp-row-value-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
 .tdp-row-value {
   display: flex;
   align-items: center;
@@ -2423,6 +2540,17 @@ button {
   font-size: 13px;
   color: #fff;
   text-align: right;
+}
+.tdp-row-caption {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.35);
+}
+.tdp-icon-btn {
+  display: flex;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 .tdp-badge {
   font-size: 11px;
@@ -3724,6 +3852,10 @@ button {
   color: #00A065;
   font-size: 18px;
   font-weight: 500;
+}
+.ld-status-pill.in-progress {
+  background: #0E1A22;
+  color: var(--blue);
 }
 .ld-loadid {
   display: flex;

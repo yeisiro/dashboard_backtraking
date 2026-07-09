@@ -581,6 +581,7 @@ export interface TripRow {
   endDate: string // delivery
   lane: string
   band?: 'best' | 'worst'
+  status: 'in-progress' | 'completed'
   // Revenue
   income: number
   negotiatedRpm: number
@@ -618,6 +619,7 @@ interface TripBase {
   endDate: string
   lane: string
   band?: 'best' | 'worst'
+  status?: TripRow['status']
   income: number
   negotiatedRpm: number
   executedRpm: number
@@ -645,6 +647,7 @@ function buildTrip(b: TripBase): TripRow {
   return {
     ...b,
     score: 0, // filled in by computeScores once the full set is known
+    status: b.status ?? 'completed',
     profit: b.income - b.cost,
     wastedRpmPct: round1(((b.negotiatedRpm - b.effectiveRpm) / b.negotiatedRpm) * 100),
     totalCost,

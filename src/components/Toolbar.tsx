@@ -12,11 +12,13 @@ export default function Toolbar({
   onTabChange,
   classFilter = [],
   onClassFilterChange,
+  view = 'dashboard',
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
   classFilter?: string[]
   onClassFilterChange?: (next: string[]) => void
+  view?: 'summary' | 'dashboard'
 }) {
   const [showConnect, setShowConnect] = useState(false)
 
@@ -40,10 +42,12 @@ export default function Toolbar({
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
         <TrucksFilter />
         <DateFilter />
-        <button className="btn-primary" onClick={() => setShowConnect(true)}>
-          Connect Fleet
-          <Plus size={15} />
-        </button>
+        {!(view === 'summary' && tab === 'overview') && (
+          <button className="btn-primary" onClick={() => setShowConnect(true)}>
+            Connect Fleet
+            <Plus size={15} />
+          </button>
+        )}
       </div>
 
       {showConnect && <ConnectFleetModal onClose={() => setShowConnect(false)} />}

@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { X, RefreshCw, Copy, ChevronDown, Download, Search, Maximize2, Minimize2, Plus, Minus, RotateCcw } from 'lucide-react'
+import {
+  X,
+  RefreshCw,
+  Copy,
+  ChevronDown,
+  Download,
+  Search,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Minus,
+  RotateCcw,
+  User,
+  MapPin,
+  Truck as TruckIcon,
+} from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { select } from 'd3-selection'
 import { zoom, zoomIdentity } from 'd3-zoom'
@@ -105,6 +120,107 @@ const TRUCKS: Truck[] = [
     driver: { name: 'Wanda Fields', phone: '(713) 555-0188', license: 'TX-F2205', status: 'Off duty' },
     trailer: { number: 'TR-7719', type: 'Dry Van', length: '53 ft', status: 'Unlinked' },
   },
+  // Extra units near existing hubs (Chicago/Dallas) plus two new hubs
+  // (Atlanta/LA) — demonstrates pin clustering when several trucks sit
+  // close together at the default zoomed-out view.
+  {
+    id: 'R11101', lat: 42.3, lon: -87.4, class: 'B',
+    location: 'Waukegan, IL', eta: '6h 10m', eld: '281474984321101', plate: '11029384756',
+    vin: '1FTFW1ET8DFC00301', fuel: 'diesel', maxHitch: '1190', axle: '6x4', tank: '290 mi', documents: 2,
+    driver: { name: 'Sam Ortiz', phone: '(847) 555-0110', license: 'IL-O2201', status: 'On duty' },
+    trailer: { number: 'TR-1101', type: 'Dry Van', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11102', lat: 41.6, lon: -87.9, class: 'C',
+    location: 'Joliet, IL', eta: '4h 30m', eld: '281474984321102', plate: '22938475610',
+    vin: '2GCEK19T531102938', fuel: 'diesel', maxHitch: '1120', axle: '4x2', tank: '280 mi', documents: 3,
+    driver: { name: 'Nina Castillo', phone: '(815) 555-0122', license: 'IL-C3312', status: 'Resting' },
+    trailer: { number: 'TR-1102', type: 'Reefer', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11103', lat: 42.05, lon: -88.05, class: 'A',
+    location: 'Elgin, IL', eta: '2h 15m', eld: '281474984321103', plate: '33847561029',
+    vin: '3GNAXUEV5KL103928', fuel: 'diesel', maxHitch: '1250', axle: '6x4', tank: '305 mi', documents: 4,
+    driver: { name: 'Owen Baxter', phone: '(224) 555-0133', license: 'IL-B4423', status: 'On duty' },
+    trailer: { number: 'TR-1103', type: 'Flatbed', length: '48 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11104', lat: 41.5, lon: -87.15, class: 'D',
+    location: 'Gary, IN', eta: '9h 45m', eld: '281474984321104', plate: '44756102938',
+    vin: '4T1BF1FK0EU104839', fuel: 'regular', maxHitch: '960', axle: '4x2', tank: '260 mi', documents: 1,
+    driver: { name: 'Renee Cole', phone: '(219) 555-0144', license: 'IN-C5534', status: 'Off duty' },
+    trailer: { number: 'TR-1104', type: 'Dry Van', length: '53 ft', status: 'Unlinked' },
+  },
+  {
+    id: 'R11105', lat: 33.2, lon: -96.5, class: 'A',
+    location: 'McKinney, TX', eta: '5h 20m', eld: '281474984321105', plate: '55610293847',
+    vin: '5FNRL6H97EB105940', fuel: 'diesel', maxHitch: '1230', axle: '6x4', tank: '312 mi', documents: 3,
+    driver: { name: 'Jorge Delgado', phone: '(469) 555-0155', license: 'TX-D6645', status: 'On duty' },
+    trailer: { number: 'TR-1105', type: 'Dry Van', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11106', lat: 32.4, lon: -97.1, class: 'B',
+    location: 'Arlington, TX', eta: '3h 05m', eld: '281474984321106', plate: '66102938475',
+    vin: '6FTFW1EF1EFA10695', fuel: 'diesel', maxHitch: '1160', axle: '4x2', tank: '270 mi', documents: 2,
+    driver: { name: 'Chloe Whitfield', phone: '(817) 555-0166', license: 'TX-W7756', status: 'Resting' },
+    trailer: { number: 'TR-1106', type: 'Reefer', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11107', lat: 33.0, lon: -97.3, class: 'C',
+    location: 'Denton, TX', eta: '7h 40m', eld: '281474984321107', plate: '77029384756',
+    vin: '7G1ZD5ST1LF107061', fuel: 'diesel', maxHitch: '1080', axle: '4x2', tank: '295 mi', documents: 4,
+    driver: { name: 'Marcus Boyd', phone: '(940) 555-0177', license: 'TX-B8867', status: 'On duty' },
+    trailer: { number: 'TR-1107', type: 'Flatbed', length: '48 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11108', lat: 33.749, lon: -84.388, class: 'A',
+    location: 'Atlanta, GA', eta: '10h 15m', eld: '281474984321108', plate: '88293847561',
+    vin: '8HGCM82633A108172', fuel: 'diesel', maxHitch: '1270', axle: '6x4', tank: '330 mi', documents: 3,
+    driver: { name: 'Talia Grant', phone: '(404) 555-0188', license: 'GA-G9978', status: 'On duty' },
+    trailer: { number: 'TR-1108', type: 'Dry Van', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11109', lat: 34.1, lon: -84.0, class: 'B',
+    location: 'Lawrenceville, GA', eta: '11h 50m', eld: '281474984321109', plate: '99384756102',
+    vin: '9FMDK3GC1BB109283', fuel: 'diesel', maxHitch: '1145', axle: '4x2', tank: '285 mi', documents: 2,
+    driver: { name: 'Derek Simmons', phone: '(678) 555-0199', license: 'GA-S0089', status: 'Resting' },
+    trailer: { number: 'TR-1109', type: 'Reefer', length: '53 ft', status: 'Unlinked' },
+  },
+  {
+    id: 'R11110', lat: 33.4, lon: -84.7, class: 'C',
+    location: 'Newnan, GA', eta: '13h 25m', eld: '281474984321110', plate: '10293847561',
+    vin: '1VWDX7AJ0DM110394', fuel: 'diesel', maxHitch: '1095', axle: '4x2', tank: '275 mi', documents: 1,
+    driver: { name: 'Paige Alvarado', phone: '(770) 555-0100', license: 'GA-A1190', status: 'Off duty' },
+    trailer: { number: 'TR-1110', type: 'Flatbed', length: '48 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11111', lat: 34.0, lon: -84.9, class: 'D',
+    location: 'Marietta, GA', eta: '14h 05m', eld: '281474984321111', plate: '11928374650',
+    vin: '2G1ZD5ST9LF111405', fuel: 'regular', maxHitch: '975', axle: '4x2', tank: '260 mi', documents: 2,
+    driver: { name: 'Isaiah Ferrell', phone: '(470) 555-0111', license: 'GA-F2201', status: 'On duty' },
+    trailer: { number: 'TR-1111', type: 'Dry Van', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11112', lat: 34.052, lon: -118.244, class: 'A',
+    location: 'Los Angeles, CA', eta: '28h 30m', eld: '281474984321112', plate: '12837465091',
+    vin: '3VWDX7AJ2DM112516', fuel: 'diesel', maxHitch: '1260', axle: '6x4', tank: '318 mi', documents: 4,
+    driver: { name: 'Vanessa Cruz', phone: '(213) 555-0112', license: 'CA-C3312', status: 'On duty' },
+    trailer: { number: 'TR-1112', type: 'Dry Van', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11113', lat: 34.5, lon: -117.9, class: 'B',
+    location: 'Victorville, CA', eta: '26h 10m', eld: '281474984321113', plate: '23948756102',
+    vin: '4T1BF1FK2CU113627', fuel: 'diesel', maxHitch: '1130', axle: '4x2', tank: '290 mi', documents: 3,
+    driver: { name: 'Miguel Torres', phone: '(760) 555-0123', license: 'CA-T4423', status: 'Resting' },
+    trailer: { number: 'TR-1113', type: 'Reefer', length: '53 ft', status: 'Linked' },
+  },
+  {
+    id: 'R11114', lat: 33.7, lon: -118.5, class: 'C',
+    location: 'Torrance, CA', eta: '29h 45m', eld: '281474984321114', plate: '34857610293',
+    vin: '5NPE24AF3FH114738', fuel: 'diesel', maxHitch: '1085', axle: '4x2', tank: '270 mi', documents: 2,
+    driver: { name: 'Sierra Nakamura', phone: '(310) 555-0134', license: 'CA-N5534', status: 'On duty' },
+    trailer: { number: 'TR-1114', type: 'Flatbed', length: '48 ft', status: 'Unlinked' },
+  },
 ]
 
 // Freight hubs with their market grade — 89 major US cities.
@@ -203,12 +319,52 @@ const CITIES: City[] = [
 const W = 960
 const H = 520
 
-export default function MarketMap() {
+function statusDotColor(status: string) {
+  if (status === 'On duty') return 'var(--green, #2ee6a6)'
+  if (status === 'Resting') return 'var(--yellow, #f5c84b)'
+  return 'var(--text-muted, #626b78)'
+}
+
+function formatAgo(ts: number, now: number) {
+  const seconds = Math.max(0, Math.round((now - ts) / 1000))
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'} ago`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hours = Math.round(minutes / 60)
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`
+}
+
+// Trucks projected within this many screen pixels of each other collapse
+// into a single cluster marker. Divided by the current zoom scale so the
+// grouping loosens as the user zooms in (pins spread out, clusters split).
+const CLUSTER_PIXEL_RADIUS = 26
+
+export default function MarketMap({ fill = false }: { fill?: boolean }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [selected, setSelected] = useState<Truck | null>(null)
   const [search, setSearch] = useState('')
+  const [showResults, setShowResults] = useState(false)
   const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState(false)
+
+  // When each truck's location last reported in — staggered on load so the
+  // list looks like a live feed, then bumped to "just now" on refresh.
+  const [lastUpdated, setLastUpdated] = useState<Record<string, number>>(() => {
+    const start = Date.now()
+    return Object.fromEntries(TRUCKS.map((t, i) => [t.id, start - (7000 + i * 4231) % 90000]))
+  })
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const refreshLocation = (id: string) => {
+    setLastUpdated((prev) => ({ ...prev, [id]: Date.now() }))
+  }
+  const refreshAllLocations = () => {
+    const stamp = Date.now()
+    setLastUpdated(Object.fromEntries(TRUCKS.map((t) => [t.id, stamp])))
+  }
 
   // Refs so the pin/zoom effects (which re-run on filter changes) can reach
   // the projection, pins layer, and zoom behavior built by the mount effect
@@ -222,14 +378,28 @@ export default function MarketMap() {
   // Current zoom scale (k) — pins/labels counter-scale by 1/k so they stay a
   // constant on-screen size instead of ballooning when the map zooms in.
   const zoomKRef = useRef(1)
-  const hiddenClassesRef = useRef(hiddenClasses)
-  hiddenClassesRef.current = hiddenClasses
+  // Latest cluster/pin render function — rebuilt whenever visibleTrucks
+  // changes, called both after that rebuild and on every zoom tick (so
+  // clusters re-group live as the zoom level changes pixel distances).
+  const drawPinsRef = useRef<(k: number) => void>(() => {})
 
   const q = search.trim().toLowerCase()
-  const filteredTrucks = useMemo(
-    () => TRUCKS.filter((t) => !hiddenClasses.has(t.class) && (q === '' || t.id.toLowerCase().includes(q))),
-    [q, hiddenClasses],
+  // Map pins/clusters only respect the class legend — search no longer hides
+  // pins, it's just a lookup that jumps to a truck once one is picked.
+  const visibleTrucks = useMemo(
+    () => TRUCKS.filter((t) => !hiddenClasses.has(t.class)),
+    [hiddenClasses],
   )
+  // Shows the full fleet by default; typing narrows the list down.
+  const searchResults = useMemo(() => {
+    if (q === '') return visibleTrucks
+    return visibleTrucks.filter(
+      (t) =>
+        t.id.toLowerCase().includes(q) ||
+        t.driver.name.toLowerCase().includes(q) ||
+        t.location.toLowerCase().includes(q),
+    )
+  }, [q, visibleTrucks])
 
   const toggleClass = (cls: string) => {
     setHiddenClasses((prev) => {
@@ -254,6 +424,31 @@ export default function MarketMap() {
     if (!svgEl || !zoomBehavior) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(select(svgEl) as any).transition().duration(300).call(zoomBehavior.transform, zoomIdentity)
+  }
+
+  // Zooms/pans to fit a set of projected pixel points — used both by search
+  // (fit the matches) and by clicking a cluster (fit its members, splitting it).
+  const zoomToPixelPoints = (pts: [number, number][]) => {
+    const svgEl = svgRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !zoomBehavior || pts.length === 0) return
+    const svg = select(svgEl)
+
+    const xs = pts.map((p) => p[0])
+    const ys = pts.map((p) => p[1])
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    const spanX = Math.max(maxX - minX, 1)
+    const spanY = Math.max(maxY - minY, 1)
+    const padding = 140
+    const scale = Math.min(8, Math.max(2.5, Math.min((W - padding) / spanX, (H - padding) / spanY)))
+    const transform = zoomIdentity.translate(W / 2, H / 2).scale(scale).translate(-cx, -cy)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(svg as any).transition().duration(500).call(zoomBehavior.transform, transform)
   }
 
   useEffect(() => {
@@ -354,10 +549,7 @@ export default function MarketMap() {
       .on('zoom', (event) => {
         zoomGroup.attr('transform', event.transform.toString())
         zoomKRef.current = event.transform.k
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        pinsGroupRef.current?.selectAll('g.truck-pin').attr('transform', (d: any) =>
-          `translate(${d.px},${d.py}) scale(${0.9 / event.transform.k})`,
-        )
+        drawPinsRef.current(event.transform.k)
       })
     svg.call(zoomBehavior).on('dblclick.zoom', null)
     zoomBehaviorRef.current = zoomBehavior
@@ -368,132 +560,234 @@ export default function MarketMap() {
     }
   }, [])
 
-  // Draw/refresh truck pins whenever the search text or class visibility
-  // changes — keeps the base map (topology, zoom state) intact.
+  // Draw/refresh truck pins whenever the search text, class visibility, or
+  // zoom level changes. Nearby trucks (within CLUSTER_PIXEL_RADIUS on screen)
+  // collapse into a single cluster marker showing how many are grouped there;
+  // clicking a cluster zooms in to fit and split its members.
   useEffect(() => {
-    const pins = pinsGroupRef.current
     const projection = projectionRef.current
-    if (!pins || !projection) return
-    pins.selectAll('*').remove()
+    if (!projection) return
 
-    filteredTrucks.forEach((t: Truck) => {
-      const p = projection([t.lon, t.lat])
-      if (!p) return
-      const [px, py] = p
-      const color = CLASS_COLOR[t.class]
-      // Pin tip sits exactly on the projected point. Counter-scale by the
-      // current zoom level so the pin/label stay a constant on-screen size.
-      const g = pins
-        .append('g')
-        .datum({ px, py })
-        .attr('class', 'truck-pin')
-        .attr('transform', `translate(${px},${py}) scale(${0.9 / zoomKRef.current})`)
-        .style('cursor', 'pointer')
-        .on('click', (event: Event) => {
-          event.stopPropagation()
-          setSelected(t)
+    const points = visibleTrucks
+      .map((t) => {
+        const p = projection([t.lon, t.lat])
+        return p ? { t, x: p[0], y: p[1] } : null
+      })
+      .filter((p): p is { t: Truck; x: number; y: number } => p !== null)
+
+    drawPinsRef.current = (k: number) => {
+      const pins = pinsGroupRef.current
+      if (!pins) return
+      pins.selectAll('*').remove()
+
+      const threshold = CLUSTER_PIXEL_RADIUS / k
+      const used = new Set<string>()
+      const clusters: { x: number; y: number; items: { t: Truck; x: number; y: number }[] }[] = []
+      points.forEach((p) => {
+        if (used.has(p.t.id)) return
+        const group = [p]
+        used.add(p.t.id)
+        points.forEach((q) => {
+          if (used.has(q.t.id)) return
+          if (Math.hypot(p.x - q.x, p.y - q.y) < threshold) {
+            group.push(q)
+            used.add(q.t.id)
+          }
         })
+        const cx = group.reduce((s, g) => s + g.x, 0) / group.length
+        const cy = group.reduce((s, g) => s + g.y, 0) / group.length
+        clusters.push({ x: cx, y: cy, items: group })
+      })
 
-      // Invisible hit area so the whole pin is easy to click.
-      g.append('circle')
-        .attr('cx', 0).attr('cy', -14).attr('r', 16)
-        .attr('fill', 'transparent')
-      g.append('path')
-        .attr('d', 'M0 0 C -5 -7 -9 -10 -9 -16 A 9 9 0 1 1 9 -16 C 9 -10 5 -7 0 0 Z')
-        .attr('fill', color)
-        .attr('stroke', 'rgba(255,255,255,0.85)')
-        .attr('stroke-width', 1)
-      g.append('circle')
-        .attr('cx', 0).attr('cy', -16).attr('r', 3.2)
-        .attr('fill', '#fff')
-
-      // Truck ID label — always visible above the pin.
-      g.append('text')
-        .attr('x', 0).attr('y', -32)
-        .attr('text-anchor', 'middle')
-        .attr('fill', '#fff')
-        .attr('font-size', 9)
-        .attr('font-family', 'sans-serif')
-        .attr('font-weight', 700)
-        .attr('stroke', 'rgba(0,0,0,0.65)')
-        .attr('stroke-width', 3)
-        .style('paint-order', 'stroke')
-        .style('pointer-events', 'none')
-        .text(t.id)
-    })
-  }, [filteredTrucks])
-
-  // Searching zooms/pans to the matching truck(s) and opens the same detail
-  // panel a click would — so a search result behaves just like clicking a pin.
-  useEffect(() => {
-    const svgEl = svgRef.current
-    const projection = projectionRef.current
-    const zoomBehavior = zoomBehaviorRef.current
-    if (!svgEl || !projection || !zoomBehavior) return
-    const svg = select(svgEl)
-
-    if (q === '') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(svg as any).transition().duration(400).call(zoomBehavior.transform, zoomIdentity)
-      return
+      clusters.forEach((c) => {
+        if (c.items.length === 1) {
+          drawTruckPin(pins, c.items[0].t, c.items[0].x, c.items[0].y, k)
+        } else {
+          drawClusterMarker(pins, c, k)
+        }
+      })
     }
 
-    const matches = TRUCKS.filter(
-      (t) => !hiddenClassesRef.current.has(t.class) && t.id.toLowerCase().includes(q),
-    )
-    if (matches.length === 0) return
-
-    setSelected(matches[0])
-
-    const pts = matches
-      .map((t) => projection([t.lon, t.lat]))
-      .filter((p): p is [number, number] => p !== null)
-    if (pts.length === 0) return
-
-    const xs = pts.map((p) => p[0])
-    const ys = pts.map((p) => p[1])
-    const minX = Math.min(...xs)
-    const maxX = Math.max(...xs)
-    const minY = Math.min(...ys)
-    const maxY = Math.max(...ys)
-    const cx = (minX + maxX) / 2
-    const cy = (minY + maxY) / 2
-    const spanX = Math.max(maxX - minX, 1)
-    const spanY = Math.max(maxY - minY, 1)
-    const padding = 140
-    const scale = Math.min(8, Math.max(2.5, Math.min((W - padding) / spanX, (H - padding) / spanY)))
-    const transform = zoomIdentity.translate(W / 2, H / 2).scale(scale).translate(-cx, -cy)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(svg as any).transition().duration(500).call(zoomBehavior.transform, transform)
+    drawPinsRef.current(zoomKRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q])
+  }, [visibleTrucks])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function drawTruckPin(pins: any, t: Truck, px: number, py: number, k: number) {
+    const color = CLASS_COLOR[t.class]
+    // Pin tip sits exactly on the projected point. Counter-scale by the
+    // current zoom level so the pin/label stay a constant on-screen size.
+    const g = pins
+      .append('g')
+      .attr('transform', `translate(${px},${py}) scale(${0.9 / k})`)
+      .style('cursor', 'pointer')
+      .on('click', (event: Event) => {
+        event.stopPropagation()
+        setSelected(t)
+      })
+
+    // Invisible hit area so the whole pin is easy to click.
+    g.append('circle')
+      .attr('cx', 0).attr('cy', -14).attr('r', 16)
+      .attr('fill', 'transparent')
+    g.append('path')
+      .attr('d', 'M0 0 C -5 -7 -9 -10 -9 -16 A 9 9 0 1 1 9 -16 C 9 -10 5 -7 0 0 Z')
+      .attr('fill', color)
+      .attr('stroke', 'rgba(255,255,255,0.85)')
+      .attr('stroke-width', 1)
+    g.append('circle')
+      .attr('cx', 0).attr('cy', -16).attr('r', 3.2)
+      .attr('fill', '#fff')
+
+    // Truck ID label — always visible above the pin.
+    g.append('text')
+      .attr('x', 0).attr('y', -32)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#fff')
+      .attr('font-size', 9)
+      .attr('font-family', 'sans-serif')
+      .attr('font-weight', 700)
+      .attr('stroke', 'rgba(0,0,0,0.65)')
+      .attr('stroke-width', 3)
+      .style('paint-order', 'stroke')
+      .style('pointer-events', 'none')
+      .text(t.id)
+  }
+
+  function drawClusterMarker(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pins: any,
+    cluster: { x: number; y: number; items: { t: Truck; x: number; y: number }[] },
+    k: number,
+  ) {
+    const count = cluster.items.length
+    const r = (Math.min(22, 12 + count * 1.6)) / k
+
+    const g = pins
+      .append('g')
+      .attr('transform', `translate(${cluster.x},${cluster.y})`)
+      .style('cursor', 'pointer')
+      .on('click', (event: Event) => {
+        event.stopPropagation()
+        zoomToPixelPoints(cluster.items.map((it) => [it.x, it.y] as [number, number]))
+      })
+
+    g.append('circle')
+      .attr('r', r)
+      .attr('fill', 'rgba(77, 157, 255, 0.9)')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.5 / k)
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', '#fff')
+      .attr('font-size', 12 / k)
+      .attr('font-family', 'sans-serif')
+      .attr('font-weight', 700)
+      .style('pointer-events', 'none')
+      .text(count)
+  }
+
+  // Opening the list while the detail panel is open makes them overlap
+  // (both anchor to the right edge) — close the panel first.
+  const openSearchResults = () => {
+    setShowResults(true)
+    setSelected(null)
+  }
+
+  // Picking a result from the list zooms/pans to that truck and opens the
+  // same detail panel a click would — typing alone never moves the map,
+  // only choosing a result does.
+  const selectSearchResult = (t: Truck) => {
+    const projection = projectionRef.current
+    const p = projection?.([t.lon, t.lat])
+    if (p) zoomToPixelPoints([p])
+    setSelected(t)
+    setSearch('')
+    setShowResults(false)
+  }
 
   return (
-    <section className="card market-map-card">
+    <section className={`card market-map-card ${fill ? 'mm-fill' : ''}`}>
       <div className="card-head">
         <span className="eyebrow">Fleet Monitor</span>
-        <div className="mm-search-box">
-          <Search size={14} color="var(--text-muted)" />
-          <input
-            type="text"
-            placeholder="Search truck ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              type="button"
-              className="mm-search-clear"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-            >
-              <X size={13} />
-            </button>
+        <div className="mm-header-actions">
+        <div className="mm-search-wrap">
+          <div className="mm-search-box">
+            <Search size={14} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Search truck, driver, or city..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              // onClick (not just onFocus) because picking a result keeps the
+              // input focused (its button's onMouseDown prevents the blur
+              // that would otherwise close the dropdown mid-click) — so
+              // clicking the already-focused input again fires no new focus
+              // event, and this is the only way to reopen the list.
+              onFocus={openSearchResults}
+              onClick={openSearchResults}
+              onBlur={() => setTimeout(() => setShowResults(false), 150)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="mm-search-clear"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {showResults && (
+            <div className="mm-search-results">
+              {searchResults.length === 0 && (
+                <div className="mm-search-empty">
+                  {q === '' ? 'All truck classes are hidden' : `No trucks match "${search.trim()}"`}
+                </div>
+              )}
+              {searchResults.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="mm-search-result"
+                  // Fires before the input's onBlur closes the dropdown.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectSearchResult(t)}
+                >
+                  <div className="mm-sr-id">{t.id}</div>
+                  <div className="mm-sr-row">
+                    <span className="mm-sr-dot" style={{ background: statusDotColor(t.driver.status) }} />
+                    <span className="mm-sr-chip">
+                      <User size={12} /> {t.driver.name}
+                    </span>
+                  </div>
+                  <div className="mm-sr-row mm-sr-muted">
+                    <MapPin size={12} /> {t.location} · {formatAgo(lastUpdated[t.id] ?? now, now)}
+                  </div>
+                  <div className="mm-sr-row mm-sr-muted">
+                    <TruckIcon size={12} /> {t.trailer.type} · {t.trailer.number}
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
+        </div>
+
+        <button
+          type="button"
+          className="mm-refresh-all-btn"
+          onClick={refreshAllLocations}
+          aria-label="Refresh all truck locations"
+        >
+          <RefreshCw size={14} />
+        </button>
         </div>
       </div>
       {expanded && <div className="mm-expand-backdrop" onClick={() => setExpanded(false)} />}
-      <div className={`market-map-wrap ${expanded ? 'expanded' : ''}`}>
+      <div className={`market-map-wrap ${expanded ? 'expanded' : ''} ${fill && !expanded ? 'mm-fill-wrap' : ''}`}>
         <svg
           ref={svgRef}
           className="market-map-svg"
@@ -538,8 +832,8 @@ export default function MarketMap() {
           ))}
         </div>
 
-        {filteredTrucks.length === 0 && (
-          <div className="mm-empty">No trucks match your search/filters</div>
+        {visibleTrucks.length === 0 && (
+          <div className="mm-empty">All truck classes are hidden</div>
         )}
 
         {selected && (
@@ -547,6 +841,9 @@ export default function MarketMap() {
             key={selected.id}
             truck={selected}
             onClose={() => setSelected(null)}
+            lastUpdatedAt={lastUpdated[selected.id] ?? now}
+            now={now}
+            onRefreshLocation={() => refreshLocation(selected.id)}
           />
         )}
       </div>
@@ -562,27 +859,54 @@ function DetailRow({
   badge,
   copy,
   refresh,
+  onRefresh,
+  caption,
 }: {
   label: string
   value: ReactNode
   badge?: string
   copy?: boolean
   refresh?: boolean
+  onRefresh?: () => void
+  caption?: string
 }) {
   return (
     <div className="tdp-row">
       <span className="tdp-row-label">{label}</span>
-      <div className="tdp-row-value">
-        <span>{value}</span>
-        {badge && <span className="tdp-badge">{badge}</span>}
-        {refresh && <RefreshCw size={15} className="tdp-icon" />}
-        {copy && <Copy size={15} className="tdp-icon" />}
+      <div className="tdp-row-value-col">
+        <div className="tdp-row-value">
+          <span>{value}</span>
+          {badge && <span className="tdp-badge">{badge}</span>}
+          {refresh && (
+            onRefresh ? (
+              <button type="button" className="tdp-icon-btn" onClick={onRefresh} aria-label={`Refresh ${label}`}>
+                <RefreshCw size={15} className="tdp-icon" />
+              </button>
+            ) : (
+              <RefreshCw size={15} className="tdp-icon" />
+            )
+          )}
+          {copy && <Copy size={15} className="tdp-icon" />}
+        </div>
+        {caption && <span className="tdp-row-caption">{caption}</span>}
       </div>
     </div>
   )
 }
 
-function TruckDetailPanel({ truck, onClose }: { truck: Truck; onClose: () => void }) {
+function TruckDetailPanel({
+  truck,
+  onClose,
+  lastUpdatedAt,
+  now,
+  onRefreshLocation,
+}: {
+  truck: Truck
+  onClose: () => void
+  lastUpdatedAt: number
+  now: number
+  onRefreshLocation: () => void
+}) {
   const [tab, setTab] = useState<Tab>('unit')
 
   return (
@@ -613,7 +937,13 @@ function TruckDetailPanel({ truck, onClose }: { truck: Truck; onClose: () => voi
         {tab === 'unit' && (
           <>
             <div className="tdp-section-title">General information</div>
-            <DetailRow label="Current Location" value={truck.location} refresh />
+            <DetailRow
+              label="Current Location"
+              value={truck.location}
+              refresh
+              onRefresh={onRefreshLocation}
+              caption={`Updated ${formatAgo(lastUpdatedAt, now)}`}
+            />
             <DetailRow label="ETA" value={truck.eta} refresh />
             <DetailRow label="ELD" value={truck.eld} badge="Linked" copy />
             <DetailRow label="Plate Number" value={truck.plate} copy />

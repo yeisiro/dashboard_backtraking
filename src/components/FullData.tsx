@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronUp, ChevronDown, Eye, Search, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock } from 'lucide-react'
 import { tripRows, type TripRow } from '../data'
 import TripDetailModal from './TripDetailModal'
 
@@ -15,6 +15,11 @@ const CLASS_COLOR: Record<TripRow['cls'], string> = {
   B: 'var(--blue)',
   C: 'var(--orange)',
   D: 'var(--red)',
+}
+
+const STATUS_STYLE: Record<TripRow['status'], { label: string; color: string; icon: typeof CheckCircle2 }> = {
+  completed: { label: 'Completed', color: 'var(--green)', icon: CheckCircle2 },
+  'in-progress': { label: 'In Progress', color: 'var(--blue)', icon: Clock },
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────
@@ -44,6 +49,7 @@ const PLAIN_COLUMNS = [
   { label: 'Truck', left: true },
   { label: 'Date', left: true },
   { label: 'Lane', left: true },
+  { label: 'Status', left: true },
 ]
 
 const SORT_COLUMNS: { key: SortKey; label: string }[] = [
@@ -61,6 +67,19 @@ const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.lane}`
 // "May 14 → May 15", collapsed to "May 14" when start and end match.
 const dateRange = (r: TripRow) =>
   r.startDate === r.endDate ? r.startDate : `${r.startDate} → ${r.endDate}`
+
+// V1 always spells out both ends of the trip, even for same-day trips.
+const fullDateRange = (r: TripRow) => `${r.startDate} → ${r.endDate}`
+
+function StatusBadge({ status }: { status: TripRow['status'] }) {
+  const { label, color, icon: Icon } = STATUS_STYLE[status]
+  return (
+    <span className="fd-status" style={{ color }}>
+      <Icon size={13} />
+      {label}
+    </span>
+  )
+}
 
 export default function FullData({
   band = null,
@@ -85,7 +104,7 @@ export default function FullData({
       </div>
 
       {tab === 'Trips' ? (
-        <TripsTable band={band} classFilter={classFilter} />
+        <TripsTable band={band} classFilter={classFilter} view={view} />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
@@ -96,9 +115,11 @@ export default function FullData({
 function TripsTable({
   band,
   classFilter = [],
+  view = 'dashboard',
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
+  view?: 'summary' | 'dashboard'
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -160,15 +181,17 @@ function TripsTable({
   const byClass =
     classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
 
-  // Search matches truck number, either date, or either city in the lane.
+  // V1 searches by trip city (lane) only. V2 also matches truck number and
+  // either date.
   const q = query.trim().toLowerCase()
   const filtered = q
-    ? byClass.filter(
-        (r) =>
-          r.truck.toLowerCase().includes(q) ||
-          r.startDate.toLowerCase().includes(q) ||
-          r.endDate.toLowerCase().includes(q) ||
-          r.lane.toLowerCase().includes(q)
+    ? byClass.filter((r) =>
+        view === 'summary'
+          ? r.lane.toLowerCase().includes(q)
+          : r.truck.toLowerCase().includes(q) ||
+            r.startDate.toLowerCase().includes(q) ||
+            r.endDate.toLowerCase().includes(q) ||
+            r.lane.toLowerCase().includes(q)
       )
     : byClass
 
@@ -250,7 +273,7 @@ function TripsTable({
         <Search size={14} className="fd-search-icon" />
         <input
           type="text"
-          placeholder="Search by truck, date, or city"
+          placeholder={view === 'summary' ? 'Search by city' : 'Search by truck, date, or city'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -315,8 +338,13 @@ function TripsTable({
                     {r.cls}
                   </span>
                 </td>
-                <td className="fd-left fd-dim">{dateRange(r)}</td>
+                <td className="fd-left fd-dim">
+                  {view === 'summary' ? fullDateRange(r) : dateRange(r)}
+                </td>
                 <td className="fd-left fd-dim">{r.lane}</td>
+                <td className="fd-left">
+                  <StatusBadge status={r.status} />
+                </td>
                 {columnOrder.map((key) => metricCell(key, r))}
                 <td>
                   <button
@@ -332,7 +360,7 @@ function TripsTable({
           </tbody>
           <tfoot>
             <tr>
-              <td className="fd-left" colSpan={3}>
+              <td className="fd-left" colSpan={PLAIN_COLUMNS.length}>
                 <span className="fd-total-label">Total</span>
               </td>
               {columnOrder.map((key) => metricFooterCell(key))}
