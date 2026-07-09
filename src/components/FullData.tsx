@@ -26,16 +26,23 @@ const STATUS_STYLE: Record<TripRow['status'], { label: string; color: string; ic
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 const pct = (n: number) => n.toFixed(1) + '%'
 const miles = (n: number) => n.toLocaleString() + ' mi'
+// "9h 24m" — built from the trip's real effectiveHours + idleHours, not an estimate.
+const fmtHours = (h: number) => {
+  const totalMin = Math.round(h * 60)
+  return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`
+}
+const tripHours = (r: TripRow) => r.effectiveHours + r.idleHours
 
 // ── Sorting ───────────────────────────────────────────────────────────────
 // Truck, Date, and Lane are plain (unsortable) — only the metric columns sort.
 // 'score' has no column of its own but stays sortable internally — arriving
 // from a "Worst trips"/"Best trips" link ranks rows by it without showing it.
 type SortKey =
-  | 'score' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
+  | 'score' | 'time' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
 
 const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   score: (r) => r.score,
+  time: (r) => tripHours(r),
   distance: (r) => r.totalMiles,
   income: (r) => r.income,
   cost: (r) => r.cost,
@@ -53,6 +60,7 @@ const PLAIN_COLUMNS = [
 ]
 
 const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'time', label: 'Time' },
   { key: 'distance', label: 'Total Miles' },
   { key: 'income', label: 'Income' },
   { key: 'cost', label: 'Cost' },
@@ -105,9 +113,109 @@ export default function FullData({
 
       {tab === 'Trips' ? (
         <TripsTable band={band} classFilter={classFilter} view={view} />
+      ) : tab === 'Fleet Analytics' ? (
+        <FleetAnalytics classFilter={classFilter} view={view} />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
+    </div>
+  )
+}
+
+const CLASS_ORDER: TripRow['cls'][] = ['A', 'B', 'C', 'D']
+// Trip data covers roughly one week — projected to a monthly figure for the
+// "$/truck/mo" header stat, same convention as the "/mo" savings elsewhere.
+const WEEKS_PER_MONTH = 4.33
+
+// One collapsible section per truck class. Each section's body is just the
+// Trips table, pre-filtered to that class — same sort/search/reorder/detail
+// behavior, only the framing (class header + margin bar) is new.
+function FleetAnalytics({
+  classFilter = [],
+  view = 'dashboard',
+}: {
+  classFilter?: string[]
+  view?: 'summary' | 'dashboard'
+}) {
+  const classes =
+    classFilter.length > 0 ? CLASS_ORDER.filter((c) => classFilter.includes(c)) : CLASS_ORDER
+  const [expanded, setExpanded] = useState<Set<TripRow['cls']>>(
+    () => new Set(classes[0] ? [classes[0]] : [])
+  )
+  const toggleExpanded = (cls: TripRow['cls']) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(cls) ? next.delete(cls) : next.add(cls)
+      return next
+    })
+
+  return (
+    <div className="fd-fleet">
+      {classes.map((cls) => {
+        const rows = tripRows.filter((r) => r.cls === cls)
+        if (rows.length === 0) return null
+        const truckCount = new Set(rows.map((r) => r.truck)).size
+        const totalTime = rows.reduce((sum, r) => sum + tripHours(r), 0)
+        const totalMiles = rows.reduce((sum, r) => sum + r.totalMiles, 0)
+        const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
+        const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
+        const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
+        const avgAdherence = rows.reduce((sum, r) => sum + r.adherence, 0) / rows.length
+        const avgWastedRate = rows.reduce((sum, r) => sum + r.wastedRate, 0) / rows.length
+        const totalLeakage = rows.reduce((sum, r) => sum + r.totalExcessCost, 0)
+        const margin = totalIncome ? (totalProfit / totalIncome) * 100 : 0
+        const perTruckMo = truckCount ? (totalProfit / truckCount) * WEEKS_PER_MONTH : 0
+        const isOpen = expanded.has(cls)
+        // Bar length reads as margin quality: scaled against a 15% "great margin"
+        // reference, floored so even a weak class still shows a sliver.
+        const barPct = Math.max(6, Math.min(100, (Math.max(margin, 0) / 15) * 100))
+
+        return (
+          <div key={cls} className={`fd-fleet-class ${isOpen ? 'open' : ''}`}>
+            <button
+              className="fd-fleet-head"
+              aria-expanded={isOpen}
+              onClick={() => toggleExpanded(cls)}
+            >
+              <span className="fd-fleet-badge" style={{ background: CLASS_COLOR[cls] }}>
+                {cls}
+              </span>
+              <span className="fd-fleet-count">{truckCount} trucks</span>
+              <span className="fd-fleet-margin" style={{ color: margin >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {margin >= 0 ? '+' : ''}{margin.toFixed(2)}% margin
+              </span>
+              <span className="fd-fleet-permo">
+                <b>{usd(perTruckMo)}</b> / truck / mo
+              </span>
+              <ChevronDown size={15} className="fd-fleet-chevron" />
+            </button>
+            <div className="fd-fleet-bar">
+              <span style={{ width: `${barPct}%`, background: CLASS_COLOR[cls] }} />
+            </div>
+            {/* Collapsed: the class total sits here, outside the dropdown. Expanded:
+                this total is dropped in favor of the trip table's own footer row,
+                which shows the same total below the itemized trips. */}
+            {!isOpen && (
+              <div className="fd-fleet-total">
+                <span className="fd-fleet-total-label">Total</span>
+                <span className="fd-fleet-total-item"><i>Time</i><b>{fmtHours(totalTime)}</b></span>
+                <span className="fd-fleet-total-item"><i>Total Miles</i><b>{miles(totalMiles)}</b></span>
+                <span className="fd-fleet-total-item"><i>Income</i><b>{usd(totalIncome)}</b></span>
+                <span className="fd-fleet-total-item"><i>Cost</i><b>{usd(totalCost)}</b></span>
+                <span className="fd-fleet-total-item"><i>Profit</i><b className="fd-strong">{usd(totalProfit)}</b></span>
+                <span className="fd-fleet-total-item"><i>Adherence</i><b>{pct(avgAdherence)}</b></span>
+                <span className="fd-fleet-total-item"><i>Wasted Rate</i><b>{pct(avgWastedRate)}</b></span>
+                <span className="fd-fleet-total-item"><i>Leakage</i><b className="fd-neg">{usd(totalLeakage)}</b></span>
+              </div>
+            )}
+            {isOpen && (
+              <div className="fd-fleet-body">
+                <TripsTable band={null} classFilter={[cls]} view={view} />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -205,6 +313,7 @@ function TripsTable({
   // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
   // can't be summed meaningfully, so Adherence/Wasted Rate show the
   // fleet-wide average instead.
+  const totalTime = rows.reduce((sum, r) => sum + tripHours(r), 0)
   const totalDistance = rows.reduce((sum, r) => sum + r.totalMiles, 0)
   const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
   const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
@@ -216,6 +325,8 @@ function TripsTable({
   // Cells for the metric columns, rendered in whatever order columnOrder says.
   const metricCell = (key: SortKey, r: TripRow) => {
     switch (key) {
+      case 'time':
+        return <td key={key} className="fd-dim">{fmtHours(tripHours(r))}</td>
       case 'distance':
         return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
       case 'income':
@@ -236,6 +347,8 @@ function TripsTable({
   }
   const metricFooterCell = (key: SortKey) => {
     switch (key) {
+      case 'time':
+        return <td key={key} className="fd-dim">{fmtHours(totalTime)}</td>
       case 'distance':
         return <td key={key} className="fd-dim">{miles(totalDistance)}</td>
       case 'income':

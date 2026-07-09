@@ -778,9 +778,10 @@ export default function MarketMap({ fill = false }: { fill?: boolean }) {
 
         <button
           type="button"
-          className="mm-refresh-all-btn"
+          className="mm-refresh-all-btn mm-tooltip"
           onClick={refreshAllLocations}
           aria-label="Refresh all truck locations"
+          data-tooltip="Refresh all truck locations"
         >
           <RefreshCw size={14} />
         </button>

@@ -1920,6 +1920,101 @@ button {
   color: var(--text-muted);
   font-size: 14px;
 }
+.fd-fleet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.fd-fleet-class {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.fd-fleet-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.fd-fleet-head:hover { background: rgba(255, 255, 255, 0.02); }
+.fd-fleet-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b0f12;
+  flex-shrink: 0;
+}
+.fd-fleet-count { font-size: 13px; color: var(--text-dim); flex-shrink: 0; }
+.fd-fleet-margin { font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.fd-fleet-permo { font-size: 13px; color: var(--text-dim); margin-left: auto; }
+.fd-fleet-permo b { color: var(--text); font-weight: 700; }
+.fd-fleet-chevron {
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.fd-fleet-class.open .fd-fleet-chevron { transform: rotate(180deg); }
+.fd-fleet-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.fd-fleet-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+}
+.fd-fleet-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+.fd-fleet-body .fd-search { margin-top: 12px; }
+.fd-fleet-total {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+.fd-fleet-total-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.fd-fleet-total-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.fd-fleet-total-item i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.fd-fleet-total-item b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
 .fd-filterbar {
   display: flex;
   align-items: center;
@@ -2386,6 +2481,33 @@ button {
 .mm-refresh-all-btn:hover {
   color: var(--text);
   background: var(--surface-3);
+}
+.mm-tooltip {
+  position: relative;
+}
+.mm-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.mm-tooltip:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 .mm-sr-id {
   font-size: 14px;
