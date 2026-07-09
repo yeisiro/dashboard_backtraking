@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock } from 'lucide-react'
+import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock, GripVertical } from 'lucide-react'
 import { tripRows, type TripRow } from '../data'
 import TripDetailModal from './TripDetailModal'
 
@@ -202,8 +202,10 @@ function TripsTable({
       })
     : filtered
 
-  // Totals: dollar columns sum across all trips. Percentages can't be summed
-  // meaningfully, so Adherence/Wasted Rate show the fleet-wide average instead.
+  // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
+  // can't be summed meaningfully, so Adherence/Wasted Rate show the
+  // fleet-wide average instead.
+  const totalDistance = rows.reduce((sum, r) => sum + r.totalMiles, 0)
   const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
   const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
   const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
@@ -235,7 +237,7 @@ function TripsTable({
   const metricFooterCell = (key: SortKey) => {
     switch (key) {
       case 'distance':
-        return <td key={key} />
+        return <td key={key} className="fd-dim">{miles(totalDistance)}</td>
       case 'income':
         return <td key={key} className="fd-strong">{usd(totalIncome)}</td>
       case 'cost':
@@ -305,6 +307,9 @@ function TripsTable({
                     onDrop={handleColDrop(key)}
                     onDragEnd={handleColDragEnd}
                   >
+                    <span className="fd-drag-handle" aria-hidden="true">
+                      <GripVertical size={12} />
+                    </span>
                     <button
                       className={`fd-sort ${sortKey === key ? 'active' : ''}`}
                       onClick={() => toggleSort(key)}

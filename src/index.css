@@ -2012,8 +2012,23 @@ button {
 }
 .fd-table th.fd-left,
 .fd-table td.fd-left { text-align: left; padding-left: 0; padding-right: 24px; }
-.fd-table th[draggable="true"] { cursor: grab; }
+.fd-table th[draggable="true"] { position: relative; cursor: grab; }
+.fd-table th[draggable="true"]:active { cursor: grabbing; }
 .fd-table th.fd-col-dragover { box-shadow: inset 2px 0 0 var(--green); }
+.fd-drag-handle {
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.fd-table th[draggable="true"]:hover .fd-drag-handle,
+.fd-table th.fd-col-dragover .fd-drag-handle { opacity: 0.55; }
+.fd-table th[draggable="true"]:active .fd-drag-handle { opacity: 0.9; }
 .fd-sort {
   display: inline-flex;
   align-items: center;
