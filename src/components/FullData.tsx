@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock, GripVertical } from 'lucide-react'
+import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock, GripVertical, Filter, Check } from 'lucide-react'
 import { tripRows, type TripRow } from '../data'
 import TripDetailModal from './TripDetailModal'
 
@@ -26,24 +26,39 @@ const STATUS_STYLE: Record<TripRow['status'], { label: string; color: string; ic
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 const pct = (n: number) => n.toFixed(1) + '%'
 const miles = (n: number) => n.toLocaleString() + ' mi'
-// "9h 24m" — built from the trip's real effectiveHours + idleHours, not an estimate.
+// "9h 24m" — built from the trip's real effectiveHours, not an estimate.
 const fmtHours = (h: number) => {
   const totalMin = Math.round(h * 60)
   return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`
 }
-const tripHours = (r: TripRow) => r.effectiveHours + r.idleHours
+// Driving time only — effectiveHours excludes idleHours by definition.
+const drivingHours = (r: TripRow) => r.effectiveHours
+const deadheadMiles = (r: TripRow) => r.totalMiles - r.loadedMiles
+
+// "May 14" → a month/day sort key. No year in the data, but every month has
+// at most 31 days so month*31+day never collides across months.
+const MONTH_INDEX: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+}
+const dateSortValue = (s: string) => {
+  const [mon, day] = s.split(' ')
+  return (MONTH_INDEX[mon] ?? 0) * 31 + Number(day)
+}
 
 // ── Sorting ───────────────────────────────────────────────────────────────
-// Truck, Date, and Lane are plain (unsortable) — only the metric columns sort.
 // 'score' has no column of its own but stays sortable internally — arriving
 // from a "Worst trips"/"Best trips" link ranks rows by it without showing it.
 type SortKey =
-  | 'score' | 'time' | 'distance' | 'income' | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
+  | 'score' | 'startDate' | 'time' | 'distance' | 'deadhead' | 'income' | 'cost' | 'profit'
+  | 'adherence' | 'wastedRate' | 'leakage'
 
 const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   score: (r) => r.score,
-  time: (r) => tripHours(r),
+  startDate: (r) => dateSortValue(r.startDate),
+  time: (r) => drivingHours(r),
   distance: (r) => r.totalMiles,
+  deadhead: (r) => deadheadMiles(r),
   income: (r) => r.income,
   cost: (r) => r.cost,
   profit: (r) => r.profit,
@@ -52,22 +67,29 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   leakage: (r) => r.totalExcessCost,
 }
 
-const PLAIN_COLUMNS = [
-  { label: 'Truck', left: true },
-  { label: 'Date', left: true },
-  { label: 'Lane', left: true },
-  { label: 'Status', left: true },
-]
+// ── Columns ───────────────────────────────────────────────────────────────
+// Every data column is user-reorderable (dragged via the grip handle) —
+// 'truck'/'lane'/'status' just don't have a sort accessor, and 'status' gets
+// its own filter dropdown instead of a sort button. Details stays last as
+// the fixed action column, outside this list.
+type ColId =
+  | 'truck' | 'lane' | 'status' | 'startDate' | 'time' | 'distance' | 'deadhead' | 'income'
+  | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
 
-const SORT_COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'time', label: 'Time' },
-  { key: 'distance', label: 'Total Miles' },
-  { key: 'income', label: 'Income' },
-  { key: 'cost', label: 'Cost' },
-  { key: 'profit', label: 'Profit' },
-  { key: 'adherence', label: 'Adherence' },
-  { key: 'wastedRate', label: 'Wasted Rate' },
-  { key: 'leakage', label: 'Leakage' },
+const ALL_COLUMNS: { key: ColId; label: string; left?: boolean; sortable?: boolean }[] = [
+  { key: 'truck', label: 'Truck', left: true },
+  { key: 'startDate', label: 'Date', left: true, sortable: true },
+  { key: 'lane', label: 'Lane', left: true },
+  { key: 'status', label: 'Status', left: true },
+  { key: 'time', label: 'Driving Time', sortable: true },
+  { key: 'distance', label: 'Total Miles', sortable: true },
+  { key: 'deadhead', label: 'Miles DH', sortable: true },
+  { key: 'income', label: 'Income', sortable: true },
+  { key: 'cost', label: 'Cost', sortable: true },
+  { key: 'profit', label: 'Profit', sortable: true },
+  { key: 'adherence', label: 'Adherence', sortable: true },
+  { key: 'wastedRate', label: 'Wasted Rate', sortable: true },
+  { key: 'leakage', label: 'Leakage', sortable: true },
 ]
 
 const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.lane}`
@@ -123,9 +145,6 @@ export default function FullData({
 }
 
 const CLASS_ORDER: TripRow['cls'][] = ['A', 'B', 'C', 'D']
-// Trip data covers roughly one week — projected to a monthly figure for the
-// "$/truck/mo" header stat, same convention as the "/mo" savings elsewhere.
-const WEEKS_PER_MONTH = 4.33
 
 // One collapsible section per truck class. Each section's body is just the
 // Trips table, pre-filtered to that class — same sort/search/reorder/detail
@@ -155,8 +174,9 @@ function FleetAnalytics({
         const rows = tripRows.filter((r) => r.cls === cls)
         if (rows.length === 0) return null
         const truckCount = new Set(rows.map((r) => r.truck)).size
-        const totalTime = rows.reduce((sum, r) => sum + tripHours(r), 0)
+        const totalTime = rows.reduce((sum, r) => sum + drivingHours(r), 0)
         const totalMiles = rows.reduce((sum, r) => sum + r.totalMiles, 0)
+        const totalDeadhead = rows.reduce((sum, r) => sum + deadheadMiles(r), 0)
         const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
         const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
         const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
@@ -164,7 +184,6 @@ function FleetAnalytics({
         const avgWastedRate = rows.reduce((sum, r) => sum + r.wastedRate, 0) / rows.length
         const totalLeakage = rows.reduce((sum, r) => sum + r.totalExcessCost, 0)
         const margin = totalIncome ? (totalProfit / totalIncome) * 100 : 0
-        const perTruckMo = truckCount ? (totalProfit / truckCount) * WEEKS_PER_MONTH : 0
         const isOpen = expanded.has(cls)
         // Bar length reads as margin quality: scaled against a 15% "great margin"
         // reference, floored so even a weak class still shows a sliver.
@@ -181,25 +200,19 @@ function FleetAnalytics({
                 {cls}
               </span>
               <span className="fd-fleet-count">{truckCount} trucks</span>
-              <span className="fd-fleet-margin" style={{ color: margin >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {margin >= 0 ? '+' : ''}{margin.toFixed(2)}% margin
-              </span>
-              <span className="fd-fleet-permo">
-                <b>{usd(perTruckMo)}</b> / truck / mo
-              </span>
               <ChevronDown size={15} className="fd-fleet-chevron" />
             </button>
             <div className="fd-fleet-bar">
               <span style={{ width: `${barPct}%`, background: CLASS_COLOR[cls] }} />
             </div>
-            {/* Collapsed: the class total sits here, outside the dropdown. Expanded:
-                this total is dropped in favor of the trip table's own footer row,
-                which shows the same total below the itemized trips. */}
+            {/* Collapsed: this total row is the only thing visible below the header.
+                Expanded: it's dropped in favor of the trip table's own footer row,
+                which shows the same total below the itemized trips instead. */}
             {!isOpen && (
               <div className="fd-fleet-total">
-                <span className="fd-fleet-total-label">Total</span>
-                <span className="fd-fleet-total-item"><i>Time</i><b>{fmtHours(totalTime)}</b></span>
+                <span className="fd-fleet-total-item"><i>Driving Time</i><b>{fmtHours(totalTime)}</b></span>
                 <span className="fd-fleet-total-item"><i>Total Miles</i><b>{miles(totalMiles)}</b></span>
+                <span className="fd-fleet-total-item"><i>Miles DH</i><b>{miles(totalDeadhead)}</b></span>
                 <span className="fd-fleet-total-item"><i>Income</i><b>{usd(totalIncome)}</b></span>
                 <span className="fd-fleet-total-item"><i>Cost</i><b>{usd(totalCost)}</b></span>
                 <span className="fd-fleet-total-item"><i>Profit</i><b className="fd-strong">{usd(totalProfit)}</b></span>
@@ -233,26 +246,33 @@ function TripsTable({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<TripRow | null>(null)
   const [query, setQuery] = useState('')
+  // Empty = all statuses shown.
+  const [statusFilter, setStatusFilter] = useState<TripRow['status'][]>([])
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false)
+  const toggleStatusFilter = (status: TripRow['status']) =>
+    setStatusFilter((prev) =>
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+    )
 
-  // Drag-and-drop column reordering, scoped to the metric columns (Truck /
-  // Date / Lane stay put as the row's identity, Details stays last as the
-  // action column).
-  const [columnOrder, setColumnOrder] = useState<SortKey[]>(() => SORT_COLUMNS.map((c) => c.key))
-  const [dragOverKey, setDragOverKey] = useState<SortKey | null>(null)
-  const dragKeyRef = useRef<SortKey | null>(null)
+  // Drag-and-drop column reordering — every column (including Truck / Date /
+  // Lane / Status) can be dragged via its grip handle. Details stays last as
+  // the fixed action column, outside this list.
+  const [columnOrder, setColumnOrder] = useState<ColId[]>(() => ALL_COLUMNS.map((c) => c.key))
+  const [dragOverKey, setDragOverKey] = useState<ColId | null>(null)
+  const dragKeyRef = useRef<ColId | null>(null)
 
-  const handleColDragStart = (key: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+  const handleColDragStart = (key: ColId) => (e: React.DragEvent<HTMLTableCellElement>) => {
     dragKeyRef.current = key
     e.dataTransfer.effectAllowed = 'move'
   }
-  const handleColDragOver = (key: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+  const handleColDragOver = (key: ColId) => (e: React.DragEvent<HTMLTableCellElement>) => {
     e.preventDefault()
     if (dragKeyRef.current && dragKeyRef.current !== key) setDragOverKey(key)
   }
-  const handleColDragLeave = (key: SortKey) => () => {
+  const handleColDragLeave = (key: ColId) => () => {
     setDragOverKey((k) => (k === key ? null : k))
   }
-  const handleColDrop = (targetKey: SortKey) => (e: React.DragEvent<HTMLTableCellElement>) => {
+  const handleColDrop = (targetKey: ColId) => (e: React.DragEvent<HTMLTableCellElement>) => {
     e.preventDefault()
     const fromKey = dragKeyRef.current
     dragKeyRef.current = null
@@ -303,32 +323,66 @@ function TripsTable({
       )
     : byClass
 
+  const byStatus =
+    statusFilter.length > 0 ? filtered.filter((r) => statusFilter.includes(r.status)) : filtered
+
   const rows = sortKey
-    ? [...filtered].sort((a, b) => {
+    ? [...byStatus].sort((a, b) => {
         const cmp = SORT_ACCESSOR[sortKey](a) - SORT_ACCESSOR[sortKey](b)
         return sortDir === 'asc' ? cmp : -cmp
       })
-    : filtered
+    : byStatus
 
   // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
-  // can't be summed meaningfully, so Adherence/Wasted Rate show the
-  // fleet-wide average instead.
-  const totalTime = rows.reduce((sum, r) => sum + tripHours(r), 0)
-  const totalDistance = rows.reduce((sum, r) => sum + r.totalMiles, 0)
-  const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
-  const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
-  const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
-  const avgAdherence = rows.length ? rows.reduce((sum, r) => sum + r.adherence, 0) / rows.length : 0
-  const avgWastedRate = rows.length ? rows.reduce((sum, r) => sum + r.wastedRate, 0) / rows.length : 0
-  const totalLeakage = rows.reduce((sum, r) => sum + r.totalExcessCost, 0)
+  // can't be summed meaningfully, so Adherence/Wasted Rate show the average
+  // instead. Computed per subset so both the flat table and each group's own
+  // footer can share this.
+  const computeTotals = (subset: TripRow[]) => ({
+    tripCount: subset.length,
+    completedCount: subset.filter((r) => r.status === 'completed').length,
+    totalTime: subset.reduce((sum, r) => sum + drivingHours(r), 0),
+    totalDistance: subset.reduce((sum, r) => sum + r.totalMiles, 0),
+    totalDeadhead: subset.reduce((sum, r) => sum + deadheadMiles(r), 0),
+    totalIncome: subset.reduce((sum, r) => sum + r.income, 0),
+    totalCost: subset.reduce((sum, r) => sum + r.cost, 0),
+    totalProfit: subset.reduce((sum, r) => sum + r.profit, 0),
+    avgAdherence: subset.length ? subset.reduce((sum, r) => sum + r.adherence, 0) / subset.length : 0,
+    avgWastedRate: subset.length ? subset.reduce((sum, r) => sum + r.wastedRate, 0) / subset.length : 0,
+    totalLeakage: subset.reduce((sum, r) => sum + r.totalExcessCost, 0),
+  })
 
-  // Cells for the metric columns, rendered in whatever order columnOrder says.
-  const metricCell = (key: SortKey, r: TripRow) => {
+  // Cells for every column, rendered in whatever order columnOrder says.
+  const renderCell = (key: ColId, r: TripRow) => {
     switch (key) {
+      case 'truck':
+        return (
+          <td key={key} className="fd-left">
+            <span className="fd-truck">{r.truck}</span>
+            <span className="fd-class" style={{ background: CLASS_COLOR[r.cls] }}>
+              {r.cls}
+            </span>
+          </td>
+        )
+      case 'startDate':
+        return (
+          <td key={key} className="fd-left fd-dim">
+            {view === 'summary' ? fullDateRange(r) : dateRange(r)}
+          </td>
+        )
+      case 'lane':
+        return <td key={key} className="fd-left fd-dim">{r.lane}</td>
+      case 'status':
+        return (
+          <td key={key} className="fd-left">
+            <StatusBadge status={r.status} />
+          </td>
+        )
       case 'time':
-        return <td key={key} className="fd-dim">{fmtHours(tripHours(r))}</td>
+        return <td key={key} className="fd-dim">{fmtHours(drivingHours(r))}</td>
       case 'distance':
         return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
+      case 'deadhead':
+        return <td key={key} className="fd-dim">{miles(deadheadMiles(r))}</td>
       case 'income':
         return <td key={key}>{usd(r.income)}</td>
       case 'cost':
@@ -345,22 +399,40 @@ function TripsTable({
         return null
     }
   }
-  const metricFooterCell = (key: SortKey) => {
+  const renderFooterCell = (key: ColId, t: ReturnType<typeof computeTotals>) => {
     switch (key) {
+      case 'truck':
+        return (
+          <td key={key} className="fd-left">
+            <span className="fd-total-label">Total</span>
+            <span className="fd-total-count">{t.tripCount} trips</span>
+          </td>
+        )
+      case 'startDate':
+      case 'lane':
+        return <td key={key} className="fd-left" />
+      case 'status':
+        return (
+          <td key={key} className="fd-left fd-dim">
+            {t.completedCount}/{t.tripCount} completed
+          </td>
+        )
       case 'time':
-        return <td key={key} className="fd-dim">{fmtHours(totalTime)}</td>
+        return <td key={key} className="fd-dim">{fmtHours(t.totalTime)}</td>
       case 'distance':
-        return <td key={key} className="fd-dim">{miles(totalDistance)}</td>
+        return <td key={key} className="fd-dim">{miles(t.totalDistance)}</td>
+      case 'deadhead':
+        return <td key={key} className="fd-dim">{miles(t.totalDeadhead)}</td>
       case 'income':
-        return <td key={key} className="fd-strong">{usd(totalIncome)}</td>
+        return <td key={key} className="fd-strong">{usd(t.totalIncome)}</td>
       case 'cost':
-        return <td key={key} className="fd-dim">{usd(totalCost)}</td>
+        return <td key={key} className="fd-dim">{usd(t.totalCost)}</td>
       case 'profit':
-        return <td key={key} className="fd-strong">{usd(totalProfit)}</td>
+        return <td key={key} className="fd-strong">{usd(t.totalProfit)}</td>
       case 'adherence':
         return (
           <td key={key} className="fd-dim">
-            {pct(avgAdherence)}{' '}
+            {pct(t.avgAdherence)}{' '}
             <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
               avg
             </span>
@@ -369,18 +441,120 @@ function TripsTable({
       case 'wastedRate':
         return (
           <td key={key} className="fd-dim">
-            {pct(avgWastedRate)}{' '}
+            {pct(t.avgWastedRate)}{' '}
             <span className="fd-avg-tag cf-tip" data-tip="Average across all trips shown, not a sum">
               avg
             </span>
           </td>
         )
       case 'leakage':
-        return <td key={key} className="fd-neg">{usd(totalLeakage)}</td>
+        return <td key={key} className="fd-neg">{usd(t.totalLeakage)}</td>
       default:
         return null
     }
   }
+
+  const renderRow = (r: TripRow) => (
+    <tr key={rowKey(r)}>
+      {columnOrder.map((key) => renderCell(key, r))}
+      <td>
+        <button className="fd-view" aria-label="View trip details" onClick={() => setSelected(r)}>
+          View <Eye size={13} />
+        </button>
+      </td>
+    </tr>
+  )
+
+  const colCount = columnOrder.length + 1
+
+  const renderThead = () => (
+    <thead>
+      <tr>
+        {columnOrder.map((key) => {
+          const c = ALL_COLUMNS.find((col) => col.key === key)!
+          return (
+            <th
+              key={key}
+              className={`${c.left ? 'fd-left' : ''} ${dragOverKey === key ? 'fd-col-dragover' : ''}`}
+              draggable
+              onDragStart={handleColDragStart(key)}
+              onDragOver={handleColDragOver(key)}
+              onDragLeave={handleColDragLeave(key)}
+              onDrop={handleColDrop(key)}
+              onDragEnd={handleColDragEnd}
+            >
+              <span className="fd-drag-handle" aria-hidden="true">
+                <GripVertical size={12} />
+              </span>
+              {key === 'status' ? (
+                <span className="fd-th-filter cf">
+                  {c.label}
+                  <button
+                    className={`fd-th-filter-btn ${statusFilter.length > 0 ? 'active' : ''}`}
+                    aria-label="Filter by status"
+                    onClick={() => setStatusFilterOpen((o) => !o)}
+                  >
+                    <Filter size={12} />
+                  </button>
+                  {statusFilterOpen && (
+                    <>
+                      <div className="cf-backdrop" onClick={() => setStatusFilterOpen(false)} />
+                      <div className="cf-menu cf-list">
+                        <button
+                          className={`cf-item ${statusFilter.length === 0 ? 'active' : ''}`}
+                          onClick={() => setStatusFilter([])}
+                        >
+                          All statuses
+                          {statusFilter.length === 0 && <Check size={17} className="cf-check" />}
+                        </button>
+                        {(Object.keys(STATUS_STYLE) as TripRow['status'][]).map((s) => {
+                          const active = statusFilter.includes(s)
+                          return (
+                            <button
+                              key={s}
+                              className={`cf-item ${active ? 'active' : ''}`}
+                              onClick={() => toggleStatusFilter(s)}
+                            >
+                              {STATUS_STYLE[s].label}
+                              {active && <Check size={17} className="cf-check" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+                </span>
+              ) : c.sortable ? (
+                <button
+                  className={`fd-sort ${sortKey === key ? 'active' : ''}`}
+                  onClick={() => toggleSort(key as SortKey)}
+                >
+                  {c.label}
+                  {sortKey === key ? (
+                    sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                  ) : (
+                    <ChevronDown size={12} className="fd-sort-idle" />
+                  )}
+                </button>
+              ) : (
+                c.label
+              )}
+            </th>
+          )
+        })}
+        <th>Details</th>
+      </tr>
+    </thead>
+  )
+
+  const renderFooterRow = (t: ReturnType<typeof computeTotals>) => (
+    <tfoot>
+      <tr>
+        {columnOrder.map((key) => renderFooterCell(key, t))}
+        <td />
+      </tr>
+    </tfoot>
+  )
 
   return (
     <>
@@ -400,91 +574,18 @@ function TripsTable({
       </div>
       <div className="fd-table-wrap">
         <table className="fd-table">
-          <thead>
-            <tr>
-              {PLAIN_COLUMNS.map((c) => (
-                <th key={c.label} className={c.left ? 'fd-left' : ''}>
-                  {c.label}
-                </th>
-              ))}
-              {columnOrder.map((key) => {
-                const c = SORT_COLUMNS.find((col) => col.key === key)!
-                return (
-                  <th
-                    key={key}
-                    className={dragOverKey === key ? 'fd-col-dragover' : ''}
-                    draggable
-                    onDragStart={handleColDragStart(key)}
-                    onDragOver={handleColDragOver(key)}
-                    onDragLeave={handleColDragLeave(key)}
-                    onDrop={handleColDrop(key)}
-                    onDragEnd={handleColDragEnd}
-                  >
-                    <span className="fd-drag-handle" aria-hidden="true">
-                      <GripVertical size={12} />
-                    </span>
-                    <button
-                      className={`fd-sort ${sortKey === key ? 'active' : ''}`}
-                      onClick={() => toggleSort(key)}
-                    >
-                      {c.label}
-                      {sortKey === key ? (
-                        sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                      ) : (
-                        <ChevronDown size={12} className="fd-sort-idle" />
-                      )}
-                    </button>
-                  </th>
-                )
-              })}
-              <th>Details</th>
-            </tr>
-          </thead>
+          {renderThead()}
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td className="fd-no-results" colSpan={PLAIN_COLUMNS.length + SORT_COLUMNS.length + 1}>
-                  No trips match "{query}"
+                <td className="fd-no-results" colSpan={colCount}>
+                  {query ? `No trips match "${query}"` : 'No trips match this filter'}
                 </td>
               </tr>
             )}
-            {rows.map((r) => (
-              <tr key={rowKey(r)}>
-                <td className="fd-left">
-                  <span className="fd-truck">{r.truck}</span>
-                  <span className="fd-class" style={{ background: CLASS_COLOR[r.cls] }}>
-                    {r.cls}
-                  </span>
-                </td>
-                <td className="fd-left fd-dim">
-                  {view === 'summary' ? fullDateRange(r) : dateRange(r)}
-                </td>
-                <td className="fd-left fd-dim">{r.lane}</td>
-                <td className="fd-left">
-                  <StatusBadge status={r.status} />
-                </td>
-                {columnOrder.map((key) => metricCell(key, r))}
-                <td>
-                  <button
-                    className="fd-view"
-                    aria-label="View trip details"
-                    onClick={() => setSelected(r)}
-                  >
-                    View <Eye size={13} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {rows.map(renderRow)}
           </tbody>
-          <tfoot>
-            <tr>
-              <td className="fd-left" colSpan={PLAIN_COLUMNS.length}>
-                <span className="fd-total-label">Total</span>
-              </td>
-              {columnOrder.map((key) => metricFooterCell(key))}
-              <td />
-            </tr>
-          </tfoot>
+          {renderFooterRow(computeTotals(rows))}
         </table>
       </div>
       {selected && <TripDetailModal trip={selected} onClose={() => setSelected(null)} />}

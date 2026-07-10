@@ -1957,13 +1957,11 @@ button {
   flex-shrink: 0;
 }
 .fd-fleet-count { font-size: 13px; color: var(--text-dim); flex-shrink: 0; }
-.fd-fleet-margin { font-size: 13px; font-weight: 600; flex-shrink: 0; }
-.fd-fleet-permo { font-size: 13px; color: var(--text-dim); margin-left: auto; }
-.fd-fleet-permo b { color: var(--text); font-weight: 700; }
 .fd-fleet-chevron {
   color: var(--text-muted);
   transition: transform 0.15s;
   flex-shrink: 0;
+  margin-left: auto;
 }
 .fd-fleet-class.open .fd-fleet-chevron { transform: rotate(180deg); }
 .fd-fleet-bar {
@@ -1983,23 +1981,14 @@ button {
 .fd-fleet-total {
   display: flex;
   align-items: baseline;
-  gap: 22px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--border);
+  gap: 28px;
+  padding: 14px 16px;
   overflow-x: auto;
-}
-.fd-fleet-total-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  flex-shrink: 0;
 }
 .fd-fleet-total-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   flex-shrink: 0;
 }
 .fd-fleet-total-item i {
@@ -2144,6 +2133,23 @@ button {
 .fd-sort.active { color: var(--text); }
 .fd-sort .fd-sort-idle { opacity: 0; transition: opacity 0.15s; }
 .fd-sort:hover .fd-sort-idle { opacity: 0.4; }
+.fd-th-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.fd-th-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.fd-th-filter-btn:hover { color: var(--text-dim); }
+.fd-th-filter-btn.active { color: var(--green); }
 .fd-table td {
   text-align: right;
   padding: 14px 16px 14px 0;
@@ -2167,6 +2173,14 @@ button {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text);
+}
+.fd-total-count {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
 }
 .fd-avg-tag {
   font-size: 9px;

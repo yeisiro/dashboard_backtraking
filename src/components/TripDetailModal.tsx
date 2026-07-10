@@ -361,7 +361,7 @@ const TONE_VAR: Record<Tone, string> = {
 }
 
 // ── Timeline nodes ──────────────────────────────────────────────────────────
-type NodeKind = 'radio-teal' | 'minus' | 'x' | 'check' | 'radio-empty'
+type NodeKind = 'radio-teal' | 'radio-yellow' | 'minus' | 'x' | 'check' | 'radio-empty'
 interface TlEvent {
   t: number
   kind: NodeKind
@@ -400,6 +400,12 @@ function NodeIcon({ kind }: { kind: NodeKind }) {
         <span className="ld-radio-ring" style={{ borderColor: '#CDCDCD' }} />
       </span>
     )
+  if (kind === 'radio-yellow')
+    return (
+      <span className="ld-node ld-node-radio" style={{ background: '#342E26' }}>
+        <span className="ld-radio-dot" style={{ borderColor: '#F5C84B' }} />
+      </span>
+    )
   return (
     <span className="ld-node ld-node-radio" style={{ background: '#233340' }}>
       <span className="ld-radio-dot" />
@@ -416,6 +422,18 @@ const BADGE_STYLE: Record<Tone | 'gray', { bg: string; color: string; border?: s
   gray: { bg: '#0E141A', color: '#9A9A9A', border: '#162028' },
 }
 
+// Cost breakdown segments (share of total lane cost), sorted largest first.
+// Static across trips — only the $ amount they're multiplied against changes.
+const COST_SEGMENTS = [
+  { label: 'Efficient Miles', pct: 79.9, color: '#2ec86e' },
+  { label: 'Loaded Deviation Excess', pct: 13, color: '#d94a35' },
+  { label: 'Reposition deadhead', pct: 3.34, color: '#b23a2a' },
+  { label: 'PC while loaded', pct: 3.29, color: '#ff6a4d' },
+  { label: 'Operative center return', pct: 0.261, color: '#8a3020' },
+  { label: 'PC while unloaded', pct: 0.0973, color: '#ff8a5c' },
+  { label: 'Deadhead Deviation Excess', pct: 0.0893, color: '#5a2018' },
+]
+
 export default function TripDetailModal({
   trip,
   onClose,
@@ -429,6 +447,7 @@ export default function TripDetailModal({
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
   const [hoverDev, setHoverDev] = useState(false)
+  const [hoverRepo, setHoverRepo] = useState(false)
   const [fullMap, setFullMap] = useState(false)
 
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
@@ -441,12 +460,25 @@ export default function TripDetailModal({
   const routePoints = buildRoutePoints(ox, oy, dx, dy, routeSeed)
   const routeStr = routePoints.map(([x, y]) => `${x},${y}`).join(' ')
 
+  // Reposition deadhead — the empty leg driven to reach the pickup, before the
+  // load itself starts. Not a problem like the mid-route deviation (that one's
+  // red), just an ordinary cost of positioning the truck, so it's drawn in
+  // amber/yellow. Seeded per trip like everything else on this map.
+  const repoRand = seededRandom(routeSeed + 555)
+  const repoAngle = repoRand() * Math.PI * 2
+  const routeLen = Math.hypot(dx - ox, dy - oy) || 1
+  const repoDist = routeLen * (0.15 + repoRand() * 0.15)
+  const repoStart: [number, number] = [ox + Math.cos(repoAngle) * repoDist, oy + Math.sin(repoAngle) * repoDist]
+  const repositionStr = `${repoStart[0]},${repoStart[1]} ${ox},${oy}`
+  const repositionCost = (trip.totalCost * COST_SEGMENTS.find((s) => s.label === 'Reposition deadhead')!.pct) / 100
+  const repositionMiles = Math.round(dhMiles * 0.3) || 12
+
   // Crop the full US projection to a padded box around the whole route (not
   // just its endpoints), so the mini-map "zooms in" on it without clipping
   // any bends. Sizes below scale with the crop width so markers/text/strokes
   // read the same on screen regardless of route length.
-  const routeXs = routePoints.map((p) => p[0])
-  const routeYs = routePoints.map((p) => p[1])
+  const routeXs = [...routePoints.map((p) => p[0]), repoStart[0]]
+  const routeYs = [...routePoints.map((p) => p[1]), repoStart[1]]
   const minX = Math.min(...routeXs)
   const maxX = Math.max(...routeXs)
   const minY = Math.min(...routeYs)
@@ -485,11 +517,13 @@ export default function TripDetailModal({
   ]
   const deviationStr = [devStartPt.pos, devBulge, devEndPt.pos].map(([x, y]) => `${x},${y}`).join(' ')
 
-  // The truck's actual driven path for playback: the main route with the
-  // deviation window swapped out for the detour itself, so scrubbing through
-  // that stretch visibly sends the truck off onto the red line and back.
+  // The truck's actual driven path for playback: starts empty from the
+  // reposition point (before pickup), then the main route with the deviation
+  // window swapped out for the detour itself, so scrubbing through that
+  // stretch visibly sends the truck off onto the red line and back.
   const routeFracs = cumulativeFractions(routePoints)
   const drivenPoints: [number, number][] = [
+    repoStart,
     ...routePoints.filter((_, i) => routeFracs[i] < devStart),
     devStartPt.pos,
     devBulge,
@@ -703,6 +737,16 @@ export default function TripDetailModal({
       <path d={NATION_PATH} fill="#161b21" />
       <path d={STATE_MESH_PATH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={vbW * 0.0018} />
       <polyline
+        points={repositionStr}
+        fill="none"
+        stroke="#F5C84B"
+        strokeWidth={vbW * 0.005}
+        strokeDasharray={`${vbW * 0.01} ${vbW * 0.022}`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.85}
+      />
+      <polyline
         points={routeStr}
         fill="none"
         stroke="#4d9dff"
@@ -734,6 +778,22 @@ export default function TripDetailModal({
           behind markers drawn after it. Sorting the hovered one to the end
           keeps its tooltip on top no matter where it sits on the route. */}
       {[
+        {
+          key: 'repo',
+          hovered: hoverRepo,
+          node: (
+            <FuelStopMarker
+              x={repoStart[0]} y={repoStart[1]} vbW={vbW}
+              icon={Truck}
+              color="#F5C84B"
+              title="Reposition deadhead"
+              line2={`${repositionMiles} mi empty, before pickup`}
+              line3={`${money(repositionCost)} cost`}
+              hovered={hoverRepo}
+              onHoverChange={setHoverRepo}
+            />
+          ),
+        },
         {
           key: 'dev',
           hovered: hoverDev,
@@ -896,6 +956,17 @@ export default function TripDetailModal({
   const devT = (devStart + devEnd) / 2
   const tlItems: TlEvent[] = []
   tlItems.push({
+    t: -0.1,
+    kind: 'radio-yellow',
+    calloutTone: 'yellow',
+    badgeTone: 'yellow',
+    action: 'Reposition',
+    status: 'Completed',
+    place: `${repositionMiles} mi deadhead`,
+    time: timeForT(-0.1),
+    cost: `${money(repositionCost)}`,
+  })
+  tlItems.push({
     t: 0,
     kind: 'radio-teal',
     calloutTone: 'teal',
@@ -983,18 +1054,9 @@ export default function TripDetailModal({
     setHoverEnd(e.action === 'Delivery')
     setHoverFuel(e.fuelIndex ?? null)
     setHoverDev(e.kind === 'x')
+    setHoverRepo(e.action === 'Reposition')
   }
 
-  // Cost breakdown segments (share of total lane cost), sorted largest first.
-  const COST_SEGMENTS = [
-    { label: 'Efficient Miles', pct: 79.9, color: '#2ec86e' },
-    { label: 'Loaded Deviation Excess', pct: 13, color: '#d94a35' },
-    { label: 'Reposition deadhead', pct: 3.34, color: '#b23a2a' },
-    { label: 'PC while loaded', pct: 3.29, color: '#ff6a4d' },
-    { label: 'Operative center return', pct: 0.261, color: '#8a3020' },
-    { label: 'PC while unloaded', pct: 0.0973, color: '#ff8a5c' },
-    { label: 'Deadhead Deviation Excess', pct: 0.0893, color: '#5a2018' },
-  ]
   const R = 60
   const C = 2 * Math.PI * R
   let acc = 0
