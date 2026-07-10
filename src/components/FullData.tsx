@@ -200,6 +200,7 @@ function FleetAnalytics({
                 {cls}
               </span>
               <span className="fd-fleet-count">{truckCount} trucks</span>
+              <span className="fd-fleet-count">{rows.length} trips</span>
               <ChevronDown size={15} className="fd-fleet-chevron" />
             </button>
             <div className="fd-fleet-bar">
@@ -402,12 +403,6 @@ function TripsTable({
   const renderFooterCell = (key: ColId, t: ReturnType<typeof computeTotals>) => {
     switch (key) {
       case 'truck':
-        return (
-          <td key={key} className="fd-left">
-            <span className="fd-total-label">Total</span>
-            <span className="fd-total-count">{t.tripCount} trips</span>
-          </td>
-        )
       case 'startDate':
       case 'lane':
         return <td key={key} className="fd-left" />
@@ -547,10 +542,22 @@ function TripsTable({
     </thead>
   )
 
+  // The "Total · N trips" label always anchors the first cell of the footer
+  // row — reordering columns moves data around, but this stays a fixed
+  // read of "where the row starts," regardless of which column that is.
   const renderFooterRow = (t: ReturnType<typeof computeTotals>) => (
     <tfoot>
       <tr>
-        {columnOrder.map((key) => renderFooterCell(key, t))}
+        {columnOrder.map((key, i) => {
+          if (i !== 0) return renderFooterCell(key, t)
+          const left = ALL_COLUMNS.find((c) => c.key === key)?.left
+          return (
+            <td key={key} className={left ? 'fd-left' : ''}>
+              <span className="fd-total-label">Total</span>
+              <span className="fd-total-count">{t.tripCount} trips</span>
+            </td>
+          )
+        })}
         <td />
       </tr>
     </tfoot>
