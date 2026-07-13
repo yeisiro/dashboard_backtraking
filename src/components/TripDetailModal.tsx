@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   BarChart3,
   X,
-  CheckCircle2,
   Crosshair,
   Maximize2,
   Play,
@@ -17,13 +16,12 @@ import {
   MapPin,
   Flag,
   Truck,
-  Clock,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
 import type { FeatureCollection, MultiLineString } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
-import type { TripRow } from '../data'
+import { costSegments, type TripRow } from '../data'
 
 const money = (n: number) => '$' + Math.round(n).toLocaleString()
 
@@ -422,17 +420,13 @@ const BADGE_STYLE: Record<Tone | 'gray', { bg: string; color: string; border?: s
   gray: { bg: '#0E141A', color: '#9A9A9A', border: '#162028' },
 }
 
-// Cost breakdown segments (share of total lane cost), sorted largest first.
-// Static across trips — only the $ amount they're multiplied against changes.
-const COST_SEGMENTS = [
-  { label: 'Efficient Miles', pct: 79.9, color: '#2ec86e' },
-  { label: 'Loaded Deviation Excess', pct: 13, color: '#d94a35' },
-  { label: 'Reposition deadhead', pct: 3.34, color: '#b23a2a' },
-  { label: 'PC while loaded', pct: 3.29, color: '#ff6a4d' },
-  { label: 'Operative center return', pct: 0.261, color: '#8a3020' },
-  { label: 'PC while unloaded', pct: 0.0973, color: '#ff8a5c' },
-  { label: 'Deadhead Deviation Excess', pct: 0.0893, color: '#5a2018' },
-]
+// V1 only tracks the post-delivery paperwork lifecycle — every trip here
+// already happened, so these are the only statuses in play for now.
+const STATUS_META: Record<TripRow['status'], { label: string; bg: string; color: string }> = {
+  delivered: { label: 'Delivered', bg: '#0E1A22', color: 'var(--blue)' },
+  invoiced: { label: 'Invoiced', bg: '#221B0E', color: 'var(--orange)' },
+  paid: { label: 'Paid', bg: '#0E1F22', color: '#00A065' },
+}
 
 export default function TripDetailModal({
   trip,
@@ -470,7 +464,7 @@ export default function TripDetailModal({
   const repoDist = routeLen * (0.15 + repoRand() * 0.15)
   const repoStart: [number, number] = [ox + Math.cos(repoAngle) * repoDist, oy + Math.sin(repoAngle) * repoDist]
   const repositionStr = `${repoStart[0]},${repoStart[1]} ${ox},${oy}`
-  const repositionCost = (trip.totalCost * COST_SEGMENTS.find((s) => s.label === 'Reposition deadhead')!.pct) / 100
+  const repositionCost = (trip.totalCost * costSegments.find((s) => s.label === 'Reposition deadhead')!.pct) / 100
   const repositionMiles = Math.round(dhMiles * 0.3) || 12
 
   // Crop the full US projection to a padded box around the whole route (not
@@ -1101,9 +1095,11 @@ export default function TripDetailModal({
                 <div className="ld-loadid-sub">Load id</div>
               </div>
             </div>
-            <span className={`ld-status-pill ${trip.status === 'in-progress' ? 'in-progress' : ''}`}>
-              {trip.status === 'in-progress' ? <Clock size={20} /> : <CheckCircle2 size={20} />}
-              {trip.status === 'in-progress' ? 'In Progress' : 'Completed'}
+            <span
+              className="ld-status-pill"
+              style={{ background: STATUS_META[trip.status].bg, color: STATUS_META[trip.status].color }}
+            >
+              {STATUS_META[trip.status].label}
             </span>
           </div>
 
@@ -1117,7 +1113,7 @@ export default function TripDetailModal({
               <div className="ld-cost-chart">
                 <div className="ld-donut2">
                   <svg viewBox="0 0 160 160">
-                    {COST_SEGMENTS.map((s, i) => {
+                    {costSegments.map((s, i) => {
                       const len = (s.pct / 100) * C
                       const offset = -acc
                       acc += len
@@ -1145,13 +1141,13 @@ export default function TripDetailModal({
                   <div className="ld-donut2-center">
                     {hover !== null ? (
                       <>
-                        <span className="ld-donut2-total" style={{ color: COST_SEGMENTS[hover].color }}>
-                          {COST_SEGMENTS[hover].pct < 1
-                            ? COST_SEGMENTS[hover].pct.toFixed(2)
-                            : Math.round(COST_SEGMENTS[hover].pct)}
+                        <span className="ld-donut2-total" style={{ color: costSegments[hover].color }}>
+                          {costSegments[hover].pct < 1
+                            ? costSegments[hover].pct.toFixed(2)
+                            : Math.round(costSegments[hover].pct)}
                           %
                         </span>
-                        <span className="ld-donut2-label">{COST_SEGMENTS[hover].label}</span>
+                        <span className="ld-donut2-label">{costSegments[hover].label}</span>
                       </>
                     ) : (
                       <>
@@ -1162,7 +1158,7 @@ export default function TripDetailModal({
                   </div>
                 </div>
                 <div className="ld-legend">
-                  {COST_SEGMENTS.map((s, i) => (
+                  {costSegments.map((s, i) => (
                     <div
                       className={`ld-legend-row ${hover === i ? 'active' : ''}`}
                       key={s.label}

@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronUp, ChevronDown, Eye, Search, X, CheckCircle2, Clock, GripVertical, Filter, Check } from 'lucide-react'
-import { tripRows, type TripRow } from '../data'
+import {
+  ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
+  TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock,
+} from 'lucide-react'
+import { tripRows, costSegments, deltaTone, deltaTrend, type TripRow, type Goal } from '../data'
+import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
+import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
 
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel & Savings', 'Rewards'] as const
 type SubTab = (typeof SUBTABS)[number]
@@ -17,9 +22,12 @@ const CLASS_COLOR: Record<TripRow['cls'], string> = {
   D: 'var(--red)',
 }
 
-const STATUS_STYLE: Record<TripRow['status'], { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  completed: { label: 'Completed', color: 'var(--green)', icon: CheckCircle2 },
-  'in-progress': { label: 'In Progress', color: 'var(--blue)', icon: Clock },
+// V1 only tracks the post-delivery paperwork lifecycle — every trip here
+// already happened, so these are the only statuses in play for now.
+const STATUS_STYLE: Record<TripRow['status'], { label: string; color: string }> = {
+  delivered: { label: 'Delivered', color: 'var(--blue)' },
+  invoiced: { label: 'Invoiced', color: 'var(--orange)' },
+  paid: { label: 'Paid', color: 'var(--green)' },
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────
@@ -83,7 +91,7 @@ const ALL_COLUMNS: { key: ColId; label: string; left?: boolean; sortable?: boole
   { key: 'status', label: 'Status', left: true },
   { key: 'time', label: 'Driving Time', sortable: true },
   { key: 'distance', label: 'Total Miles', sortable: true },
-  { key: 'deadhead', label: 'Miles DH', sortable: true },
+  { key: 'deadhead', label: 'Deadhead', sortable: true },
   { key: 'income', label: 'Income', sortable: true },
   { key: 'cost', label: 'Cost', sortable: true },
   { key: 'profit', label: 'Profit', sortable: true },
@@ -102,10 +110,9 @@ const dateRange = (r: TripRow) =>
 const fullDateRange = (r: TripRow) => `${r.startDate} → ${r.endDate}`
 
 function StatusBadge({ status }: { status: TripRow['status'] }) {
-  const { label, color, icon: Icon } = STATUS_STYLE[status]
+  const { label, color } = STATUS_STYLE[status]
   return (
     <span className="fd-status" style={{ color }}>
-      <Icon size={13} />
       {label}
     </span>
   )
@@ -137,6 +144,8 @@ export default function FullData({
         <TripsTable band={band} classFilter={classFilter} view={view} />
       ) : tab === 'Fleet Analytics' ? (
         <FleetAnalytics classFilter={classFilter} view={view} />
+      ) : tab === 'Productivity' ? (
+        <Productivity classFilter={classFilter} />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
@@ -213,7 +222,7 @@ function FleetAnalytics({
               <div className="fd-fleet-total">
                 <span className="fd-fleet-total-item"><i>Driving Time</i><b>{fmtHours(totalTime)}</b></span>
                 <span className="fd-fleet-total-item"><i>Total Miles</i><b>{miles(totalMiles)}</b></span>
-                <span className="fd-fleet-total-item"><i>Miles DH</i><b>{miles(totalDeadhead)}</b></span>
+                <span className="fd-fleet-total-item"><i>Deadhead</i><b>{miles(totalDeadhead)}</b></span>
                 <span className="fd-fleet-total-item"><i>Income</i><b>{usd(totalIncome)}</b></span>
                 <span className="fd-fleet-total-item"><i>Cost</i><b>{usd(totalCost)}</b></span>
                 <span className="fd-fleet-total-item"><i>Profit</i><b className="fd-strong">{usd(totalProfit)}</b></span>
@@ -230,6 +239,652 @@ function FleetAnalytics({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function PvDeltaArrow({ trend }: { trend: 'up' | 'down' | 'flat' }) {
+  if (trend === 'up') return <TrendingUp size={12} />
+  if (trend === 'down') return <TrendingDown size={12} />
+  return <Minus size={12} />
+}
+function pvToneClass(tone: ReturnType<typeof deltaTone>) {
+  if (tone === 'green') return 'pos'
+  if (tone === 'red') return 'neg'
+  if (tone === 'orange' || tone === 'yellow') return 'warn'
+  return ''
+}
+
+// A stat tile matching the Overview KPI card look: eyebrow, value + delta vs
+// the active date filter's comparison window, then a descriptive foot line.
+function StatTile({
+  label,
+  value,
+  delta,
+  goal,
+  foot,
+}: {
+  label: string
+  value: string
+  delta?: string
+  goal?: Goal
+  foot?: string
+}) {
+  const { compareLabel, compareRange } = usePeriod()
+  return (
+    <div className="card kpi">
+      <div className="kpi-head">
+        <span className="eyebrow">{label}</span>
+      </div>
+      <div className="kpi-value-row">
+        <span className="value">{value}</span>
+        {delta && (
+          <span className="kpi-cmp">
+            <span className={`delta ${pvToneClass(deltaTone(delta, goal))}`}>
+              <PvDeltaArrow trend={deltaTrend(delta)} />
+              {delta}
+            </span>
+            <span
+              className="crow-vs cmp-tip"
+              data-tip={compareRange ? `Compared to ${compareRange}` : 'Compared to the previous period'}
+            >
+              {compareLabel}
+            </span>
+          </span>
+        )}
+      </div>
+      {foot && <div className="foot">{foot}</div>}
+    </div>
+  )
+}
+
+interface BarDatum {
+  label: string
+  color: string
+  heightPct: number
+  displayValue: string
+  subValue?: string
+}
+
+// A vertical bar chart: percentage/value on top, colored bar scaled to the
+// tallest bar in the set, category label (rotated) below. Reused for cost
+// and time distributions — same shape, different data.
+function VerticalBarChart({ bars }: { bars: BarDatum[] }) {
+  return (
+    <div className="pv-bars">
+      {bars.map((b) => (
+        <div className="pv-bar-col" key={b.label}>
+          <span className="pv-bar-val">{b.displayValue}</span>
+          {b.subValue && <span className="pv-bar-subval">{b.subValue}</span>}
+          <div className="pv-bar-track">
+            <div
+              className="pv-bar-fill"
+              style={{ height: `${Math.max(2, b.heightPct)}%`, background: b.color }}
+              title={`${b.label}: ${b.displayValue}${b.subValue ? ` (${b.subValue})` : ''}`}
+            />
+          </div>
+          <span className="pv-bar-label">{b.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// $ tick formatter for the line chart's y-axis and tooltip.
+const fmtMoneyTick = (v: number) => {
+  const a = Math.abs(v)
+  return a >= 1000 ? `$${Math.round(v / 1000)}k` : usd(v)
+}
+
+// Income / Cost / Profit over time, ending at the fleet's real current
+// totals. Profit is derived as income − cost at every point (not an
+// independent wave), so the three lines always reconcile.
+interface EvolutionLine {
+  key: string
+  label: string
+  color: string
+  s: number[]
+}
+
+// Pure line-chart renderer — given the lines, no opinion on which lines they
+// are. Used for both the standard Income/Cost/Profit view and the by-category
+// breakdown, which now live in separate places (card vs. detail modal) but
+// share this exact rendering.
+function EvolutionLineChart({
+  lines,
+  startLabel,
+  endLabel,
+}: {
+  lines: EvolutionLine[]
+  startLabel: string
+  endLabel: string
+}) {
+  const [hover, setHover] = useState<number | null>(null)
+  const W = 1000
+  const H = 210
+  const padL = 46
+  const padR = 10
+  const padT = 16
+  const padB = 22
+  const n = lines[0]?.s.length ?? 0
+  const all = lines.flatMap((l) => l.s)
+  const min = Math.min(0, ...all)
+  const max = Math.max(...all)
+  const range = max - min || 1
+  const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
+  const y = (v: number) => padT + (1 - (v - min) / range) * (H - padT - padB)
+  const path = (s: number[]) =>
+    s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
+  const ticks = [0, 0.5, 1].map((t) => ({ y: padT + t * (H - padT - padB), v: max - t * range }))
+
+  return (
+    <div className="pv-line">
+      <div className="pv-line-legend">
+        {lines.map((l) => (
+          <span className="pv-legend-item" key={l.key}>
+            <i style={{ background: l.color }} />
+            {l.label}
+          </span>
+        ))}
+      </div>
+      <div className="pv-line-plot">
+        <svg
+          className="pv-line-svg"
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          onMouseLeave={() => setHover(null)}
+        >
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={padL} y1={t.y} x2={W - padR} y2={t.y} stroke="var(--border)" strokeWidth="1" />
+              <text className="pv-axis-label" x={padL - 8} y={t.y + 3} textAnchor="end">
+                {fmtMoneyTick(t.v)}
+              </text>
+            </g>
+          ))}
+          {lines.map((l) => (
+            <path key={l.key} d={path(l.s)} fill="none" stroke={l.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          ))}
+          {hover !== null && (
+            <line x1={x(hover)} y1={padT} x2={x(hover)} y2={H - padB} stroke="var(--text-muted)" strokeWidth="1" strokeDasharray="3 3" />
+          )}
+          {lines.map((l) => (
+            <circle key={l.key} cx={x(n - 1)} cy={y(l.s[n - 1])} r="4" fill={l.color} stroke="var(--bg)" strokeWidth="1.5" />
+          ))}
+          <text className="pv-axis-label" x={padL} y={H - 4} textAnchor="start">{startLabel}</text>
+          <text className="pv-axis-label" x={W - padR} y={H - 4} textAnchor="end">{endLabel}</text>
+        </svg>
+        <div className="pv-line-dots">
+          {Array.from({ length: n }, (_, i) => (
+            <div
+              key={i}
+              className="pv-line-dot"
+              style={{ left: `${(x(i) / W) * 100}%` }}
+              onMouseEnter={() => setHover(i)}
+            />
+          ))}
+        </div>
+        {hover !== null && (
+          <div className="pv-line-tip" style={{ left: `${(x(hover) / W) * 100}%` }}>
+            {lines.map((l) => (
+              <div className="pv-tip-row" key={l.key}>
+                <i style={{ background: l.color }} />
+                {l.label}: <b>{fmtMoneyTick(l.s[hover])}</b>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function standardEvolutionLines(income: number[], cost: number[], profit: number[]): EvolutionLine[] {
+  return [
+    { key: 'income', label: 'Income', color: 'var(--green)', s: income },
+    { key: 'cost', label: 'Cost', color: 'var(--red)', s: cost },
+    { key: 'profit', label: 'Profit', color: 'var(--blue)', s: profit },
+  ]
+}
+
+// The card always shows Income/Cost/Profit — the by-category breakdown moved
+// into the detail modal, so it doesn't compete with this for the same chart.
+function MonetaryEvolutionChart({
+  income,
+  cost,
+  profit,
+  startLabel,
+  endLabel,
+}: {
+  income: number[]
+  cost: number[]
+  profit: number[]
+  startLabel: string
+  endLabel: string
+}) {
+  return (
+    <EvolutionLineChart
+      lines={standardEvolutionLines(income, cost, profit)}
+      startLabel={startLabel}
+      endLabel={endLabel}
+    />
+  )
+}
+
+function MonetaryEvolutionDetailModal({
+  income,
+  cost,
+  profit,
+  categoryLines,
+  startLabel,
+  endLabel,
+  onClose,
+}: {
+  income: number[]
+  cost: number[]
+  profit: number[]
+  categoryLines: EvolutionLine[]
+  startLabel: string
+  endLabel: string
+  onClose: () => void
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal delay-detail" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="title">
+            <TrendingUp size={18} />
+            Monetary Evolution
+          </span>
+          <button className="cfm-x" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="dd-block">
+            <div className="dd-block-title">Income, Cost & Profit</div>
+            <EvolutionLineChart
+              lines={standardEvolutionLines(income, cost, profit)}
+              startLabel={startLabel}
+              endLabel={endLabel}
+            />
+          </div>
+          <div className="dd-block">
+            <div className="dd-block-title">By Cost Category</div>
+            <EvolutionLineChart lines={categoryLines} startLabel={startLabel} endLabel={endLabel} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Deterministic 14-point trend shape, ending exactly at the real current
+// total — a shape, not a claim about actual daily history. Resampled to the
+// selected date filter's length so the chart's point count always matches
+// the range it claims to show.
+const EVOLUTION_WAVE = [0.86, 0.89, 0.91, 0.9, 0.93, 0.95, 0.94, 0.97, 0.99, 0.98, 1.0, 1.02, 1.01, 1.0]
+
+// Linear-interpolates EVOLUTION_WAVE to `n` points. Anchors i=0 to wave[0]
+// and i=n-1 to wave[last] (=1.0), so "ends at the real current total" still
+// holds no matter which date filter is selected.
+function resampleWave(wave: number[], n: number): number[] {
+  const last = wave.length - 1
+  if (n <= 1) return [wave[last]]
+  return Array.from({ length: n }, (_, i) => {
+    const pos = (i / (n - 1)) * last
+    const lo = Math.floor(pos)
+    const hi = Math.min(last, lo + 1)
+    const t = pos - lo
+    return wave[lo] * (1 - t) + wave[hi] * t
+  })
+}
+
+const shortDate = (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
+
+interface TimeSegment {
+  label: string
+  color: string
+  hours: number
+}
+
+// The idle+unused pool has no per-cause field in the data (unlike driving,
+// which splits honestly via each trip's deadheadPct). These fixed shares —
+// reusing the app's existing categorical colors — spread that pool across
+// the operational categories fleets actually track, the same "known split of
+// an aggregate" approach costSegments already uses elsewhere.
+const TIME_IDLE_WEIGHTS: { label: string; color: string; share: number }[] = [
+  { label: 'Loading/Unloading', color: 'var(--orange)', share: 0.35 },
+  { label: 'Detention', color: '#f4a6a6', share: 0.3 },
+  { label: '30 min break rule', color: 'var(--yellow)', share: 0.12 },
+  { label: 'Refueling', color: '#7CC8CF', share: 0.08 },
+  { label: 'Personal Conveyance (PC)', color: 'var(--blue)', share: 0.08 },
+  { label: 'Other resting/waiting', color: '#8a94a6', share: 0.07 },
+]
+
+// Same donut rendering as StatusDonut/the cost-segment donut, generalized to
+// any labeled set of hour segments.
+function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const total = segments.reduce((s, x) => s + x.hours, 0)
+  const R = 60
+  const C = 2 * Math.PI * R
+  let acc = 0
+
+  return (
+    <div className="dd-donut-row">
+      <div className="ld-donut2">
+        <svg viewBox="0 0 160 160">
+          {segments.map((s, i) => {
+            const p = total ? (s.hours / total) * 100 : 0
+            const len = (p / 100) * C
+            const offset = -acc
+            acc += len
+            const dimmed = hover !== null && hover !== i
+            return (
+              <circle
+                key={s.label}
+                cx="80"
+                cy="80"
+                r={R}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="26"
+                strokeDasharray={`${len} ${C - len}`}
+                strokeDashoffset={offset}
+                transform="rotate(-90 80 80)"
+                opacity={dimmed ? 0.3 : 1}
+                className="ld-donut2-seg"
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+              />
+            )
+          })}
+        </svg>
+        <div className="ld-donut2-center">
+          {hover !== null ? (
+            <>
+              <span className="ld-donut2-total" style={{ color: segments[hover].color }}>
+                {total ? Math.round((segments[hover].hours / total) * 100) : 0}%
+              </span>
+              <span className="ld-donut2-label">{segments[hover].label}</span>
+            </>
+          ) : (
+            <>
+              <span className="ld-donut2-total">{fmtHours(total)}</span>
+              <span className="ld-donut2-label">Total</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="ld-legend">
+        {segments.map((s, i) => (
+          <div
+            className={`ld-legend-row ${hover === i ? 'active' : ''}`}
+            key={s.label}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <span className="ld-legend-name">
+              <span className="ld-legend-dot" style={{ background: s.color }} />
+              {s.label}
+            </span>
+            <span className="ld-legend-pct">{total ? Math.round((s.hours / total) * 100) : 0}%</span>
+            <span className="ld-legend-val">{fmtHours(s.hours)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TimeDistributionDetailModal({
+  bars,
+  segments,
+  onClose,
+}: {
+  bars: BarDatum[]
+  segments: TimeSegment[]
+  onClose: () => void
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal delay-detail" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="title">
+            <Clock size={18} />
+            Time Distribution
+          </span>
+          <button className="cfm-x" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="dd-block">
+            <div className="dd-block-title">Hours Summary</div>
+            <VerticalBarChart bars={bars} />
+          </div>
+          <div className="dd-block">
+            <div className="dd-block-title">Hours Breakdown</div>
+            <TimeSegmentDonut segments={segments} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
+  const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
+  const [delayModalOpen, setDelayModalOpen] = useState(false)
+  const [evolutionModalOpen, setEvolutionModalOpen] = useState(false)
+  const [timeModalOpen, setTimeModalOpen] = useState(false)
+  const { rangeDays, rangeEnd } = usePeriod()
+
+  const totalLoads = rows.length
+  const totalTrucks = new Set(rows.map((r) => r.truck)).size
+  const totalIncome = rows.reduce((sum, r) => sum + r.income, 0)
+  const totalCost = rows.reduce((sum, r) => sum + r.cost, 0)
+  const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
+  const profitability = totalIncome ? (totalProfit / totalIncome) * 100 : 0
+
+  // Cost distribution: the shared cost-segment percentages (same story as the
+  // Operation Details donut), scaled to this fleet's total cost.
+  const maxCostPct = Math.max(...costSegments.map((s) => s.pct))
+  const costBars: BarDatum[] = costSegments.map((s) => ({
+    label: s.label,
+    color: s.color,
+    heightPct: (s.pct / maxCostPct) * 100,
+    displayValue: `${s.pct < 1 ? s.pct.toFixed(2) : Math.round(s.pct)}%`,
+    subValue: usd(totalCost * (s.pct / 100)),
+  }))
+
+  // Time distribution: real driving + idle hours per trip, plus whatever's
+  // left of that trip's calendar window as "not used."
+  let sumEffective = 0
+  let sumIdle = 0
+  let sumNotUsed = 0
+  rows.forEach((r) => {
+    const days = Math.max(1, dateSortValue(r.endDate) - dateSortValue(r.startDate) + 1)
+    sumEffective += r.effectiveHours
+    sumIdle += r.idleHours
+    sumNotUsed += Math.max(0, days * 24 - r.effectiveHours - r.idleHours)
+  })
+  const timeTotal = sumEffective + sumIdle + sumNotUsed || 1
+  const timeShares = [
+    { label: 'Effective hours', color: 'var(--green)', hours: sumEffective, share: sumEffective / timeTotal },
+    { label: 'Non-productive hours', color: 'var(--yellow)', hours: sumIdle, share: sumIdle / timeTotal },
+    { label: 'Not used hours', color: 'var(--red)', hours: sumNotUsed, share: sumNotUsed / timeTotal },
+  ]
+  const maxTimeShare = Math.max(...timeShares.map((t) => t.share)) || 1
+  const timeBars: BarDatum[] = timeShares.map((t) => ({
+    label: t.label,
+    color: t.color,
+    heightPct: (t.share / maxTimeShare) * 100,
+    displayValue: `${(t.share * 100).toFixed(1)}%`,
+    subValue: fmtHours(t.hours),
+  }))
+
+  // Time distribution detail: the same driving/idle/unused totals as the
+  // card's 3-bar view, split further into real operational sub-categories —
+  // loaded vs. deadhead driving comes straight off each trip's deadheadPct;
+  // the idle+unused pool (no per-cause field in the data) spreads across
+  // TIME_IDLE_WEIGHTS.
+  const deadheadHours = rows.reduce((sum, r) => sum + r.effectiveHours * (r.deadheadPct / 100), 0)
+  const idlePoolHours = sumIdle + sumNotUsed
+  const timeDetailSegments: TimeSegment[] = [
+    { label: 'Loaded Driving', color: 'var(--green)', hours: sumEffective - deadheadHours },
+    { label: 'Deadhead driving', color: 'var(--red)', hours: deadheadHours },
+    ...TIME_IDLE_WEIGHTS.map((w) => ({ label: w.label, color: w.color, hours: idlePoolHours * w.share })),
+  ]
+
+  // Delay distribution: same Fair/Early/Late classification shown in the
+  // detail modal — the card is just the compact preview of it.
+  const { pickup: pickupDelaySegments, dropoff: dropoffDelaySegments } = getDelaySegments(rows)
+
+  // Monetary Evolution's trend follows whatever date filter is selected —
+  // same point count as the selected window, ending on rangeEnd.
+  const evolutionWave = resampleWave(EVOLUTION_WAVE, Math.max(rangeDays, 2))
+  const evolutionStart = new Date(rangeEnd)
+  evolutionStart.setDate(evolutionStart.getDate() - (Math.max(rangeDays, 2) - 1))
+  const evolutionStartLabel = shortDate(evolutionStart)
+  const evolutionEndLabel = shortDate(rangeEnd)
+
+  const incomeSeries = evolutionWave.map((w) => totalIncome * w)
+  const costSeries = evolutionWave.map((w) => totalCost * w)
+  const profitSeries = incomeSeries.map((v, i) => v - costSeries[i])
+
+  // Each cost category's own trend — same wave shape as total cost, scaled to
+  // that category's static share of it.
+  const categorySeries = costSegments.map((s) => ({
+    key: s.label,
+    label: s.label,
+    color: s.color,
+    s: evolutionWave.map((w) => totalCost * (s.pct / 100) * w),
+  }))
+
+  return (
+    <div className="pv">
+      <div className="kpi-row">
+        <StatTile
+          label="Total Loads"
+          value={totalLoads.toLocaleString()}
+          delta="+1"
+          goal="high"
+          foot={totalTrucks ? `Across ${totalTrucks} truck${totalTrucks === 1 ? '' : 's'}` : undefined}
+        />
+        <StatTile
+          label="Total Income"
+          value={usd(totalIncome)}
+          delta="+$620"
+          goal="high"
+          foot={totalLoads ? `${usd(totalIncome / totalLoads)} avg per load` : undefined}
+        />
+        <StatTile
+          label="Total Cost"
+          value={usd(totalCost)}
+          delta="+$310"
+          goal="low"
+          foot={totalIncome ? `${pct((totalCost / totalIncome) * 100)} of income` : undefined}
+        />
+        <StatTile
+          label="Total Profit"
+          value={usd(totalProfit)}
+          delta="+$310"
+          goal="high"
+          foot={totalLoads ? `${usd(totalProfit / totalLoads)} avg per load` : undefined}
+        />
+        <StatTile
+          label="Profitability"
+          value={`${profitability.toFixed(1)}%`}
+          delta="+0.4"
+          goal="high"
+          foot="Net profit as a share of revenue"
+        />
+      </div>
+
+      <div className="grid-2 grid-2-even">
+        <section className="card pv-panel">
+          <div className="card-head">
+            <span className="eyebrow">Cost Distribution by Type</span>
+          </div>
+          <VerticalBarChart bars={costBars} />
+        </section>
+        <section className="card pv-panel">
+          <div className="card-head">
+            <span className="eyebrow">Monetary Evolution</span>
+            <button
+              className="pv-panel-icon-btn cf-tip"
+              aria-label="View monetary evolution details"
+              data-tip="See the full breakdown, including the by-cost-category trend"
+              onClick={() => setEvolutionModalOpen(true)}
+            >
+              <ArrowUpRight size={15} />
+            </button>
+          </div>
+          <MonetaryEvolutionChart
+            income={incomeSeries}
+            cost={costSeries}
+            profit={profitSeries}
+            startLabel={evolutionStartLabel}
+            endLabel={evolutionEndLabel}
+          />
+        </section>
+      </div>
+
+      <div className="grid-2 grid-2-even">
+        <section className="card pv-panel">
+          <div className="card-head">
+            <span className="eyebrow">Time Distribution</span>
+            <button
+              className="pv-panel-icon-btn cf-tip"
+              aria-label="View time distribution details"
+              data-tip="See the full breakdown across driving, loading, and rest categories"
+              onClick={() => setTimeModalOpen(true)}
+            >
+              <ArrowUpRight size={15} />
+            </button>
+          </div>
+          <VerticalBarChart bars={timeBars} />
+        </section>
+        <section className="card pv-panel">
+          <div className="card-head">
+            <span className="eyebrow">On-Time Performance</span>
+            <button
+              className="pv-panel-icon-btn cf-tip"
+              aria-label="View on-time performance details"
+              data-tip="See the full breakdown — pickup & delivery delays plus late-cause categories"
+              onClick={() => setDelayModalOpen(true)}
+            >
+              <ArrowUpRight size={15} />
+            </button>
+          </div>
+          <div className="pv-delay-donuts">
+            <StatusDonut title="Pick Up" segments={pickupDelaySegments} compact />
+            <StatusDonut title="Delivery" segments={dropoffDelaySegments} compact />
+          </div>
+        </section>
+      </div>
+
+      {timeModalOpen && (
+        <TimeDistributionDetailModal
+          bars={timeBars}
+          segments={timeDetailSegments}
+          onClose={() => setTimeModalOpen(false)}
+        />
+      )}
+      {delayModalOpen && <DelayDetailModal rows={rows} onClose={() => setDelayModalOpen(false)} />}
+      {evolutionModalOpen && (
+        <MonetaryEvolutionDetailModal
+          income={incomeSeries}
+          cost={costSeries}
+          profit={profitSeries}
+          categoryLines={categorySeries}
+          startLabel={evolutionStartLabel}
+          endLabel={evolutionEndLabel}
+          onClose={() => setEvolutionModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -340,7 +995,6 @@ function TripsTable({
   // footer can share this.
   const computeTotals = (subset: TripRow[]) => ({
     tripCount: subset.length,
-    completedCount: subset.filter((r) => r.status === 'completed').length,
     totalTime: subset.reduce((sum, r) => sum + drivingHours(r), 0),
     totalDistance: subset.reduce((sum, r) => sum + r.totalMiles, 0),
     totalDeadhead: subset.reduce((sum, r) => sum + deadheadMiles(r), 0),
@@ -405,13 +1059,8 @@ function TripsTable({
       case 'truck':
       case 'startDate':
       case 'lane':
-        return <td key={key} className="fd-left" />
       case 'status':
-        return (
-          <td key={key} className="fd-left fd-dim">
-            {t.completedCount}/{t.tripCount} completed
-          </td>
-        )
+        return <td key={key} className="fd-left" />
       case 'time':
         return <td key={key} className="fd-dim">{fmtHours(t.totalTime)}</td>
       case 'distance':
