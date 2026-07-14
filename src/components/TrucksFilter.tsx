@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, Check, Search, Pencil, Plus } from 'lucide-react'
 import AddCabModal from './AddCabModal'
 import GroupModal from './GroupModal'
+import { tripRows } from '../data'
 
 type Tab = 'individual' | 'group'
 
@@ -11,7 +12,10 @@ interface Group {
   trucks: string[]
 }
 
-const initialTrucks = ['48201', '48202', '48203', '48204', '48205', '48206', '48207']
+// The real trucks that show up in trip data (e.g. "#6120") — not the fake
+// fleet-roster numbers groups still use below, which aren't wired to any
+// actual filtering.
+const initialTrucks = [...new Set(tripRows.map((r) => r.truck))].sort()
 
 // Shared fleet pool that groups draw their trucks from.
 const fleetPool = Array.from({ length: 14 }, (_, i) => `482${String(i + 1).padStart(2, '0')}`)
@@ -30,12 +34,17 @@ type GroupEditor =
   | { mode: 'edit'; group: Group }
   | null
 
-export default function TrucksFilter() {
+export default function TrucksFilter({
+  selected = [],
+  onChange,
+}: {
+  selected?: string[]
+  onChange?: (next: string[]) => void
+}) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('individual')
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<string[]>([]) // empty = All
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]) // group ids
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]) // group ids — decorative, not wired to trip filtering
   const [groups, setGroups] = useState<Group[]>(initialGroups)
   const [nextId, setNextId] = useState(5)
   const [trucks, setTrucks] = useState(initialTrucks)
@@ -46,11 +55,11 @@ export default function TrucksFilter() {
   const label = isAll ? 'All' : `${selected.length + selectedGroups.length} selected`
 
   const toggleTruck = (id: string) =>
-    setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+    onChange?.(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
   const toggleGroup = (id: string) =>
     setSelectedGroups((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const reset = () => {
-    setSelected([])
+    onChange?.([])
     setSelectedGroups([])
   }
 

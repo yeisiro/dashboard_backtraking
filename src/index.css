@@ -1930,6 +1930,9 @@ button {
 .kpi-row.kpi-row-4 {
   grid-template-columns: repeat(4, 1fr);
 }
+.kpi-row.kpi-row-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
 .grid-2.grid-2-even {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -2004,6 +2007,14 @@ button {
   padding: 24px 20px 90px;
   min-height: 220px;
 }
+.pv-pie-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  min-height: 220px;
+}
+.pv-pie-wrap .dd-donut-row { width: 100%; }
 .pv-bar-col {
   display: flex;
   flex-direction: column;
@@ -2609,6 +2620,187 @@ button {
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* Truck Activity Map — static choropleth (no zoom/pan/search, unlike the
+   interactive Fleet Monitor map). */
+.tam-card { padding: 16px; }
+.tam-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.tam-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin-top: 12px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 0.5px solid rgba(255, 255, 255, 0.07);
+  background: #131619;
+}
+.tam-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #131619;
+}
+.tam-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.tam-detail {
+  flex: 0 0 320px;
+  width: 320px;
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.tam-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.tam-detail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tam-detail-code {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.tam-detail-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.tam-side-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tam-side-stats .kpi { padding: 10px; }
+.tam-side-stats .value { font-size: 17px; }
+.tam-stat-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.tam-stat-clickable:hover { border-color: rgba(255, 255, 255, 0.18); }
+.tam-stat-clickable .kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tam-stat-chevron {
+  color: var(--text-muted);
+}
+.tam-sublist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.tam-sublist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tam-sublist-row:last-child { border-bottom: none; }
+.tam-sublist-row-clickable {
+  cursor: pointer;
+  margin: 0 -8px;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.tam-sublist-row-clickable:hover { background: rgba(255, 255, 255, 0.05); }
+.tam-sublist-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  min-width: 0;
+}
+.tam-sublist-lane {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tam-sublist-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tam-sublist-arrow { color: var(--text-muted); }
+
+.tam-modal { width: 620px; }
+.tam-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tam-toggle-btn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.tam-toggle-btn:hover { color: var(--text-dim); }
+.tam-toggle-btn.active {
+  color: var(--text);
+  background: rgba(46, 230, 166, 0.08);
+  border-color: rgba(46, 230, 166, 0.35);
+}
+.tam-cause-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tam-cause-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.tam-cause-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tam-cause-group-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  flex: 1;
+}
+.tam-cause-group-total {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tam-cause-group .tam-sublist { padding-left: 16px; }
 
 .mm-header-actions {
   display: flex;

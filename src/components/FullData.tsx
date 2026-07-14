@@ -7,6 +7,7 @@ import { tripRows, costSegments, deltaTone, deltaTrend, type TripRow, type Goal 
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
+import FuelSavings from './FuelSavings'
 
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel & Savings', 'Rewards'] as const
 type SubTab = (typeof SUBTABS)[number]
@@ -121,10 +122,14 @@ function StatusBadge({ status }: { status: TripRow['status'] }) {
 export default function FullData({
   band = null,
   classFilter = [],
+  truckFilter = [],
+  onTruckFilterChange,
   view = 'dashboard',
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
+  truckFilter?: string[]
+  onTruckFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
 }) {
   const [tab, setTab] = useState<SubTab>('Trips')
@@ -141,11 +146,19 @@ export default function FullData({
       </div>
 
       {tab === 'Trips' ? (
-        <TripsTable band={band} classFilter={classFilter} view={view} />
+        <TripsTable band={band} classFilter={classFilter} view={view} truckFilter={truckFilter} />
       ) : tab === 'Fleet Analytics' ? (
         <FleetAnalytics classFilter={classFilter} view={view} />
       ) : tab === 'Productivity' ? (
         <Productivity classFilter={classFilter} />
+      ) : tab === 'Fuel & Savings' ? (
+        <FuelSavings
+          classFilter={classFilter}
+          onSelectTrucks={(trucks) => {
+            onTruckFilterChange?.(trucks)
+            setTab('Trips')
+          }}
+        />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
@@ -294,38 +307,6 @@ function StatTile({
         )}
       </div>
       {foot && <div className="foot">{foot}</div>}
-    </div>
-  )
-}
-
-interface BarDatum {
-  label: string
-  color: string
-  heightPct: number
-  displayValue: string
-  subValue?: string
-}
-
-// A vertical bar chart: percentage/value on top, colored bar scaled to the
-// tallest bar in the set, category label (rotated) below. Reused for cost
-// and time distributions — same shape, different data.
-function VerticalBarChart({ bars }: { bars: BarDatum[] }) {
-  return (
-    <div className="pv-bars">
-      {bars.map((b) => (
-        <div className="pv-bar-col" key={b.label}>
-          <span className="pv-bar-val">{b.displayValue}</span>
-          {b.subValue && <span className="pv-bar-subval">{b.subValue}</span>}
-          <div className="pv-bar-track">
-            <div
-              className="pv-bar-fill"
-              style={{ height: `${Math.max(2, b.heightPct)}%`, background: b.color }}
-              title={`${b.label}: ${b.displayValue}${b.subValue ? ` (${b.subValue})` : ''}`}
-            />
-          </div>
-          <span className="pv-bar-label">{b.label}</span>
-        </div>
-      ))}
     </div>
   )
 }
@@ -542,10 +523,10 @@ function resampleWave(wave: number[], n: number): number[] {
 
 const shortDate = (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
 
-interface TimeSegment {
+interface PieSegment {
   label: string
   color: string
-  hours: number
+  value: number
 }
 
 // The idle+unused pool has no per-cause field in the data (unlike driving,
@@ -562,11 +543,20 @@ const TIME_IDLE_WEIGHTS: { label: string; color: string; share: number }[] = [
   { label: 'Other resting/waiting', color: '#8a94a6', share: 0.07 },
 ]
 
-// Same donut rendering as StatusDonut/the cost-segment donut, generalized to
-// any labeled set of hour segments.
-function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
+// Same donut rendering as StatusDonut, generalized to any labeled set of
+// segments — reused for cost distribution, time distribution, and the hours
+// breakdown, each with its own value formatter (currency vs. duration).
+function PieChart({
+  segments,
+  formatValue,
+  totalLabel = 'Total',
+}: {
+  segments: PieSegment[]
+  formatValue: (v: number) => string
+  totalLabel?: string
+}) {
   const [hover, setHover] = useState<number | null>(null)
-  const total = segments.reduce((s, x) => s + x.hours, 0)
+  const total = segments.reduce((s, x) => s + x.value, 0)
   const R = 60
   const C = 2 * Math.PI * R
   let acc = 0
@@ -576,7 +566,7 @@ function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
       <div className="ld-donut2">
         <svg viewBox="0 0 160 160">
           {segments.map((s, i) => {
-            const p = total ? (s.hours / total) * 100 : 0
+            const p = total ? (s.value / total) * 100 : 0
             const len = (p / 100) * C
             const offset = -acc
             acc += len
@@ -605,14 +595,14 @@ function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
           {hover !== null ? (
             <>
               <span className="ld-donut2-total" style={{ color: segments[hover].color }}>
-                {total ? Math.round((segments[hover].hours / total) * 100) : 0}%
+                {total ? Math.round((segments[hover].value / total) * 100) : 0}%
               </span>
               <span className="ld-donut2-label">{segments[hover].label}</span>
             </>
           ) : (
             <>
-              <span className="ld-donut2-total">{fmtHours(total)}</span>
-              <span className="ld-donut2-label">Total</span>
+              <span className="ld-donut2-total">{formatValue(total)}</span>
+              <span className="ld-donut2-label">{totalLabel}</span>
             </>
           )}
         </div>
@@ -629,8 +619,8 @@ function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
               <span className="ld-legend-dot" style={{ background: s.color }} />
               {s.label}
             </span>
-            <span className="ld-legend-pct">{total ? Math.round((s.hours / total) * 100) : 0}%</span>
-            <span className="ld-legend-val">{fmtHours(s.hours)}</span>
+            <span className="ld-legend-pct">{total ? Math.round((s.value / total) * 100) : 0}%</span>
+            <span className="ld-legend-val">{formatValue(s.value)}</span>
           </div>
         ))}
       </div>
@@ -639,12 +629,12 @@ function TimeSegmentDonut({ segments }: { segments: TimeSegment[] }) {
 }
 
 function TimeDistributionDetailModal({
-  bars,
+  summarySegments,
   segments,
   onClose,
 }: {
-  bars: BarDatum[]
-  segments: TimeSegment[]
+  summarySegments: PieSegment[]
+  segments: PieSegment[]
   onClose: () => void
 }) {
   return (
@@ -662,11 +652,11 @@ function TimeDistributionDetailModal({
         <div className="modal-body">
           <div className="dd-block">
             <div className="dd-block-title">Hours Summary</div>
-            <VerticalBarChart bars={bars} />
+            <PieChart segments={summarySegments} formatValue={fmtHours} />
           </div>
           <div className="dd-block">
             <div className="dd-block-title">Hours Breakdown</div>
-            <TimeSegmentDonut segments={segments} />
+            <PieChart segments={segments} formatValue={fmtHours} />
           </div>
         </div>
       </div>
@@ -690,13 +680,10 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
 
   // Cost distribution: the shared cost-segment percentages (same story as the
   // Operation Details donut), scaled to this fleet's total cost.
-  const maxCostPct = Math.max(...costSegments.map((s) => s.pct))
-  const costBars: BarDatum[] = costSegments.map((s) => ({
+  const costPieSegments: PieSegment[] = costSegments.map((s) => ({
     label: s.label,
     color: s.color,
-    heightPct: (s.pct / maxCostPct) * 100,
-    displayValue: `${s.pct < 1 ? s.pct.toFixed(2) : Math.round(s.pct)}%`,
-    subValue: usd(totalCost * (s.pct / 100)),
+    value: totalCost * (s.pct / 100),
   }))
 
   // Time distribution: real driving + idle hours per trip, plus whatever's
@@ -710,19 +697,15 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
     sumIdle += r.idleHours
     sumNotUsed += Math.max(0, days * 24 - r.effectiveHours - r.idleHours)
   })
-  const timeTotal = sumEffective + sumIdle + sumNotUsed || 1
   const timeShares = [
-    { label: 'Effective hours', color: 'var(--green)', hours: sumEffective, share: sumEffective / timeTotal },
-    { label: 'Non-productive hours', color: 'var(--yellow)', hours: sumIdle, share: sumIdle / timeTotal },
-    { label: 'Not used hours', color: 'var(--red)', hours: sumNotUsed, share: sumNotUsed / timeTotal },
+    { label: 'Effective hours', color: 'var(--green)', hours: sumEffective },
+    { label: 'Non-productive hours', color: 'var(--yellow)', hours: sumIdle },
+    { label: 'Not used hours', color: 'var(--red)', hours: sumNotUsed },
   ]
-  const maxTimeShare = Math.max(...timeShares.map((t) => t.share)) || 1
-  const timeBars: BarDatum[] = timeShares.map((t) => ({
+  const timePieSegments: PieSegment[] = timeShares.map((t) => ({
     label: t.label,
     color: t.color,
-    heightPct: (t.share / maxTimeShare) * 100,
-    displayValue: `${(t.share * 100).toFixed(1)}%`,
-    subValue: fmtHours(t.hours),
+    value: t.hours,
   }))
 
   // Time distribution detail: the same driving/idle/unused totals as the
@@ -732,10 +715,10 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
   // TIME_IDLE_WEIGHTS.
   const deadheadHours = rows.reduce((sum, r) => sum + r.effectiveHours * (r.deadheadPct / 100), 0)
   const idlePoolHours = sumIdle + sumNotUsed
-  const timeDetailSegments: TimeSegment[] = [
-    { label: 'Loaded Driving', color: 'var(--green)', hours: sumEffective - deadheadHours },
-    { label: 'Deadhead driving', color: 'var(--red)', hours: deadheadHours },
-    ...TIME_IDLE_WEIGHTS.map((w) => ({ label: w.label, color: w.color, hours: idlePoolHours * w.share })),
+  const timeDetailSegments: PieSegment[] = [
+    { label: 'Loaded Driving', color: 'var(--green)', value: sumEffective - deadheadHours },
+    { label: 'Deadhead driving', color: 'var(--red)', value: deadheadHours },
+    ...TIME_IDLE_WEIGHTS.map((w) => ({ label: w.label, color: w.color, value: idlePoolHours * w.share })),
   ]
 
   // Delay distribution: same Fair/Early/Late classification shown in the
@@ -795,7 +778,7 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
           foot={totalLoads ? `${usd(totalProfit / totalLoads)} avg per load` : undefined}
         />
         <StatTile
-          label="Profitability"
+          label="Margin"
           value={`${profitability.toFixed(1)}%`}
           delta="+0.4"
           goal="high"
@@ -808,7 +791,9 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
           <div className="card-head">
             <span className="eyebrow">Cost Distribution by Type</span>
           </div>
-          <VerticalBarChart bars={costBars} />
+          <div className="pv-pie-wrap">
+            <PieChart segments={costPieSegments} formatValue={usd} />
+          </div>
         </section>
         <section className="card pv-panel">
           <div className="card-head">
@@ -845,7 +830,9 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
               <ArrowUpRight size={15} />
             </button>
           </div>
-          <VerticalBarChart bars={timeBars} />
+          <div className="pv-pie-wrap">
+            <PieChart segments={timePieSegments} formatValue={fmtHours} />
+          </div>
         </section>
         <section className="card pv-panel">
           <div className="card-head">
@@ -868,7 +855,7 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
 
       {timeModalOpen && (
         <TimeDistributionDetailModal
-          bars={timeBars}
+          summarySegments={timePieSegments}
           segments={timeDetailSegments}
           onClose={() => setTimeModalOpen(false)}
         />
@@ -893,10 +880,12 @@ function TripsTable({
   band,
   classFilter = [],
   view = 'dashboard',
+  truckFilter = [],
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
   view?: 'summary' | 'dashboard'
+  truckFilter?: string[]
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -965,19 +954,15 @@ function TripsTable({
   const byClass =
     classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
 
-  // V1 searches by trip city (lane) only. V2 also matches truck number and
-  // either date.
+  // Truck filtering always goes through the header's "Trucks:" filter —
+  // arriving from a truck clicked on the Fuel & Savings map sets that same
+  // filter (see FullData's onSelectTrucks) rather than a side-channel here.
+  const byTruck = truckFilter.length > 0 ? byClass.filter((r) => truckFilter.includes(r.truck)) : byClass
+
+  // Free-text search is by city (lane) only — truck filtering is the header
+  // filter's job, not this box's.
   const q = query.trim().toLowerCase()
-  const filtered = q
-    ? byClass.filter((r) =>
-        view === 'summary'
-          ? r.lane.toLowerCase().includes(q)
-          : r.truck.toLowerCase().includes(q) ||
-            r.startDate.toLowerCase().includes(q) ||
-            r.endDate.toLowerCase().includes(q) ||
-            r.lane.toLowerCase().includes(q)
-      )
-    : byClass
+  const filtered = q ? byTruck.filter((r) => r.lane.toLowerCase().includes(q)) : byTruck
 
   const byStatus =
     statusFilter.length > 0 ? filtered.filter((r) => statusFilter.includes(r.status)) : filtered
@@ -1218,7 +1203,7 @@ function TripsTable({
         <Search size={14} className="fd-search-icon" />
         <input
           type="text"
-          placeholder={view === 'summary' ? 'Search by city' : 'Search by truck, date, or city'}
+          placeholder="Search by city"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

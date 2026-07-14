@@ -12,12 +12,16 @@ export default function Toolbar({
   onTabChange,
   classFilter = [],
   onClassFilterChange,
+  truckFilter = [],
+  onTruckFilterChange,
   view = 'dashboard',
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
   classFilter?: string[]
   onClassFilterChange?: (next: string[]) => void
+  truckFilter?: string[]
+  onTruckFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
 }) {
   const [showConnect, setShowConnect] = useState(false)
@@ -40,7 +44,7 @@ export default function Toolbar({
       </div>
       <div className="filters">
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
-        <TrucksFilter />
+        <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
         <DateFilter />
         {!(view === 'summary' && tab === 'overview') && (
           <button className="btn-primary" onClick={() => setShowConnect(true)}>

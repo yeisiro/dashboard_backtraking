@@ -19,6 +19,7 @@ export default function App() {
   const [dataTab, setDataTab] = useState<DataTab>('overview')
   const [tripsBand, setTripsBand] = useState<'best' | 'worst' | null>(null)
   const [classFilter, setClassFilter] = useState<string[]>([])
+  const [truckFilter, setTruckFilter] = useState<string[]>([])
   const noData = fleetMode === 'empty'
   const [rangeEnd, setRangeEnd] = useState(() => {
     const t = new Date()
@@ -43,10 +44,18 @@ export default function App() {
               onTabChange={setDataTab}
               classFilter={classFilter}
               onClassFilterChange={setClassFilter}
+              truckFilter={truckFilter}
+              onTruckFilterChange={setTruckFilter}
               view={view}
             />
             {dataTab === 'full' ? (
-              <FullData band={tripsBand} classFilter={classFilter} view={view} />
+              <FullData
+                band={tripsBand}
+                classFilter={classFilter}
+                truckFilter={truckFilter}
+                onTruckFilterChange={setTruckFilter}
+                view={view}
+              />
             ) : (
               <>
                 <KpiCards noData={noData} hideMarketPosition={view === 'summary'} />
