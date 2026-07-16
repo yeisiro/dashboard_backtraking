@@ -2294,6 +2294,33 @@ button {
   flex: 0 0 auto;
 }
 .fd-search-clear:hover { color: var(--text-dim); }
+.fd-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fd-place-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.fd-place-chip button {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.fd-place-chip button:hover { color: var(--text-dim); }
 .fd-table td.fd-no-results {
   text-align: center;
   padding: 40px 0;
@@ -2421,6 +2448,8 @@ button {
 .fd-pos { color: var(--green); }
 .fd-score { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .fd-truck { font-weight: 700; }
+.fd-load-ref { font-weight: 700; }
+.fd-load-route { font-size: 12px; margin-top: 2px; }
 .fd-class {
   display: inline-flex;
   align-items: center;
@@ -2621,6 +2650,88 @@ button {
   flex-shrink: 0;
 }
 
+/* Fuel and Savings — Money Saved / Money Leakage headline row, and the Fuel
+   Efficiency by Truck ranking below it (reuses .recovery-card/.mini-card
+   from Potential Savings so both "who's an outlier" panels match). */
+.fs-headline-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+/* Fuel Efficiency headline card: Cost/Gal, Total Gallons and Avg MPG are
+   equally important, so they get equal-weight columns inside the one card
+   instead of a single headline value with the rest demoted to a caption. */
+.fs-fuel-split {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.fs-fuel-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.fs-fuel-metric:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+.fs-fuel-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.fs-fuel-value {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* Fuel Efficiency by Truck drill-down: per-truck fuel table inside the
+   SubDetailModal, columns aligned with TruckFuelList's header row. */
+.fs-truck-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px 70px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 4px;
+  font-size: 12.5px;
+}
+.fs-truck-row-head {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.fs-truck-row span:not(.tam-sublist-main) {
+  text-align: right;
+}
+.fs-truck-row-head span:first-child,
+.fs-truck-row span.tam-sublist-main {
+  text-align: left;
+}
+.fs-truck-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+.fs-truck-row-head span:first-child.fs-truck-sort {
+  justify-content: flex-start;
+}
+.fs-truck-sort:hover {
+  color: var(--text);
+}
+.fs-truck-sort.active {
+  color: var(--text);
+}
+
 /* Truck Activity Map — static choropleth (no zoom/pan/search, unlike the
    interactive Fleet Monitor map). */
 .tam-card { padding: 16px; }
@@ -2649,6 +2760,49 @@ button {
   font-size: 11px;
   color: var(--text-muted);
 }
+.tam-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tam-legend-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.tam-legend-gradient {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--red), var(--yellow), var(--green));
+}
+.tam-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.tam-tooltip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.tam-tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.tam-tooltip-pos { color: var(--green); }
+.tam-tooltip-neg { color: var(--red); }
 .tam-detail {
   flex: 0 0 320px;
   width: 320px;
@@ -4302,7 +4456,7 @@ button {
 /* ── Lane detail modal (Figma "Detalle de operación por lane") ──────────── */
 .ld-modal {
   zoom: 0.8;
-  width: 1457px;
+  width: 1650px;
   max-width: 121vw;
   max-height: 119vh;
   background: #0E141A;
@@ -4351,7 +4505,8 @@ button {
 .ld-strip {
   display: flex;
   align-items: center;
-  gap: 22px;
+  flex-wrap: wrap;
+  gap: 12px 22px;
   background: #05080B;
   border-radius: 16px;
   padding: 16px 20px;
@@ -4410,6 +4565,41 @@ button {
   font-size: 18px;
   font-weight: 500;
 }
+/* Route adherence / pickup / delivery — quiet icons in the route strip
+   itself, not a second row of pills, but bright/solid enough (not the dark
+   muted badge fill) to actually register against the near-black strip bg.
+   Color alone flags status at a glance; label/value shows once you click. */
+.ld-adh-icons { display: flex; align-items: center; gap: 8px; }
+.ld-adh-icon-wrap { position: relative; }
+.ld-adh-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.ld-adh-icon:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.ld-adh-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #0b1524;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: nowrap;
+  z-index: 20;
+}
+.ld-adh-pop-row { display: flex; flex-direction: column; gap: 2px; }
+.ld-adh-pop-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.ld-adh-pop-val { font-size: 13px; font-weight: 600; color: #E6E6E6; }
 .ld-loadid {
   display: flex;
   align-items: center;
@@ -4436,15 +4626,41 @@ button {
 /* Top area layout */
 .ld-top {
   display: grid;
-  grid-template-columns: 520px 0.5fr 1fr;
+  grid-template-columns: 380px 0.5fr 1fr;
   gap: 15px;
 }
 
 /* Cost summary */
-.ld-cost { padding: 18px; display: flex; flex-direction: column; }
+.ld-cost { padding: 14px; display: flex; flex-direction: column; }
 .ld-card-head { display: flex; align-items: center; justify-content: space-between; }
 .ld-cost-title { font-size: 16px; font-weight: 600; color: #E6E6E6; }
-.ld-cost-total { font-size: 34px; font-weight: 600; color: #E6E6E6; margin-top: 14px; }
+.ld-cost-back { display: flex; align-items: center; justify-content: center; }
+.ld-cost-back:hover svg { color: #CDCDCD; }
+.ld-cost-hero { display: flex; flex-direction: column; gap: 2px; margin-top: 18px; }
+.ld-cost-hero-val { font-size: 34px; font-weight: 700; color: #E6E6E6; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ld-cost-hero-lbl { font-size: 13px; font-weight: 500; color: #686868; }
+.ld-gauge { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; margin-top: 24px; flex: 1; }
+/* Margin (not the ring's own gap) reserves room for the floating %/name
+   callouts, which sit outside the ring's own box — without it they can
+   paint over whatever sits below in a short card (e.g. the stacked mobile
+   layout, where there's no extra flex space to absorb the overflow). */
+.ld-gauge-ring { position: relative; width: 250px; height: 250px; flex: 0 0 auto; margin: 46px 0; }
+.ld-gauge-ring svg { width: 100%; height: 100%; display: block; }
+/* Each group's %/name floats beside its own arc instead of living in a
+   legend list below the ring — same info, but the ring stays the focus. */
+.ld-gauge-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+.ld-gauge-label-pct { font-size: 20px; font-weight: 700; }
+.ld-gauge-label-name { font-size: 13px; font-weight: 500; color: #8a94a6; }
 .ld-cost-chart {
   display: flex;
   flex-direction: column;
@@ -4454,8 +4670,8 @@ button {
 }
 .ld-donut2 {
   position: relative;
-  width: 190px;
-  height: 190px;
+  width: 210px;
+  height: 210px;
   flex: 0 0 auto;
 }
 .ld-donut2 svg { width: 100%; height: 100%; display: block; }
@@ -4553,8 +4769,17 @@ button {
 .ld-miles-row { display: flex; align-items: center; width: 100%; }
 .ld-miles-stat { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ld-miles-num { font-size: 20px; font-weight: 600; color: #E6E6E6; font-variant-numeric: tabular-nums; }
+.ld-miles-num-sub { font-size: 14px; font-weight: 600; color: #B7BEC7; font-variant-numeric: tabular-nums; }
 .ld-miles-lbl { font-size: 11px; font-weight: 500; color: #686868; text-transform: uppercase; letter-spacing: 0.04em; }
 .ld-miles-sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.08); flex: 0 0 auto; margin: 0 12px; }
+
+/* Missed-saving is the "act on this" number in every stat row — a warm tint
+   and a filled chip pull it forward instead of it just being the column
+   with the fewest lines and a lot of leftover whitespace. */
+.ld-miles-missed { background: rgba(255, 172, 82, 0.1); border-radius: 12px; padding: 10px 14px; margin: -10px 0; }
+.ld-miles-missed .ld-miles-num { color: #FFAC52; }
+.ld-miles-missed .ld-miles-num-sub { color: #FFAC52; opacity: 0.85; }
+.ld-miles-missed .ld-miles-lbl { color: #FFAC52; opacity: 0.75; }
 
 /* Map panel */
 .ld-map {

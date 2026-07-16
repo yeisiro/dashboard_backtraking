@@ -7,9 +7,9 @@ import { tripRows, costSegments, deltaTone, deltaTrend, type TripRow, type Goal 
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
-import FuelSavings from './FuelSavings'
+import FuelSavings, { parseLane } from './FuelSavings'
 
-const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel & Savings', 'Rewards'] as const
+const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel and Savings', 'Rewards'] as const
 type SubTab = (typeof SUBTABS)[number]
 
 // V1 ("summary") drops the Rewards subtab; V2 ("dashboard") keeps the full set.
@@ -78,17 +78,17 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
 
 // ── Columns ───────────────────────────────────────────────────────────────
 // Every data column is user-reorderable (dragged via the grip handle) —
-// 'truck'/'lane'/'status' just don't have a sort accessor, and 'status' gets
+// 'truck'/'load'/'status' just don't have a sort accessor, and 'status' gets
 // its own filter dropdown instead of a sort button. Details stays last as
 // the fixed action column, outside this list.
 type ColId =
-  | 'truck' | 'lane' | 'status' | 'startDate' | 'time' | 'distance' | 'deadhead' | 'income'
+  | 'truck' | 'load' | 'status' | 'startDate' | 'time' | 'distance' | 'deadhead' | 'income'
   | 'cost' | 'profit' | 'adherence' | 'wastedRate' | 'leakage'
 
 const ALL_COLUMNS: { key: ColId; label: string; left?: boolean; sortable?: boolean }[] = [
   { key: 'truck', label: 'Truck', left: true },
+  { key: 'load', label: 'Load', left: true },
   { key: 'startDate', label: 'Date', left: true, sortable: true },
-  { key: 'lane', label: 'Lane', left: true },
   { key: 'status', label: 'Status', left: true },
   { key: 'time', label: 'Driving Time', sortable: true },
   { key: 'distance', label: 'Total Miles', sortable: true },
@@ -101,7 +101,7 @@ const ALL_COLUMNS: { key: ColId; label: string; left?: boolean; sortable?: boole
   { key: 'leakage', label: 'Leakage', sortable: true },
 ]
 
-const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.lane}`
+const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.loadRef}`
 
 // "May 14 → May 15", collapsed to "May 14" when start and end match.
 const dateRange = (r: TripRow) =>
@@ -133,6 +133,9 @@ export default function FullData({
   view?: 'summary' | 'dashboard'
 }) {
   const [tab, setTab] = useState<SubTab>('Trips')
+  const [placeFilter, setPlaceFilter] = useState<{ code: string; name: string; direction: 'outbound' | 'inbound' } | null>(
+    null,
+  )
   const subtabs = subtabsForView(view)
 
   return (
@@ -146,16 +149,29 @@ export default function FullData({
       </div>
 
       {tab === 'Trips' ? (
-        <TripsTable band={band} classFilter={classFilter} view={view} truckFilter={truckFilter} />
+        <TripsTable
+          band={band}
+          classFilter={classFilter}
+          view={view}
+          truckFilter={truckFilter}
+          placeFilter={placeFilter}
+          onClearPlaceFilter={() => setPlaceFilter(null)}
+        />
       ) : tab === 'Fleet Analytics' ? (
         <FleetAnalytics classFilter={classFilter} view={view} />
       ) : tab === 'Productivity' ? (
         <Productivity classFilter={classFilter} />
-      ) : tab === 'Fuel & Savings' ? (
+      ) : tab === 'Fuel and Savings' ? (
         <FuelSavings
           classFilter={classFilter}
           onSelectTrucks={(trucks) => {
+            setPlaceFilter(null)
             onTruckFilterChange?.(trucks)
+            setTab('Trips')
+          }}
+          onSelectPlace={(code, name, direction) => {
+            onTruckFilterChange?.([])
+            setPlaceFilter({ code, name, direction })
             setTab('Trips')
           }}
         />
@@ -881,11 +897,15 @@ function TripsTable({
   classFilter = [],
   view = 'dashboard',
   truckFilter = [],
+  placeFilter = null,
+  onClearPlaceFilter,
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
   view?: 'summary' | 'dashboard'
   truckFilter?: string[]
+  placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' } | null
+  onClearPlaceFilter?: () => void
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -900,7 +920,7 @@ function TripsTable({
     )
 
   // Drag-and-drop column reordering — every column (including Truck / Date /
-  // Lane / Status) can be dragged via its grip handle. Details stays last as
+  // Load / Status) can be dragged via its grip handle. Details stays last as
   // the fixed action column, outside this list.
   const [columnOrder, setColumnOrder] = useState<ColId[]>(() => ALL_COLUMNS.map((c) => c.key))
   const [dragOverKey, setDragOverKey] = useState<ColId | null>(null)
@@ -955,14 +975,26 @@ function TripsTable({
     classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
 
   // Truck filtering always goes through the header's "Trucks:" filter —
-  // arriving from a truck clicked on the Fuel & Savings map sets that same
+  // arriving from a truck clicked on the Fuel and Savings map sets that same
   // filter (see FullData's onSelectTrucks) rather than a side-channel here.
   const byTruck = truckFilter.length > 0 ? byClass.filter((r) => truckFilter.includes(r.truck)) : byClass
 
-  // Free-text search is by city (lane) only — truck filtering is the header
-  // filter's job, not this box's.
+  // Arriving from a state's "Leaving X" / "Arriving to X" click on the
+  // Fuel and Savings map — filters to trips whose lane actually starts/ends in
+  // that state, not just any trip touching it.
+  const byPlace = placeFilter
+    ? byTruck.filter((r) => {
+        const parsed = parseLane(r.lane)
+        return placeFilter.direction === 'outbound' ? parsed.origin === placeFilter.code : parsed.dest === placeFilter.code
+      })
+    : byTruck
+
+  // Free-text search is by city (lane) or load reference — truck filtering
+  // is the header filter's job, not this box's.
   const q = query.trim().toLowerCase()
-  const filtered = q ? byTruck.filter((r) => r.lane.toLowerCase().includes(q)) : byTruck
+  const filtered = q
+    ? byPlace.filter((r) => r.lane.toLowerCase().includes(q) || r.loadRef.toLowerCase().includes(q))
+    : byPlace
 
   const byStatus =
     statusFilter.length > 0 ? filtered.filter((r) => statusFilter.includes(r.status)) : filtered
@@ -1009,8 +1041,13 @@ function TripsTable({
             {view === 'summary' ? fullDateRange(r) : dateRange(r)}
           </td>
         )
-      case 'lane':
-        return <td key={key} className="fd-left fd-dim">{r.lane}</td>
+      case 'load':
+        return (
+          <td key={key} className="fd-left">
+            <div className="fd-load-ref">{r.loadRef}</div>
+            <div className="fd-load-route fd-dim">{r.lane}</div>
+          </td>
+        )
       case 'status':
         return (
           <td key={key} className="fd-left">
@@ -1043,7 +1080,7 @@ function TripsTable({
     switch (key) {
       case 'truck':
       case 'startDate':
-      case 'lane':
+      case 'load':
       case 'status':
         return <td key={key} className="fd-left" />
       case 'time':
@@ -1199,18 +1236,28 @@ function TripsTable({
 
   return (
     <>
-      <div className="fd-search">
-        <Search size={14} className="fd-search-icon" />
-        <input
-          type="text"
-          placeholder="Search by city"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {query && (
-          <button className="fd-search-clear" aria-label="Clear search" onClick={() => setQuery('')}>
-            <X size={13} />
-          </button>
+      <div className="fd-search-row">
+        <div className="fd-search">
+          <Search size={14} className="fd-search-icon" />
+          <input
+            type="text"
+            placeholder="Search by city or load id"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button className="fd-search-clear" aria-label="Clear search" onClick={() => setQuery('')}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        {placeFilter && (
+          <div className="fd-place-chip">
+            {placeFilter.direction === 'outbound' ? 'Leaving' : 'Arriving to'} {placeFilter.name}
+            <button aria-label="Clear place filter" onClick={onClearPlaceFilter}>
+              <X size={12} />
+            </button>
+          </div>
         )}
       </div>
       <div className="fd-table-wrap">

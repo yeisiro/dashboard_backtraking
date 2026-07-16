@@ -16,14 +16,236 @@ import {
   MapPin,
   Flag,
   Truck,
+  ChevronLeft,
+  Clock,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
 import type { FeatureCollection, MultiLineString } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
-import { costSegments, type TripRow } from '../data'
+import { costSegments, costGroupPct, type TripRow } from '../data'
 
 const money = (n: number) => '$' + Math.round(n).toLocaleString()
+
+interface CostDonutSegment {
+  label: string
+  pct: number
+  color: string
+}
+
+// Donut + legend renderer shared by the collapsed (% Loaded / % Deadhead)
+// and expanded (full cost-category) views of the Trip Cost Summary card —
+// same visual language at either granularity.
+function CostBreakdownDonut({ segments, total }: { segments: CostDonutSegment[]; total: number }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const R = 60
+  const C = 2 * Math.PI * R
+  let acc = 0
+
+  return (
+    <div className="ld-cost-chart">
+      <div className="ld-donut2">
+        <svg viewBox="0 0 160 160">
+          {segments.map((s, i) => {
+            const len = (s.pct / 100) * C
+            const offset = -acc
+            acc += len
+            const dimmed = hover !== null && hover !== i
+            return (
+              <circle
+                key={s.label}
+                cx="80"
+                cy="80"
+                r={R}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="26"
+                strokeDasharray={`${len} ${C - len}`}
+                strokeDashoffset={offset}
+                transform="rotate(-90 80 80)"
+                opacity={dimmed ? 0.3 : 1}
+                className="ld-donut2-seg"
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+              />
+            )
+          })}
+        </svg>
+        <div className="ld-donut2-center">
+          {hover !== null && (
+            <>
+              <span className="ld-donut2-total" style={{ color: segments[hover].color }}>
+                {segments[hover].pct < 1 ? segments[hover].pct.toFixed(2) : Math.round(segments[hover].pct)}%
+              </span>
+              <span className="ld-donut2-label">{segments[hover].label}</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="ld-legend">
+        {segments.map((s, i) => (
+          <div
+            className={`ld-legend-row ${hover === i ? 'active' : ''}`}
+            key={s.label}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <span className="ld-legend-name">
+              <span className="ld-legend-dot" style={{ background: s.color }} />
+              {s.label}
+            </span>
+            <span className="ld-legend-pct">{s.pct < 1 ? s.pct.toFixed(2) : Math.round(s.pct)}%</span>
+            <span className="ld-legend-val">{money((total * s.pct) / 100)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Ring color can be dark/muted since it's a large filled arc — legible at
+// that size. Text needs its own, lighter color or "Loaded" disappears
+// against the card's near-black background.
+const GAUGE_RING_COLOR = { deadhead: '#7CC8CF', loaded: '#3B566D' } as const
+const GAUGE_TEXT_COLOR = { deadhead: '#7CC8CF', loaded: '#8a94a6' } as const
+
+// A point on the ring's own circumference (in the 0..160 viewBox), at
+// `deg` degrees clockwise from 12 o'clock and `r` out from center — used to
+// float each group's %/name callout right next to its own arc, instead of
+// a legend list competing with the ring for space below it.
+function ringPoint(deg: number, r: number): { left: string; top: string } {
+  const rad = (deg * Math.PI) / 180
+  const x = 80 + Math.sin(rad) * r
+  const y = 80 - Math.cos(rad) * r
+  return { left: `${(x / 160) * 100}%`, top: `${(y / 160) * 100}%` }
+}
+
+// Collapsed Trip Cost Summary: a background track (% Loaded, the whole
+// circle) with the % Deadhead share capped on top as a short arc starting
+// at 12 o'clock — a "how much of the trip's cost is deadhead" gauge, not a
+// segmented pie. Each group's %/name floats right beside its own arc, so
+// the ring itself carries the story instead of splitting attention with a
+// legend list underneath it; hovering either the arc or its callout shows
+// that group's cost in the center.
+function TripCostGauge({ total }: { total: number }) {
+  const [hover, setHover] = useState<'deadhead' | 'loaded' | null>(null)
+  const R = 60
+  const C = 2 * Math.PI * R
+  const deadheadDeg = (costGroupPct.deadhead / 100) * 360
+  const deadheadLen = (costGroupPct.deadhead / 100) * C
+  const hoverPct = hover && costGroupPct[hover]
+  const LABEL_R = 88
+
+  return (
+    <div className="ld-gauge">
+      <div className="ld-gauge-ring">
+        <svg viewBox="0 0 160 160">
+          <circle
+            cx="80"
+            cy="80"
+            r={R}
+            fill="none"
+            stroke={GAUGE_RING_COLOR.loaded}
+            strokeWidth="26"
+            opacity={hover === 'deadhead' ? 0.35 : 1}
+            className="ld-donut2-seg"
+            onMouseEnter={() => setHover('loaded')}
+            onMouseLeave={() => setHover(null)}
+          />
+          <circle
+            cx="80"
+            cy="80"
+            r={R}
+            fill="none"
+            stroke={GAUGE_RING_COLOR.deadhead}
+            strokeWidth="26"
+            strokeDasharray={`${deadheadLen} ${C - deadheadLen}`}
+            strokeLinecap="round"
+            transform="rotate(-90 80 80)"
+            opacity={hover === 'loaded' ? 0.35 : 1}
+            className="ld-donut2-seg"
+            onMouseEnter={() => setHover('deadhead')}
+            onMouseLeave={() => setHover(null)}
+          />
+        </svg>
+        <div className="ld-donut2-center">
+          {hover && hoverPct && (
+            <span className="ld-donut2-total" style={{ color: GAUGE_TEXT_COLOR[hover] }}>
+              {money((total * hoverPct) / 100)}
+            </span>
+          )}
+        </div>
+        <div
+          className="ld-gauge-label"
+          style={{ ...ringPoint(deadheadDeg / 2, LABEL_R), color: GAUGE_TEXT_COLOR.deadhead, opacity: hover === 'loaded' ? 0.4 : 1 }}
+          onMouseEnter={() => setHover('deadhead')}
+          onMouseLeave={() => setHover(null)}
+        >
+          <span className="ld-gauge-label-pct">{Math.round(costGroupPct.deadhead)}%</span>
+          <span className="ld-gauge-label-name">Deadhead</span>
+        </div>
+        <div
+          className="ld-gauge-label"
+          style={{ ...ringPoint((deadheadDeg + 360) / 2, LABEL_R), color: GAUGE_TEXT_COLOR.loaded, opacity: hover === 'deadhead' ? 0.4 : 1 }}
+          onMouseEnter={() => setHover('loaded')}
+          onMouseLeave={() => setHover(null)}
+        >
+          <span className="ld-gauge-label-pct">{Math.round(costGroupPct.loaded)}%</span>
+          <span className="ld-gauge-label-name">Loaded miles</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// A quiet status icon for the route strip: just a colored glyph until
+// clicked, so route adherence / pickup+delivery timing sit next to the load
+// id without turning the strip into a wall of pills. Clicking reveals
+// whichever rows matter (e.g. pickup AND delivery together, for the one
+// time icon) in a small popover; clicking it again — or the other icon —
+// closes it.
+function AdhIcon({
+  icon: Icon,
+  tone,
+  rows,
+  ariaLabel,
+  open,
+  onToggle,
+}: {
+  icon: typeof Route
+  tone: Tone
+  rows: { label: string; value: string }[]
+  ariaLabel: string
+  open: boolean
+  onToggle: () => void
+}) {
+  const ring = TONE_VAR[tone]
+  return (
+    <div className="ld-adh-icon-wrap">
+      <button
+        type="button"
+        className="ld-adh-icon"
+        style={{ background: ring, color: '#0b1524' }}
+        onClick={onToggle}
+        aria-label={ariaLabel}
+      >
+        <Icon size={17} strokeWidth={2.4} />
+      </button>
+      {open && (
+        <div className="ld-adh-pop" style={{ borderColor: ring }}>
+          {rows.map((r) => (
+            <div className="ld-adh-pop-row" key={r.label}>
+              <span className="ld-adh-pop-lbl" style={{ color: ring }}>
+                {r.label}
+              </span>
+              <span className="ld-adh-pop-val">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Split "Atlanta, GA → Orlando, FL" into its two hubs.
 function splitLane(lane: string): [string, string] {
@@ -436,13 +658,15 @@ export default function TripDetailModal({
   onClose: () => void
 }) {
   const [origin, dest] = splitLane(trip.lane)
-  const [hover, setHover] = useState<number | null>(null)
+  const [costExpanded, setCostExpanded] = useState(false)
   const [hoverStart, setHoverStart] = useState(false)
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
   const [hoverDev, setHoverDev] = useState(false)
   const [hoverRepo, setHoverRepo] = useState(false)
   const [fullMap, setFullMap] = useState(false)
+  const [openAdh, setOpenAdh] = useState<'adherence' | 'time' | null>(null)
+  const toggleAdh = (key: 'adherence' | 'time') => setOpenAdh((o) => (o === key ? null : key))
 
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
 
@@ -873,58 +1097,146 @@ export default function TripDetailModal({
     </>
   )
 
+  // Excess miles: excessMilesCost is already "the $ caused by driving off the
+  // optimal plan" — converting it back through the trip's own $/mi rate gives
+  // how many of the driven miles were excess, without inventing a second,
+  // independent estimate of the plan.
+  const excessMiles = Math.round((trip.excessMilesCost * trip.totalMiles) / trip.totalCost)
+  const milesOptimal = trip.totalMiles - excessMiles
+
+  // Fuel executed/optimal share the same $ basis as the fuel-stop map above
+  // (fuelCostTotal), just netted against missedFuelSavings (already negative)
+  // to get what the optimal plan would have cost.
+  const fuelOptimal = fuelCostTotal + trip.missedFuelSavings
+  const missedSavingFuel = Math.abs(trip.missedFuelSavings)
+  // Gallons scale with miles at the same mpg, so the optimal plan — fewer
+  // miles, no deviation — also burns fewer gallons. The $ gap above is then
+  // partly extra gallons (from the extra miles) and partly a worse price
+  // paid per gallon on top of that.
+  const fuelGallonsExecuted = Math.round(trip.totalMiles / trip.mpg)
+  const fuelGallonsOptimal = Math.round(milesOptimal / trip.mpg)
+  const pricePerGalExecuted = fuelCostTotal / fuelGallonsExecuted
+  const pricePerGalOptimal = fuelOptimal / fuelGallonsOptimal
+  // One combined missed-saving figure for the earnings card — the fuel side
+  // is already a $ figure, the miles side is excessMilesCost (the $ that
+  // excess miles cost, the same basis excessMiles above was derived from).
+  const totalMissedSaving = missedSavingFuel + trip.excessMilesCost
+
+  // Pickup/delivery timing has no real scheduled time anywhere in this data
+  // model — the timeline's own timeForT times above are already decorative
+  // (see its comment). Rather than inventing an unrelated random appointment
+  // time, lateness here scales off the trip's own adherence score — the
+  // same "did this run to plan" signal already driving the rest of the
+  // modal — so a trip that reads badly everywhere else reads badly here
+  // too, and a clean trip stays clean. This is a proxy pending a real
+  // appointment-time field, the same caveat DelayDetailModal documents for
+  // its own on-time numbers.
+  const timeTier = (min: number): 'onTime' | 'late' => (min <= 15 ? 'onTime' : 'late')
+  const TIME_TIER_META = {
+    onTime: { label: 'On time', tone: 'green' as Tone },
+    late: { label: 'Late', tone: 'red' as Tone },
+  }
+  // Under an hour reads as minutes, an hour or more reads as hours — "127
+  // min late" doesn't parse at a glance the way "2h 7m late" does.
+  const formatLate = (min: number) => {
+    if (min < 60) return `${min} min late`
+    const h = Math.floor(min / 60)
+    const m = min % 60
+    return m === 0 ? `${h}h late` : `${h}h ${m}m late`
+  }
+  const latenessRand = seededRandom(routeSeed + 321)
+  const baseLateMin = Math.max(0, Math.round((96 - trip.adherence) * 1.9))
+  const pickupLateMin = Math.round(baseLateMin * (0.6 + latenessRand() * 0.8))
+  const deliveryLateMin = Math.round(baseLateMin * (0.6 + latenessRand() * 0.8))
+  const pickupTier = timeTier(pickupLateMin)
+  const deliveryTier = timeTier(deliveryLateMin)
+  // The combined time icon shows one color — whichever stop is worse — since
+  // a single glyph can't carry two independent tones at a glance.
+  const timeTierOverall = pickupTier === 'late' || deliveryTier === 'late' ? 'late' : 'onTime'
+
+  // Route adherence: the plan-following score already used elsewhere,
+  // graded into the same on-time/late/critical tone system.
+  const adherenceTier: 'good' | 'fair' | 'poor' = trip.adherence >= 90 ? 'good' : trip.adherence >= 75 ? 'fair' : 'poor'
+  const ADHERENCE_TIER_META = {
+    good: { label: 'Good', tone: 'green' as Tone },
+    fair: { label: 'Fair', tone: 'yellow' as Tone },
+    poor: { label: 'Poor', tone: 'red' as Tone },
+  }
+
   const cards: { q: string; value: React.ReactNode; icon: React.ReactNode }[] = [
     {
-      q: 'How much was earned?',
+      q: 'Earnings',
       value: (
         <div className="ld-miles-row">
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">${trip.negotiatedRpm.toFixed(2)}</span>
-            <span className="ld-miles-lbl">Negotiated RPM</span>
+            <span className="ld-miles-num">{money(trip.income)}</span>
+            <span className="ld-miles-lbl">Income</span>
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">${trip.executedRpm.toFixed(2)}</span>
-            <span className="ld-miles-lbl">Executed RPM</span>
+            <span className="ld-miles-num">{money(trip.profit)}</span>
+            <span className="ld-miles-lbl">Profit</span>
+          </div>
+          <span className="ld-miles-sep" />
+          <div className="ld-miles-stat ld-miles-missed">
+            <span className="ld-miles-num">{money(totalMissedSaving)}</span>
+            <span className="ld-miles-lbl">Total missed savings</span>
           </div>
         </div>
       ),
       icon: <TrendingUp size={16} />,
     },
     {
-      q: 'How much fuel was consumed?',
+      // Money leads every column here — $ paid first, then the $/gal rate
+      // that explains it, then the gallon volume behind it — since $ is
+      // what actually matters to the reader, not gallons.
+      q: 'Fuel cost',
       value: (
         <div className="ld-miles-row">
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{money(Math.round(trip.cost * 0.38))}</span>
-            <span className="ld-miles-lbl">Cost</span>
+            <span className="ld-miles-num">{money(fuelCostTotal)}</span>
+            <span className="ld-miles-num-sub">${pricePerGalExecuted.toFixed(2)}/gal</span>
+            <span className="ld-miles-num-sub">{fuelGallonsExecuted} gal</span>
+            <span className="ld-miles-lbl">Executed</span>
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{Math.round(trip.totalMiles / trip.mpg)} gal</span>
-            <span className="ld-miles-lbl">Gallons</span>
+            <span className="ld-miles-num">{money(fuelOptimal)}</span>
+            <span className="ld-miles-num-sub">${pricePerGalOptimal.toFixed(2)}/gal</span>
+            <span className="ld-miles-num-sub">{fuelGallonsOptimal} gal</span>
+            <span className="ld-miles-lbl">Optimal</span>
+          </div>
+          <span className="ld-miles-sep" />
+          <div className="ld-miles-stat ld-miles-missed">
+            <span className="ld-miles-num">{money(missedSavingFuel)}</span>
+            <span className="ld-miles-lbl">Fuel missed savings</span>
           </div>
         </div>
       ),
       icon: <Fuel size={16} />,
     },
     {
-      q: 'How many miles were driven?',
+      // Same money-first order as the fuel card: $ cost, then the miles
+      // driven behind it (with units, so it doesn't read as a bare count).
+      q: 'Miles cost',
       value: (
         <div className="ld-miles-row">
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{trip.loadedMiles.toLocaleString()}</span>
-            <span className="ld-miles-lbl">Loaded</span>
+            <span className="ld-miles-num">{money(trip.totalCost)}</span>
+            <span className="ld-miles-num-sub">{trip.totalMiles.toLocaleString()} mi</span>
+            <span className="ld-miles-lbl">Executed</span>
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{dhMiles.toLocaleString()}</span>
-            <span className="ld-miles-lbl">Deadhead</span>
+            <span className="ld-miles-num">{money(trip.optimalCost)}</span>
+            <span className="ld-miles-num-sub">{milesOptimal.toLocaleString()} mi</span>
+            <span className="ld-miles-lbl">Optimal</span>
           </div>
           <span className="ld-miles-sep" />
-          <div className="ld-miles-stat">
-            <span className="ld-miles-num">{trip.totalMiles.toLocaleString()}</span>
-            <span className="ld-miles-lbl">Total</span>
+          <div className="ld-miles-stat ld-miles-missed">
+            <span className="ld-miles-num">{money(trip.excessMilesCost)}</span>
+            <span className="ld-miles-num-sub">{excessMiles.toLocaleString()} mi</span>
+            <span className="ld-miles-lbl">Miles missed savings</span>
           </div>
         </div>
       ),
@@ -1051,10 +1363,6 @@ export default function TripDetailModal({
     setHoverRepo(e.action === 'Reposition')
   }
 
-  const R = 60
-  const C = 2 * Math.PI * R
-  let acc = 0
-
   return (
     <>
     <div className="modal-overlay" onClick={onClose}>
@@ -1086,12 +1394,33 @@ export default function TripDetailModal({
             <div className="ld-hub">
               <div className="ld-hub-name">{dest}</div>
             </div>
+            <div className="ld-adh-icons">
+              <AdhIcon
+                icon={Route}
+                tone={ADHERENCE_TIER_META[adherenceTier].tone}
+                rows={[{ label: 'Route adherence', value: `${Math.round(trip.adherence)}% · ${ADHERENCE_TIER_META[adherenceTier].label}` }]}
+                ariaLabel={`Route adherence: ${Math.round(trip.adherence)}% · ${ADHERENCE_TIER_META[adherenceTier].label}`}
+                open={openAdh === 'adherence'}
+                onToggle={() => toggleAdh('adherence')}
+              />
+              <AdhIcon
+                icon={Clock}
+                tone={TIME_TIER_META[timeTierOverall].tone}
+                rows={[
+                  { label: 'Pickup', value: pickupTier === 'onTime' ? 'On time' : formatLate(pickupLateMin) },
+                  { label: 'Delivery', value: deliveryTier === 'onTime' ? 'On time' : formatLate(deliveryLateMin) },
+                ]}
+                ariaLabel="Pickup and delivery timing"
+                open={openAdh === 'time'}
+                onToggle={() => toggleAdh('time')}
+              />
+            </div>
             <div className="ld-loadid">
               <span className="ld-loadid-icon">
                 <Package size={22} color="#7CC8CF" />
               </span>
               <div className="ld-loadid-txt">
-                <div className="ld-loadid-val">L00000000</div>
+                <div className="ld-loadid-val">{trip.loadRef}</div>
                 <div className="ld-loadid-sub">Load id</div>
               </div>
             </div>
@@ -1107,74 +1436,29 @@ export default function TripDetailModal({
           <div className="ld-top">
             <section className="ld-card ld-cost">
               <div className="ld-card-head">
-                <span className="ld-cost-title">Lane Cost Summary</span>
-                <BarChart3 size={18} color="#686868" />
+                <span className="ld-cost-title">Trip Cost Summary</span>
+                {costExpanded ? (
+                  <button className="ld-cost-back" onClick={() => setCostExpanded(false)} aria-label="Back to summary">
+                    <ChevronLeft size={18} color="#686868" />
+                  </button>
+                ) : (
+                  <BarChart3 size={18} color="#686868" />
+                )}
               </div>
-              <div className="ld-cost-chart">
-                <div className="ld-donut2">
-                  <svg viewBox="0 0 160 160">
-                    {costSegments.map((s, i) => {
-                      const len = (s.pct / 100) * C
-                      const offset = -acc
-                      acc += len
-                      const dimmed = hover !== null && hover !== i
-                      return (
-                        <circle
-                          key={s.label}
-                          cx="80"
-                          cy="80"
-                          r={R}
-                          fill="none"
-                          stroke={s.color}
-                          strokeWidth="26"
-                          strokeDasharray={`${len} ${C - len}`}
-                          strokeDashoffset={offset}
-                          transform="rotate(-90 80 80)"
-                          opacity={dimmed ? 0.3 : 1}
-                          className="ld-donut2-seg"
-                          onMouseEnter={() => setHover(i)}
-                          onMouseLeave={() => setHover(null)}
-                        />
-                      )
-                    })}
-                  </svg>
-                  <div className="ld-donut2-center">
-                    {hover !== null ? (
-                      <>
-                        <span className="ld-donut2-total" style={{ color: costSegments[hover].color }}>
-                          {costSegments[hover].pct < 1
-                            ? costSegments[hover].pct.toFixed(2)
-                            : Math.round(costSegments[hover].pct)}
-                          %
-                        </span>
-                        <span className="ld-donut2-label">{costSegments[hover].label}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="ld-donut2-total">{money(trip.totalCost)}</span>
-                        <span className="ld-donut2-label">Total</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="ld-legend">
-                  {costSegments.map((s, i) => (
-                    <div
-                      className={`ld-legend-row ${hover === i ? 'active' : ''}`}
-                      key={s.label}
-                      onMouseEnter={() => setHover(i)}
-                      onMouseLeave={() => setHover(null)}
-                    >
-                      <span className="ld-legend-name">
-                        <span className="ld-legend-dot" style={{ background: s.color }} />
-                        {s.label}
-                      </span>
-                      <span className="ld-legend-pct">{s.pct < 1 ? s.pct.toFixed(2) : Math.round(s.pct)}%</span>
-                      <span className="ld-legend-val">{money((trip.totalCost * s.pct) / 100)}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="ld-cost-hero">
+                <span className="ld-cost-hero-val">{money(trip.totalCost)}</span>
+                <span className="ld-cost-hero-lbl">Total</span>
               </div>
+              {costExpanded ? (
+                <CostBreakdownDonut segments={costSegments} total={trip.totalCost} />
+              ) : (
+                <>
+                  <TripCostGauge total={trip.totalCost} />
+                  <button className="ld-explore" onClick={() => setCostExpanded(true)}>
+                    Explore breakdown
+                  </button>
+                </>
+              )}
             </section>
 
             <div className="ld-metrics">
