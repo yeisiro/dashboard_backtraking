@@ -2843,8 +2843,13 @@ button {
   background: #131619;
 }
 .tam-hint {
+  margin: 6px 0 0;
   font-size: 11px;
   color: var(--text-muted);
+}
+.tam-hint strong {
+  color: var(--text-dim);
+  font-weight: 600;
 }
 .tam-legend {
   display: flex;

@@ -155,10 +155,38 @@ export function parseLane(lane: string): { origin: string | null; dest: string |
   return { origin: codes[0] ?? null, dest: codes[codes.length - 1] ?? codes[0] ?? null, all: [...new Set(codes)] }
 }
 
-function computeStateCounts(rows: TripRow[]): Record<string, number> {
+// Which state code(s) a trip counts toward, given the map's current view:
+// Outbound only credits the origin, Inbound only the destination, and All
+// credits every state the lane touches (deduped, so a same-state trip still
+// counts once there) — same union computeStateStats calls hereRows.
+export type MapDirection = 'all' | 'outbound' | 'inbound'
+function codesForDirection(lane: string, direction: MapDirection): string[] {
+  const parsed = parseLane(lane)
+  if (direction === 'outbound') return parsed.origin ? [parsed.origin] : []
+  if (direction === 'inbound') return parsed.dest ? [parsed.dest] : []
+  return parsed.all
+}
+
+const MAP_DIRECTIONS: { key: MapDirection; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'outbound', label: 'Outbound' },
+  { key: 'inbound', label: 'Inbound' },
+]
+
+// "All" is NOT an average of Outbound and Inbound — it's every trip that
+// touches a state counted once (its full income/cost/profit), regardless of
+// which end that state is. A same-state trip (both ends the same state)
+// still counts only once, same as computeStateStats' hereRows.
+const MAP_DIRECTION_EXPLAIN: Record<MapDirection, string> = {
+  all: "Counting every trip that touches a state — leaving or arriving — once each.",
+  outbound: 'Counting only trips by where they leave from.',
+  inbound: 'Counting only trips by where they arrive.',
+}
+
+function computeStateCounts(rows: TripRow[], direction: MapDirection): Record<string, number> {
   const counts: Record<string, number> = {}
   rows.forEach((r) => {
-    parseLane(r.lane).all.forEach((code) => {
+    codesForDirection(r.lane, direction).forEach((code) => {
       counts[code] = (counts[code] ?? 0) + 1
     })
   })
@@ -171,10 +199,11 @@ function computeStateCounts(rows: TripRow[]): Record<string, number> {
 // only for the hover tooltip.
 function computeStateHealth(
   rows: TripRow[],
+  direction: MapDirection,
 ): Record<string, { income: number; cost: number; profit: number; leakage: number }> {
   const health: Record<string, { income: number; cost: number; profit: number; leakage: number }> = {}
   rows.forEach((r) => {
-    parseLane(r.lane).all.forEach((code) => {
+    codesForDirection(r.lane, direction).forEach((code) => {
       const cur = health[code] ?? { income: 0, cost: 0, profit: 0, leakage: 0 }
       cur.income += r.income
       cur.cost += r.cost
@@ -465,15 +494,16 @@ function TruckActivityMap({
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [mapDirection, setMapDirection] = useState<MapDirection>('all')
   const [hover, setHover] = useState<{ code: string; name: string; x: number; y: number; flipX: boolean; flipY: boolean } | null>(
     null,
   )
-  // Memoized on `rows` alone — otherwise these recompute to new object
-  // references on every render (including the ones hover-tracking triggers),
-  // which would retrigger the draw effect below and tear down/rebuild the
-  // SVG mid-click, right under the cursor.
-  const stateCounts = useMemo(() => computeStateCounts(rows), [rows])
-  const stateHealth = useMemo(() => computeStateHealth(rows), [rows])
+  // Memoized on `rows` and `mapDirection` — otherwise these recompute to new
+  // object references on every render (including the ones hover-tracking
+  // triggers), which would retrigger the draw effect below and tear down/
+  // rebuild the SVG mid-click, right under the cursor.
+  const stateCounts = useMemo(() => computeStateCounts(rows, mapDirection), [rows, mapDirection])
+  const stateHealth = useMemo(() => computeStateHealth(rows, mapDirection), [rows, mapDirection])
   const stateMargins = useMemo(
     () => Object.fromEntries(Object.entries(stateHealth).map(([code, h]) => [code, netMarginPct(h)])),
     [stateHealth],
@@ -581,8 +611,21 @@ function TruckActivityMap({
     <section className="card tam-card">
       <div className="card-head">
         <span className="eyebrow">Performance Map</span>
-        <span className="tam-hint">Click a state for its trip breakdown</span>
+        <div className="tam-toggle">
+          {MAP_DIRECTIONS.map((d) => (
+            <button
+              key={d.key}
+              className={`tam-toggle-btn ${mapDirection === d.key ? 'active' : ''}`}
+              onClick={() => setMapDirection(d.key)}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
       </div>
+      <p className="tam-hint">
+        Click a state for its trip breakdown. <strong>{MAP_DIRECTION_EXPLAIN[mapDirection]}</strong>
+      </p>
       <div className="tam-legend">
         <span className="tam-legend-label">Losing</span>
         <span className="tam-legend-gradient" />
