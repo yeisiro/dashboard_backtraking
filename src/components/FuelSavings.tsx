@@ -710,6 +710,7 @@ interface TruckFuelStats {
   gallons: number
   mpg: number
   cpg: number
+  cpm: number
   saved: number
   leakage: number
   leakageBreakdown: LeakageBreakdown
@@ -775,6 +776,7 @@ function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
         gallons: s.gallons,
         mpg: s.gallons > 0 ? s.miles / s.gallons : 0,
         cpg,
+        cpm: s.miles > 0 ? s.fuelCost / s.miles : 0,
         saved: s.saved,
         leakage: s.leakage,
         leakageBreakdown: {
@@ -788,10 +790,11 @@ function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
     .sort((a, b) => b.gallons - a.gallons)
 }
 
-type TruckSortKey = 'truck' | 'cpg' | 'gallons' | 'mpg' | 'saved' | 'leakage'
+type TruckSortKey = 'truck' | 'cpg' | 'cpm' | 'gallons' | 'mpg' | 'saved' | 'leakage'
 const TRUCK_SORT_COLUMNS: { key: TruckSortKey; label: string }[] = [
   { key: 'truck', label: 'Truck' },
   { key: 'cpg', label: 'Avg $/gal' },
+  { key: 'cpm', label: '$/mile' },
   { key: 'gallons', label: 'Gallons' },
   { key: 'mpg', label: 'MPG' },
   { key: 'saved', label: 'Saved' },
@@ -863,6 +866,7 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
             {s.truck}
           </span>
           <span>${s.cpg.toFixed(2)}</span>
+          <span>${s.cpm.toFixed(2)}</span>
           <span>{Math.round(s.gallons).toLocaleString()}</span>
           <span>{s.mpg.toFixed(2)}</span>
           <span className="fs-truck-saved">${Math.round(s.saved).toLocaleString()}</span>
