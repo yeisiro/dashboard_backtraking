@@ -2650,54 +2650,137 @@ button {
   flex-shrink: 0;
 }
 
-/* Fuel and Savings — Money Saved / Money Leakage headline row, and the Fuel
-   Efficiency by Truck ranking below it (reuses .recovery-card/.mini-card
-   from Potential Savings so both "who's an outlier" panels match). */
-.fs-headline-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+/* Fuel & Savings Summary — Money Saved / Money Leakage and the three Fuel
+   Efficiency metrics all live in one card with a consistent column rhythm.
+   A green accent stripe on the left calls out this is the "good news"
+   panel; the whole card is one click target (onClick opens the by-truck
+   breakdown), so there's a single "View by truck" affordance instead of a
+   per-metric chevron. */
+.fs-summary-card {
+  position: relative;
+  padding: 22px 24px;
+  overflow: hidden;
+}
+.fs-summary-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--green);
+}
+.fs-summary-link {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
-/* Fuel Efficiency headline card: Cost/Gal, Total Gallons and Avg MPG are
-   equally important, so they get equal-weight columns inside the one card
-   instead of a single headline value with the rest demoted to a caption. */
-.fs-fuel-split {
+.fs-summary-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 10px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+  margin-top: 20px;
 }
 .fs-fuel-metric {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-left: 10px;
+  gap: 6px;
+  padding-left: 16px;
   border-left: 1px solid var(--border);
+  min-width: 0;
 }
 .fs-fuel-metric:first-child {
   padding-left: 0;
   border-left: none;
 }
 .fs-fuel-label {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--text-muted);
 }
 .fs-fuel-value {
-  font-size: 17px;
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.5px;
 }
 
 /* Fuel Efficiency by Truck drill-down: per-truck fuel table inside the
    SubDetailModal, columns aligned with TruckFuelList's header row. */
 .fs-truck-row {
   display: grid;
-  grid-template-columns: 1fr 90px 90px 70px;
+  grid-template-columns: 1fr 90px 90px 70px 90px 100px;
   align-items: center;
   gap: 8px;
   padding: 7px 4px;
   font-size: 12.5px;
+}
+.fs-truck-saved {
+  color: var(--green);
+  font-weight: 600;
+}
+.fs-truck-leakage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  color: var(--red);
+  font-weight: 600;
+}
+.fs-truck-leakage .info-tip {
+  color: var(--text-muted);
+}
+
+/* Per-truck leakage breakdown tooltip. Positioned `fixed` from JS-captured
+   coords (see TruckFuelList's leakTip state) instead of the usual
+   .info-tip-bubble pattern (absolute + relies on an ancestor that clips
+   overflow) — .tam-sublist scrolls with overflow-y: auto, which would cut
+   the bubble off at the list's edge. `right` is set inline per-instance
+   (window.innerWidth - iconX) so it hugs the icon regardless of scroll. */
+.fs-leak-tip-bubble {
+  position: fixed;
+  z-index: 30;
+  width: 210px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.fs-leak-tip-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.fs-leak-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.fs-leak-tip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.fs-leak-tip-label {
+  flex: 1;
+  color: var(--text-muted);
+}
+.fs-leak-tip-amount {
+  color: var(--text);
+  font-weight: 600;
 }
 .fs-truck-row-head {
   color: var(--text-muted);
@@ -2730,6 +2813,9 @@ button {
 }
 .fs-truck-sort.active {
   color: var(--text);
+}
+.fs-truck-sort-idle {
+  opacity: 0.45;
 }
 
 /* Truck Activity Map — static choropleth (no zoom/pan/search, unlike the
@@ -2803,11 +2889,20 @@ button {
 }
 .tam-tooltip-pos { color: var(--green); }
 .tam-tooltip-neg { color: var(--red); }
+.tam-tooltip-note {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  max-width: 170px;
+}
 .tam-detail {
-  flex: 0 0 320px;
-  width: 320px;
+  flex: 0 0 420px;
+  width: 420px;
   margin-top: 12px;
-  padding: 14px;
+  padding: 16px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -2833,11 +2928,41 @@ button {
 }
 .tam-side-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .tam-side-stats .kpi { padding: 10px; }
 .tam-side-stats .value { font-size: 17px; }
+
+/* Income/Profit/Cost/Leakage and Trips Here on the state detail card each
+   split into two side-by-side figures (Out/In, or Leaving/Arriving) instead
+   of one combined total — see DualStatBox/TripsHereBox in FuelSavings.tsx. */
+.tam-dual-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+.tam-dual-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tam-dual-clickable {
+  cursor: pointer;
+}
+.tam-dual-clickable:hover .tam-dual-value {
+  text-decoration: underline;
+}
+.tam-dual-value {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.tam-dual-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
 .tam-stat-clickable {
   cursor: pointer;
   transition: border-color 0.15s;
@@ -2901,6 +3026,7 @@ button {
 .tam-sublist-arrow { color: var(--text-muted); }
 
 .tam-modal { width: 620px; }
+.fs-truck-modal { width: 760px; }
 .tam-toggle {
   display: inline-flex;
   gap: 4px;
@@ -4565,41 +4691,24 @@ button {
   font-size: 18px;
   font-weight: 500;
 }
-/* Route adherence / pickup / delivery — quiet icons in the route strip
-   itself, not a second row of pills, but bright/solid enough (not the dark
-   muted badge fill) to actually register against the near-black strip bg.
-   Color alone flags status at a glance; label/value shows once you click. */
-.ld-adh-icons { display: flex; align-items: center; gap: 8px; }
-.ld-adh-icon-wrap { position: relative; }
+/* Route adherence / timing — a colored icon plus its status, read directly
+   off the strip with no hover or click needed. */
+.ld-adh-icons { display: flex; align-items: center; gap: 22px; }
+.ld-adh-item { display: flex; align-items: center; gap: 12px; }
 .ld-adh-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
-.ld-adh-icon:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.ld-adh-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  background: #0b1524;
-  border: 1px solid;
-  border-radius: 8px;
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  white-space: nowrap;
-  z-index: 20;
-}
-.ld-adh-pop-row { display: flex; flex-direction: column; gap: 2px; }
-.ld-adh-pop-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-.ld-adh-pop-val { font-size: 13px; font-weight: 600; color: #E6E6E6; }
+.ld-adh-text { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+.ld-adh-status { font-size: 15px; font-weight: 700; }
+.ld-adh-sep { color: #4b5563; font-weight: 500; }
+.ld-adh-caption { font-size: 13px; font-weight: 500; color: #8a94a6; }
 .ld-loadid {
   display: flex;
   align-items: center;

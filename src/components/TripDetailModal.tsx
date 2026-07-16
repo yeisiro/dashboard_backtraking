@@ -198,51 +198,29 @@ function TripCostGauge({ total }: { total: number }) {
   )
 }
 
-// A quiet status icon for the route strip: just a colored glyph until
-// clicked, so route adherence / pickup+delivery timing sit next to the load
-// id without turning the strip into a wall of pills. Clicking reveals
-// whichever rows matter (e.g. pickup AND delivery together, for the one
-// time icon) in a small popover; clicking it again — or the other icon —
-// closes it.
-function AdhIcon({
+// Route adherence / timing sit right in the strip as a colored icon plus
+// its status, always visible — no hover or click needed to read them.
+function AdhStat({
   icon: Icon,
   tone,
-  rows,
-  ariaLabel,
-  open,
-  onToggle,
+  status,
+  caption,
 }: {
   icon: typeof Route
   tone: Tone
-  rows: { label: string; value: string }[]
-  ariaLabel: string
-  open: boolean
-  onToggle: () => void
+  status: React.ReactNode
+  caption: string
 }) {
   const ring = TONE_VAR[tone]
   return (
-    <div className="ld-adh-icon-wrap">
-      <button
-        type="button"
-        className="ld-adh-icon"
-        style={{ background: ring, color: '#0b1524' }}
-        onClick={onToggle}
-        aria-label={ariaLabel}
-      >
-        <Icon size={17} strokeWidth={2.4} />
-      </button>
-      {open && (
-        <div className="ld-adh-pop" style={{ borderColor: ring }}>
-          {rows.map((r) => (
-            <div className="ld-adh-pop-row" key={r.label}>
-              <span className="ld-adh-pop-lbl" style={{ color: ring }}>
-                {r.label}
-              </span>
-              <span className="ld-adh-pop-val">{r.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="ld-adh-item">
+      <span className="ld-adh-icon" style={{ background: ring, color: '#0b1524' }}>
+        <Icon size={18} strokeWidth={2.4} />
+      </span>
+      <div className="ld-adh-text">
+        <span className="ld-adh-status">{status}</span>
+        <span className="ld-adh-caption">{caption}</span>
+      </div>
     </div>
   )
 }
@@ -665,8 +643,6 @@ export default function TripDetailModal({
   const [hoverDev, setHoverDev] = useState(false)
   const [hoverRepo, setHoverRepo] = useState(false)
   const [fullMap, setFullMap] = useState(false)
-  const [openAdh, setOpenAdh] = useState<'adherence' | 'time' | null>(null)
-  const toggleAdh = (key: 'adherence' | 'time') => setOpenAdh((o) => (o === key ? null : key))
 
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
 
@@ -1139,7 +1115,7 @@ export default function TripDetailModal({
   // Under an hour reads as minutes, an hour or more reads as hours — "127
   // min late" doesn't parse at a glance the way "2h 7m late" does.
   const formatLate = (min: number) => {
-    if (min < 60) return `${min} min late`
+    if (min < 60) return `${min}m late`
     const h = Math.floor(min / 60)
     const m = min % 60
     return m === 0 ? `${h}h late` : `${h}h ${m}m late`
@@ -1395,24 +1371,31 @@ export default function TripDetailModal({
               <div className="ld-hub-name">{dest}</div>
             </div>
             <div className="ld-adh-icons">
-              <AdhIcon
+              <AdhStat
                 icon={Route}
                 tone={ADHERENCE_TIER_META[adherenceTier].tone}
-                rows={[{ label: 'Route adherence', value: `${Math.round(trip.adherence)}% · ${ADHERENCE_TIER_META[adherenceTier].label}` }]}
-                ariaLabel={`Route adherence: ${Math.round(trip.adherence)}% · ${ADHERENCE_TIER_META[adherenceTier].label}`}
-                open={openAdh === 'adherence'}
-                onToggle={() => toggleAdh('adherence')}
+                status={
+                  <span style={{ color: TONE_VAR[ADHERENCE_TIER_META[adherenceTier].tone] }}>
+                    {Math.round(trip.adherence)}% · {ADHERENCE_TIER_META[adherenceTier].label}
+                  </span>
+                }
+                caption="Route adherence"
               />
-              <AdhIcon
+              <AdhStat
                 icon={Clock}
                 tone={TIME_TIER_META[timeTierOverall].tone}
-                rows={[
-                  { label: 'Pickup', value: pickupTier === 'onTime' ? 'On time' : formatLate(pickupLateMin) },
-                  { label: 'Delivery', value: deliveryTier === 'onTime' ? 'On time' : formatLate(deliveryLateMin) },
-                ]}
-                ariaLabel="Pickup and delivery timing"
-                open={openAdh === 'time'}
-                onToggle={() => toggleAdh('time')}
+                status={
+                  <>
+                    <span style={{ color: TONE_VAR[TIME_TIER_META[pickupTier].tone] }}>
+                      {pickupTier === 'onTime' ? 'Pickup on time' : `Pickup ${formatLate(pickupLateMin)}`}
+                    </span>
+                    <span className="ld-adh-sep"> · </span>
+                    <span style={{ color: TONE_VAR[TIME_TIER_META[deliveryTier].tone] }}>
+                      {deliveryTier === 'onTime' ? 'Delivery on time' : `Delivery ${formatLate(deliveryLateMin)}`}
+                    </span>
+                  </>
+                }
+                caption="Timing"
               />
             </div>
             <div className="ld-loadid">

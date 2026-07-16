@@ -133,9 +133,11 @@ export default function FullData({
   view?: 'summary' | 'dashboard'
 }) {
   const [tab, setTab] = useState<SubTab>('Trips')
-  const [placeFilter, setPlaceFilter] = useState<{ code: string; name: string; direction: 'outbound' | 'inbound' } | null>(
-    null,
-  )
+  const [placeFilter, setPlaceFilter] = useState<{
+    code: string
+    name: string
+    direction: 'outbound' | 'inbound' | 'all'
+  } | null>(null)
   const subtabs = subtabsForView(view)
 
   return (
@@ -904,7 +906,7 @@ function TripsTable({
   classFilter?: string[]
   view?: 'summary' | 'dashboard'
   truckFilter?: string[]
-  placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' } | null
+  placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' | 'all' } | null
   onClearPlaceFilter?: () => void
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
@@ -979,13 +981,16 @@ function TripsTable({
   // filter (see FullData's onSelectTrucks) rather than a side-channel here.
   const byTruck = truckFilter.length > 0 ? byClass.filter((r) => truckFilter.includes(r.truck)) : byClass
 
-  // Arriving from a state's "Leaving X" / "Arriving to X" click on the
-  // Fuel and Savings map — filters to trips whose lane actually starts/ends in
-  // that state, not just any trip touching it.
+  // Arriving from a state's "Leaving X" / "Arriving to X" click, or the
+  // Trips Here card's "view all" arrow, on the Fuel and Savings map — filters
+  // to trips whose lane actually touches that state in the given direction
+  // ('all' = either end, matching the deduped count "Trips Here" shows).
   const byPlace = placeFilter
     ? byTruck.filter((r) => {
         const parsed = parseLane(r.lane)
-        return placeFilter.direction === 'outbound' ? parsed.origin === placeFilter.code : parsed.dest === placeFilter.code
+        if (placeFilter.direction === 'outbound') return parsed.origin === placeFilter.code
+        if (placeFilter.direction === 'inbound') return parsed.dest === placeFilter.code
+        return parsed.all.includes(placeFilter.code)
       })
     : byTruck
 
@@ -1253,7 +1258,12 @@ function TripsTable({
         </div>
         {placeFilter && (
           <div className="fd-place-chip">
-            {placeFilter.direction === 'outbound' ? 'Leaving' : 'Arriving to'} {placeFilter.name}
+            {placeFilter.direction === 'outbound'
+              ? 'Leaving'
+              : placeFilter.direction === 'inbound'
+                ? 'Arriving to'
+                : 'Trips in'}{' '}
+            {placeFilter.name}
             <button aria-label="Clear place filter" onClick={onClearPlaceFilter}>
               <X size={12} />
             </button>

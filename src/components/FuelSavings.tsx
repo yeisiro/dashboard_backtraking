@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { X, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react'
+import { X, ChevronRight, ChevronUp, ChevronDown, Info } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { FeatureCollection } from 'geojson'
@@ -8,9 +8,6 @@ import { tripRows, type TripRow } from '../data'
 
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 
-// Same cost-per-gallon figure the Overview KPI ("CPG: actual vs optimal") and
-// the Money Leakage Breakdown's idle-cost formula both anchor to.
-const COST_PER_GALLON = 3.6
 // idle_gph from the Money Leakage Breakdown's documented Idle Time Cost
 // formula (see data.ts's leakBars comment) — Samsara doesn't report idle
 // gallons directly, so this configurable rate estimates them.
@@ -59,14 +56,16 @@ function SubDetailModal({
   title,
   onClose,
   children,
+  className = '',
 }: {
   title: string
   onClose: () => void
   children: ReactNode
+  className?: string
 }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal tam-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal tam-modal ${className}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="cfm-title">{title}</span>
           <button className="cfm-x" onClick={onClose} aria-label="Close">
@@ -124,139 +123,6 @@ function TruckList({ rows, onSelect }: { rows: TripRow[]; onSelect?: (truck: str
   )
 }
 
-// ---------- Cost & Leakage — same taxonomy as the Money Leakage Breakdown
-// (Overview) and Lane Cost Summary (Trip Detail), rebuilt per-trip so trips
-// can be grouped by cause instead of just showing one fixed fleet-wide split.
-
-type LeakCause = 'Missed Fuel Savings' | 'Empty Miles' | 'Idle Time Cost' | 'Poor Planning'
-const LEAK_CAUSE_ORDER: LeakCause[] = ['Missed Fuel Savings', 'Empty Miles', 'Idle Time Cost', 'Poor Planning']
-// Same colors as leakBars in data.ts (Money Leakage Breakdown).
-const LEAK_CAUSE_COLOR: Record<LeakCause, string> = {
-  'Missed Fuel Savings': '#c2453f',
-  'Empty Miles': '#cf5a44',
-  'Idle Time Cost': '#d99f42',
-  'Poor Planning': '#d9843f',
-}
-
-// Splits a trip's excess cost across the same 4 real, disjoint signals the
-// Money Leakage Breakdown's documented formulas use: fuel, deadhead/empty
-// miles, idle time, and whatever's left (poor planning — the old "Planned"
-// concept, named for the cause). "Route Deviations" isn't included: nothing
-// on TripRow distinguishes it from deadhead at the per-trip level, so
-// splitting the two would mean inventing a number.
-function tripLeakBreakdown(r: TripRow) {
-  const fuel = Math.abs(r.missedFuelSavings)
-  const emptyMiles = r.excessMilesCost
-  const idle = r.idleHours * IDLE_GPH * COST_PER_GALLON
-  const planning = Math.max(0, r.totalExcessCost - fuel - emptyMiles - idle)
-  return { fuel, emptyMiles, idle, planning }
-}
-
-function dominantCause(r: TripRow): LeakCause {
-  const b = tripLeakBreakdown(r)
-  const entries: [LeakCause, number][] = [
-    ['Missed Fuel Savings', b.fuel],
-    ['Empty Miles', b.emptyMiles],
-    ['Idle Time Cost', b.idle],
-    ['Poor Planning', b.planning],
-  ]
-  return entries.reduce((max, e) => (e[1] > max[1] ? e : max))[0]
-}
-
-// Groups trips by their dominant cause and shows, per cause, the trips that
-// fall into it — the whole point being "which trips, and why" in one flat
-// read, no extra clicks to expand a category.
-function CauseGroupedTripList({ rows, onSelect }: { rows: TripRow[]; onSelect?: (truck: string) => void }) {
-  if (rows.length === 0) return <p className="tam-detail-empty">No trips here.</p>
-
-
-  const byCause = new Map<LeakCause, TripRow[]>()
-  rows.forEach((r) => {
-    const cause = dominantCause(r)
-    const list = byCause.get(cause) ?? []
-    list.push(r)
-    byCause.set(cause, list)
-  })
-
-  return (
-    <div className="tam-cause-groups">
-      {LEAK_CAUSE_ORDER.filter((cause) => byCause.has(cause)).map((cause) => {
-        const causeRows = [...byCause.get(cause)!].sort((a, b) => b.totalExcessCost - a.totalExcessCost)
-        const causeLeakage = causeRows.reduce((s, r) => s + r.totalExcessCost, 0)
-        return (
-          <div className="tam-cause-group" key={cause}>
-            <div className="tam-cause-group-head">
-              <span className="tam-cause-group-dot" style={{ background: LEAK_CAUSE_COLOR[cause] }} />
-              <span className="tam-cause-group-name">{cause}</span>
-              <span className="tam-cause-group-total">{usd(causeLeakage)}</span>
-            </div>
-            <div className="tam-sublist">
-              {causeRows.map((r) => (
-                <div
-                  className={`tam-sublist-row ${onSelect ? 'tam-sublist-row-clickable' : ''}`}
-                  key={`${r.truck}-${r.startDate}-${r.lane}`}
-                  onClick={onSelect ? () => onSelect(r.truck) : undefined}
-                  role={onSelect ? 'button' : undefined}
-                  tabIndex={onSelect ? 0 : undefined}
-                >
-                  <span className="tam-sublist-main">
-                    {r.truck} <span className="tam-sublist-lane">{r.lane}</span>
-                  </span>
-                  <span className="tam-sublist-sub">
-                    Cost {usd(r.cost)} · Leak {usd(r.totalExcessCost)}
-                    {onSelect && <ChevronRight size={13} className="tam-sublist-arrow" />}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-const DIRECTIONS = [
-  { key: 'all', label: 'All' },
-  { key: 'outbound', label: 'Outbound' },
-  { key: 'inbound', label: 'Inbound' },
-] as const
-type Direction = (typeof DIRECTIONS)[number]['key']
-
-// One flat, cause-grouped list — no duplicate rows, since "All" is the
-// deduped union rather than outbound+inbound shown side by side (a
-// same-state trip only ever appears once there). The toggle is what lets you
-// isolate just what's leaving or just what's arriving, instead of always
-// showing both.
-function CostLeakagePanel({
-  stats,
-  onSelect,
-}: {
-  stats: StateStats
-  onSelect?: (truck: string) => void
-}) {
-  const [direction, setDirection] = useState<Direction>('all')
-  const rows =
-    direction === 'outbound' ? stats.outboundRows : direction === 'inbound' ? stats.inboundRows : stats.hereRows
-
-  return (
-    <>
-      <div className="tam-toggle">
-        {DIRECTIONS.map((d) => (
-          <button
-            key={d.key}
-            className={`tam-toggle-btn ${direction === d.key ? 'active' : ''}`}
-            onClick={() => setDirection(d.key)}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
-      <CauseGroupedTripList rows={rows} onSelect={onSelect} />
-    </>
-  )
-}
-
 // ---------- Truck Activity Map ----------
 
 // Standard Census state FIPS codes → USPS postal abbreviation + full name.
@@ -300,15 +166,18 @@ function computeStateCounts(rows: TripRow[]): Record<string, number> {
 }
 
 // Same touch-counts-once-per-state rule as computeStateCounts, but summing
-// income/profit/leakage instead of just counting — this is what drives the
-// map's red↔yellow↔green health color, while computeStateCounts still drives
-// the trip-count used in the tooltip.
-function computeStateHealth(rows: TripRow[]): Record<string, { income: number; profit: number; leakage: number }> {
-  const health: Record<string, { income: number; profit: number; leakage: number }> = {}
+// income/cost/profit/leakage instead of just counting. income/profit/leakage
+// drive the map's red↔yellow↔green health color (see netMarginPct); cost is
+// only for the hover tooltip.
+function computeStateHealth(
+  rows: TripRow[],
+): Record<string, { income: number; cost: number; profit: number; leakage: number }> {
+  const health: Record<string, { income: number; cost: number; profit: number; leakage: number }> = {}
   rows.forEach((r) => {
     parseLane(r.lane).all.forEach((code) => {
-      const cur = health[code] ?? { income: 0, profit: 0, leakage: 0 }
+      const cur = health[code] ?? { income: 0, cost: 0, profit: 0, leakage: 0 }
       cur.income += r.income
+      cur.cost += r.cost
       cur.profit += r.profit
       cur.leakage += r.totalExcessCost
       health[code] = cur
@@ -324,7 +193,6 @@ function computeStateHealth(rows: TripRow[]): Record<string, { income: number; p
 const netMarginPct = (h: { income: number; profit: number; leakage: number }) =>
   h.income > 0 ? ((h.profit - h.leakage) / h.income) * 100 : 0
 
-const fmtLeakage = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `$${Math.round(n)}`)
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}%`
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
@@ -370,7 +238,19 @@ interface StateStats {
   hereRows: TripRow[]
   outboundRows: TripRow[]
   inboundRows: TripRow[]
+  // Out = trips leaving this state, In = trips arriving here — the split
+  // shown directly on the state detail card instead of a combined total.
+  incomeOut: number
+  incomeIn: number
+  costOut: number
+  costIn: number
+  profitOut: number
+  profitIn: number
+  leakageOut: number
+  leakageIn: number
 }
+
+const sumBy = (list: TripRow[], get: (r: TripRow) => number) => list.reduce((sum, r) => sum + get(r), 0)
 
 function computeStateStats(rows: TripRow[], code: string, name: string): StateStats {
   const outboundRows = rows.filter((r) => parseLane(r.lane).origin === code)
@@ -388,6 +268,10 @@ function computeStateStats(rows: TripRow[], code: string, name: string): StateSt
 
   const income = hereRows.reduce((sum, r) => sum + r.income, 0)
   const cost = hereRows.reduce((sum, r) => sum + r.cost, 0)
+  const incomeOut = sumBy(outboundRows, (r) => r.income)
+  const incomeIn = sumBy(inboundRows, (r) => r.income)
+  const costOut = sumBy(outboundRows, (r) => r.cost)
+  const costIn = sumBy(inboundRows, (r) => r.cost)
   return {
     code,
     name,
@@ -400,31 +284,93 @@ function computeStateStats(rows: TripRow[], code: string, name: string): StateSt
     hereRows,
     outboundRows,
     inboundRows,
+    incomeOut,
+    incomeIn,
+    costOut,
+    costIn,
+    profitOut: incomeOut - costOut,
+    profitIn: incomeIn - costIn,
+    leakageOut: sumBy(outboundRows, (r) => r.totalExcessCost),
+    leakageIn: sumBy(inboundRows, (r) => r.totalExcessCost),
   }
 }
 
-// The "Trips Here" drill-down: just the outbound/inbound split, each row
-// jumping straight to Trips filtered to that place + direction — replaces
-// the old standalone Outbound/Inbound stat cards.
-function TripsDirectionPanel({
+// Income/Profit/Cost/Leakage on the state detail card each split into an
+// Out (trips leaving the state) and In (trips arriving) figure side by side,
+// instead of one combined total — so you can see at a glance whether a
+// state is a net exporter or importer of a given metric.
+function DualStatBox({
+  label,
+  outValue,
+  inValue,
+  toneOut,
+  toneIn,
+}: {
+  label: string
+  outValue: string
+  inValue: string
+  toneOut?: 'pos' | 'neg'
+  toneIn?: 'pos' | 'neg'
+}) {
+  const toneStyle = (tone?: 'pos' | 'neg') =>
+    tone === 'pos' ? { color: 'var(--green)' } : tone === 'neg' ? { color: 'var(--red)' } : undefined
+  return (
+    <div className="card kpi tam-dual-stat">
+      <div className="kpi-head">
+        <span className="eyebrow">{label}</span>
+      </div>
+      <div className="tam-dual-row">
+        <div className="tam-dual-metric">
+          <span className="tam-dual-value" style={toneStyle(toneOut)}>
+            {outValue}
+          </span>
+          <span className="tam-dual-label">Out</span>
+        </div>
+        <div className="tam-dual-metric">
+          <span className="tam-dual-value" style={toneStyle(toneIn)}>
+            {inValue}
+          </span>
+          <span className="tam-dual-label">In</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TripsHereBox({
   stats,
   onSelectPlace,
 }: {
   stats: StateStats
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound') => void
+  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
 }) {
   return (
-    <div className="tam-side-stats">
-      <StatBox
-        label={`Leaving ${stats.name}`}
-        value={String(stats.outboundRows.length)}
-        onClick={() => onSelectPlace?.(stats.code, stats.name, 'outbound')}
-      />
-      <StatBox
-        label={`Arriving to ${stats.name}`}
-        value={String(stats.inboundRows.length)}
-        onClick={() => onSelectPlace?.(stats.code, stats.name, 'inbound')}
-      />
+    <div
+      className="card kpi tam-dual-stat tam-stat-clickable"
+      onClick={() => onSelectPlace?.(stats.code, stats.name, 'all')}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="kpi-head">
+        <span className="eyebrow">Trips Here</span>
+        <span className="info-tip" tabIndex={-1}>
+          <ChevronRight size={13} className="tam-stat-chevron" />
+          <span className="info-tip-bubble" role="tooltip">
+            View all {stats.tripsHere} trip{stats.tripsHere === 1 ? '' : 's'} touching {stats.name} in the Trips
+            tab.
+          </span>
+        </span>
+      </div>
+      <div className="tam-dual-row">
+        <div className="tam-dual-metric">
+          <span className="tam-dual-value">{stats.outboundRows.length}</span>
+          <span className="tam-dual-label">Leaving</span>
+        </div>
+        <div className="tam-dual-metric">
+          <span className="tam-dual-value">{stats.inboundRows.length}</span>
+          <span className="tam-dual-label">Arriving</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -438,9 +384,9 @@ function StateDetailPanel({
   stats: StateStats
   onClose: () => void
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound') => void
+  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
 }) {
-  const [subModal, setSubModal] = useState<'trucks' | 'costleak' | 'tripsdir' | null>(null)
+  const [subModal, setSubModal] = useState<'trucks' | null>(null)
   const selectOne = (truck: string) => onSelectTrucks?.([truck])
 
   return (
@@ -460,39 +406,42 @@ function StateDetailPanel({
         <>
           <div className="tam-side-stats">
             <StatBox
-              label="Trips Here"
-              value={String(stats.tripsHere)}
-              onClick={() => setSubModal('tripsdir')}
-            />
-            <StatBox
-              label="Trucks Involved"
+              label="Trucks Operated"
               value={String(stats.truckCount)}
               onClick={() => setSubModal('trucks')}
             />
-            <StatBox label="Income" value={usd(stats.income)} tone="pos" />
-            <StatBox label="Profit" value={usd(stats.profit)} tone={stats.profit >= 0 ? 'pos' : 'neg'} />
-            <StatBox label="Cost" value={usd(stats.cost)} onClick={() => setSubModal('costleak')} />
-            <StatBox
+            <TripsHereBox stats={stats} onSelectPlace={onSelectPlace} />
+            <DualStatBox
+              label="Income"
+              outValue={usd(stats.incomeOut)}
+              inValue={usd(stats.incomeIn)}
+              toneOut="pos"
+              toneIn="pos"
+            />
+            <DualStatBox
+              label="Profit"
+              outValue={usd(stats.profitOut)}
+              inValue={usd(stats.profitIn)}
+              toneOut={stats.profitOut >= 0 ? 'pos' : 'neg'}
+              toneIn={stats.profitIn >= 0 ? 'pos' : 'neg'}
+            />
+            <DualStatBox
+              label="Cost"
+              outValue={usd(stats.costOut)}
+              inValue={usd(stats.costIn)}
+            />
+            <DualStatBox
               label="Leakage"
-              value={usd(stats.leakage)}
-              tone="neg"
-              onClick={() => setSubModal('costleak')}
+              outValue={usd(stats.leakageOut)}
+              inValue={usd(stats.leakageIn)}
+              toneOut="neg"
+              toneIn="neg"
             />
           </div>
 
-          {subModal === 'tripsdir' && (
-            <SubDetailModal title={`Trips — ${stats.name}`} onClose={() => setSubModal(null)}>
-              <TripsDirectionPanel stats={stats} onSelectPlace={onSelectPlace} />
-            </SubDetailModal>
-          )}
           {subModal === 'trucks' && (
             <SubDetailModal title={`Trucks that operated in ${stats.name}`} onClose={() => setSubModal(null)}>
               <TruckList rows={stats.hereRows} onSelect={onSelectTrucks ? selectOne : undefined} />
-            </SubDetailModal>
-          )}
-          {subModal === 'costleak' && (
-            <SubDetailModal title={`Cost & Leakage — ${stats.name}`} onClose={() => setSubModal(null)}>
-              <CostLeakagePanel stats={stats} onSelect={onSelectTrucks ? selectOne : undefined} />
             </SubDetailModal>
           )}
         </>
@@ -511,7 +460,7 @@ function TruckActivityMap({
 }: {
   rows: TripRow[]
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound') => void
+  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -663,17 +612,22 @@ function TruckActivityMap({
                       <span>{count} trip{count === 1 ? '' : 's'}</span>
                     </div>
                     <div className="tam-tooltip-row">
+                      <span>Income</span>
+                      <span className="tam-tooltip-pos">{usd(h.income)}</span>
+                    </div>
+                    <div className="tam-tooltip-row">
+                      <span>Cost</span>
+                      <span className="tam-tooltip-neg">{usd(h.cost)}</span>
+                    </div>
+                    <div className="tam-tooltip-row">
                       <span>Profit</span>
-                      <span className="tam-tooltip-pos">{usd(h.profit)}</span>
+                      <span className={h.profit >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>{usd(h.profit)}</span>
                     </div>
                     <div className="tam-tooltip-row">
-                      <span>Leakage</span>
-                      <span className="tam-tooltip-neg">{fmtLeakage(h.leakage)}</span>
-                    </div>
-                    <div className="tam-tooltip-row">
-                      <span>Net</span>
+                      <span>Net Margin</span>
                       <span className={margin >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>{fmtPct(margin)}</span>
                     </div>
+                    <p className="tam-tooltip-note">Profit net of leakage, as a share of income — this is what the map's color shows.</p>
                   </>
                 ) : (
                   <div className="tam-tooltip-row">No trips</div>
@@ -700,12 +654,22 @@ function TruckActivityMap({
 // TripDetailModal's fuelCostTotal uses, kept in sync with it here.
 const FUEL_COST_SHARE = 0.38
 
+interface LeakageBreakdown {
+  missedFuelSavings: number
+  emptyMiles: number
+  routeDeviations: number
+  idleTime: number
+}
+
 interface TruckFuelStats {
   truck: string
   cls: TripRow['cls']
   gallons: number
   mpg: number
   cpg: number
+  saved: number
+  leakage: number
+  leakageBreakdown: LeakageBreakdown
 }
 
 // Per-truck fuel breakdown: gallons burned (miles / mpg, the same derivation
@@ -713,33 +677,89 @@ interface TruckFuelStats {
 // of cost ÷ gallons) — aggregated across a truck's trips rather than
 // averaging each trip's own mpg/cpg, so a truck with more miles this period
 // weighs proportionally more.
+//
+// The leakage breakdown attributes each truck's totalExcessCost to a cause:
+// missedFuelSavings and excessMilesCost are real per-trip fields; idle time
+// is priced at IDLE_GPH × the truck's own cost/gallon; whatever's left after
+// those three is bucketed as "route deviations" so the categories always sum
+// back to the truck's actual leakage total instead of drifting from it.
 function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
-  const byTruck = new Map<string, { cls: TripRow['cls']; miles: number; gallons: number; fuelCost: number }>()
+  const byTruck = new Map<
+    string,
+    {
+      cls: TripRow['cls']
+      miles: number
+      gallons: number
+      fuelCost: number
+      saved: number
+      leakage: number
+      missedFuelSavings: number
+      emptyMiles: number
+      idleHours: number
+    }
+  >()
   rows.forEach((r) => {
     const gallons = r.totalMiles / r.mpg
-    const cur = byTruck.get(r.truck) ?? { cls: r.cls, miles: 0, gallons: 0, fuelCost: 0 }
+    const cur = byTruck.get(r.truck) ?? {
+      cls: r.cls,
+      miles: 0,
+      gallons: 0,
+      fuelCost: 0,
+      saved: 0,
+      leakage: 0,
+      missedFuelSavings: 0,
+      emptyMiles: 0,
+      idleHours: 0,
+    }
     cur.miles += r.totalMiles
     cur.gallons += gallons
     cur.fuelCost += r.cost * FUEL_COST_SHARE
+    cur.saved += r.actualSaving
+    cur.leakage += r.totalExcessCost
+    cur.missedFuelSavings += Math.abs(r.missedFuelSavings)
+    cur.emptyMiles += r.excessMilesCost
+    cur.idleHours += r.idleHours
     byTruck.set(r.truck, cur)
   })
   return [...byTruck.entries()]
-    .map(([truck, s]) => ({
-      truck,
-      cls: s.cls,
-      gallons: s.gallons,
-      mpg: s.gallons > 0 ? s.miles / s.gallons : 0,
-      cpg: s.gallons > 0 ? s.fuelCost / s.gallons : 0,
-    }))
+    .map(([truck, s]) => {
+      const cpg = s.gallons > 0 ? s.fuelCost / s.gallons : 0
+      const idleTime = s.idleHours * IDLE_GPH * cpg
+      const routeDeviations = Math.max(0, s.leakage - s.missedFuelSavings - s.emptyMiles - idleTime)
+      return {
+        truck,
+        cls: s.cls,
+        gallons: s.gallons,
+        mpg: s.gallons > 0 ? s.miles / s.gallons : 0,
+        cpg,
+        saved: s.saved,
+        leakage: s.leakage,
+        leakageBreakdown: {
+          missedFuelSavings: s.missedFuelSavings,
+          emptyMiles: s.emptyMiles,
+          routeDeviations,
+          idleTime,
+        },
+      }
+    })
     .sort((a, b) => b.gallons - a.gallons)
 }
 
-type TruckSortKey = 'truck' | 'cpg' | 'gallons' | 'mpg'
+type TruckSortKey = 'truck' | 'cpg' | 'gallons' | 'mpg' | 'saved' | 'leakage'
 const TRUCK_SORT_COLUMNS: { key: TruckSortKey; label: string }[] = [
   { key: 'truck', label: 'Truck' },
   { key: 'cpg', label: 'Avg $/gal' },
   { key: 'gallons', label: 'Gallons' },
   { key: 'mpg', label: 'MPG' },
+  { key: 'saved', label: 'Saved' },
+  { key: 'leakage', label: 'Leakage' },
+]
+
+const LEAKAGE_CATEGORIES: { key: keyof LeakageBreakdown; label: string; color: string }[] = [
+  { key: 'missedFuelSavings', label: 'Missed fuel savings', color: '#c2453f' },
+  { key: 'emptyMiles', label: 'Empty miles', color: '#cf5a44' },
+  { key: 'routeDeviations', label: 'Route deviations', color: '#d56b41' },
+  { key: 'idleTime', label: 'Idle time', color: '#d99f42' },
 ]
 
 function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
@@ -748,6 +768,11 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
   // desc (highest first) except the truck name, which reads naturally asc.
   const [sortKey, setSortKey] = useState<TruckSortKey>('gallons')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  // The leakage breakdown tooltip is positioned with `fixed` coords captured
+  // on hover/focus instead of the usual .info-tip-bubble (absolute + hidden
+  // overflow on the ancestor) — .tam-sublist scrolls with overflow-y: auto,
+  // which would clip an absolutely-positioned bubble at the list's edge.
+  const [leakTip, setLeakTip] = useState<{ x: number; y: number; breakdown: LeakageBreakdown } | null>(null)
 
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
@@ -778,8 +803,11 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
             tabIndex={0}
           >
             {col.label}
-            {sortKey === col.key &&
-              (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+            {sortKey === col.key ? (
+              sortDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
+            ) : (
+              <ChevronDown size={13} className="fs-truck-sort-idle" />
+            )}
           </span>
         ))}
       </div>
@@ -794,8 +822,48 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
           <span>${s.cpg.toFixed(2)}</span>
           <span>{Math.round(s.gallons).toLocaleString()}</span>
           <span>{s.mpg.toFixed(2)}</span>
+          <span className="fs-truck-saved">${Math.round(s.saved).toLocaleString()}</span>
+          <span className="fs-truck-leakage">
+            ${Math.round(s.leakage).toLocaleString()}
+            <span
+              className="info-tip"
+              tabIndex={0}
+              onMouseEnter={(e) => {
+                const row = e.currentTarget.closest('.fs-truck-row') ?? e.currentTarget
+                const r = row.getBoundingClientRect()
+                setLeakTip({ x: r.right, y: r.bottom, breakdown: s.leakageBreakdown })
+              }}
+              onMouseLeave={() => setLeakTip(null)}
+              onFocus={(e) => {
+                const row = e.currentTarget.closest('.fs-truck-row') ?? e.currentTarget
+                const r = row.getBoundingClientRect()
+                setLeakTip({ x: r.right, y: r.bottom, breakdown: s.leakageBreakdown })
+              }}
+              onBlur={() => setLeakTip(null)}
+            >
+              <Info size={13} color="var(--text-muted)" />
+            </span>
+          </span>
         </div>
       ))}
+      {leakTip && (
+        <div
+          className="fs-leak-tip-bubble"
+          role="tooltip"
+          style={{ top: leakTip.y + 6, right: window.innerWidth - leakTip.x }}
+        >
+          <span className="fs-leak-tip-title">Leakage breakdown</span>
+          {LEAKAGE_CATEGORIES.map((cat) => (
+            <span className="fs-leak-tip-row" key={cat.key}>
+              <span className="fs-leak-tip-dot" style={{ background: cat.color }} />
+              <span className="fs-leak-tip-label">{cat.label}</span>
+              <span className="fs-leak-tip-amount">
+                ${Math.round(leakTip.breakdown[cat.key]).toLocaleString()}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -808,7 +876,7 @@ export default function FuelSavings({
 }: {
   classFilter?: string[]
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound') => void
+  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
 }) {
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
   const moneySaved = rows.reduce((s, r) => s + r.actualSaving, 0)
@@ -824,49 +892,54 @@ export default function FuelSavings({
 
   return (
     <div className="pv">
-      <div className="fs-headline-row">
-        <StatBox
-          label="Money Saved"
-          value={usd(moneySaved)}
-          tone="pos"
-          caption={`Captured across ${rows.length.toLocaleString()} trips this period`}
-        />
-        <StatBox
-          label="Money Leakage"
-          value={'-' + usd(moneyLeakage)}
-          tone="neg"
-          caption="Missed fuel savings, empty miles, idle time & poor planning"
-        />
-        <div
-          className="card kpi tam-stat-clickable fs-fuel-card"
-          onClick={() => setShowAllTrucks(true)}
-          role="button"
-          tabIndex={0}
-        >
-          <div className="kpi-head">
-            <span className="eyebrow">Fuel Efficiency</span>
+      <div
+        className="card kpi tam-stat-clickable fs-summary-card"
+        onClick={() => setShowAllTrucks(true)}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="kpi-head">
+          <span className="eyebrow">Fuel &amp; Savings Summary</span>
+          <span className="fs-summary-link">
+            View by truck
             <ChevronRight size={13} className="tam-stat-chevron" />
+          </span>
+        </div>
+        <div className="fs-summary-row">
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Money saved</span>
+            <span className="fs-fuel-value" style={{ color: 'var(--green)' }}>
+              {usd(moneySaved)}
+            </span>
           </div>
-          <div className="fs-fuel-split">
-            <div className="fs-fuel-metric">
-              <span className="fs-fuel-label">Cost / Gal</span>
-              <span className="fs-fuel-value">${fleetCpg.toFixed(2)}</span>
-            </div>
-            <div className="fs-fuel-metric">
-              <span className="fs-fuel-label">Total Gallons</span>
-              <span className="fs-fuel-value">{Math.round(totalGallons).toLocaleString()}</span>
-            </div>
-            <div className="fs-fuel-metric">
-              <span className="fs-fuel-label">Avg MPG</span>
-              <span className="fs-fuel-value">{fleetMpg.toFixed(2)}</span>
-            </div>
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Money leakage</span>
+            <span className="fs-fuel-value" style={{ color: 'var(--red)' }}>
+              {'-' + usd(moneyLeakage)}
+            </span>
+          </div>
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Cost / gal</span>
+            <span className="fs-fuel-value">${fleetCpg.toFixed(2)}</span>
+          </div>
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Total gallons</span>
+            <span className="fs-fuel-value">{Math.round(totalGallons).toLocaleString()}</span>
+          </div>
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Avg MPG</span>
+            <span className="fs-fuel-value">{fleetMpg.toFixed(2)}</span>
           </div>
         </div>
       </div>
       <TruckActivityMap rows={rows} onSelectTrucks={onSelectTrucks} onSelectPlace={onSelectPlace} />
 
       {showAllTrucks && (
-        <SubDetailModal title="Fuel Efficiency — by truck" onClose={() => setShowAllTrucks(false)}>
+        <SubDetailModal
+          title="Fuel & savings — by truck"
+          onClose={() => setShowAllTrucks(false)}
+          className="fs-truck-modal"
+        >
           <TruckFuelList stats={truckStats} />
         </SubDetailModal>
       )}
