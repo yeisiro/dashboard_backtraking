@@ -932,6 +932,7 @@ export default function FuelSavings({
   const totalFuelCost = rows.reduce((s, r) => s + r.cost * FUEL_COST_SHARE, 0)
   const fleetMpg = totalGallons > 0 ? totalMiles / totalGallons : 0
   const fleetCpg = totalGallons > 0 ? totalFuelCost / totalGallons : 0
+  const fleetCpm = totalMiles > 0 ? totalFuelCost / totalMiles : 0
 
   return (
     <div className="pv">
@@ -964,6 +965,10 @@ export default function FuelSavings({
           <div className="fs-fuel-metric">
             <span className="fs-fuel-label">Cost / gal</span>
             <span className="fs-fuel-value">${fleetCpg.toFixed(2)}</span>
+          </div>
+          <div className="fs-fuel-metric">
+            <span className="fs-fuel-label">Cost / mile</span>
+            <span className="fs-fuel-value">${fleetCpm.toFixed(2)}</span>
           </div>
           <div className="fs-fuel-metric">
             <span className="fs-fuel-label">Total gallons</span>

@@ -2680,15 +2680,15 @@ button {
 
 .fs-summary-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
   margin-top: 20px;
 }
 .fs-fuel-metric {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: 16px;
+  padding-left: 12px;
   border-left: 1px solid var(--border);
   min-width: 0;
 }
@@ -2697,13 +2697,15 @@ button {
   border-left: none;
 }
 .fs-fuel-label {
-  font-size: 12.5px;
+  font-size: 11px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 .fs-fuel-value {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
+  white-space: nowrap;
 }
 
 /* Fuel Efficiency by Truck drill-down: per-truck fuel table inside the

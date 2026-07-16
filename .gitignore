@@ -21,3 +21,6 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Standalone design mockups (not part of the app)
+mockups/
