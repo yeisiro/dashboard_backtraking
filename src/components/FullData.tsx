@@ -132,12 +132,28 @@ export default function FullData({
   onTruckFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
 }) {
-  const [tab, setTab] = useState<SubTab>('Trips')
+  // Landing here from a "Trips Here" new-tab link (see FuelSavings.tsx's
+  // openPlaceTrips) — the query string is the only way a fresh tab can carry
+  // over the subtab + place filter, since there's no in-memory state to hand
+  // off across tabs.
+  const [tab, setTab] = useState<SubTab>(() => {
+    const subtab = new URLSearchParams(window.location.search).get('subtab')
+    return (SUBTABS as readonly string[]).includes(subtab ?? '') ? (subtab as SubTab) : 'Trips'
+  })
   const [placeFilter, setPlaceFilter] = useState<{
     code: string
     name: string
     direction: 'outbound' | 'inbound' | 'all'
-  } | null>(null)
+  } | null>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('placeCode')
+    const name = params.get('placeName')
+    const direction = params.get('placeDir')
+    if (code && name && (direction === 'outbound' || direction === 'inbound' || direction === 'all')) {
+      return { code, name, direction }
+    }
+    return null
+  })
   const subtabs = subtabsForView(view)
 
   return (
@@ -169,11 +185,6 @@ export default function FullData({
           onSelectTrucks={(trucks) => {
             setPlaceFilter(null)
             onTruckFilterChange?.(trucks)
-            setTab('Trips')
-          }}
-          onSelectPlace={(code, name, direction) => {
-            onTruckFilterChange?.([])
-            setPlaceFilter({ code, name, direction })
             setTab('Trips')
           }}
         />

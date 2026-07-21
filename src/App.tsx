@@ -16,9 +16,17 @@ export default function App() {
   const [rangeDays, setRangeDays] = useState(7)
   const [fleetMode, setFleetMode] = useState<FleetMode>('full')
   const [view, setView] = useState<View>('summary')
-  const [dataTab, setDataTab] = useState<DataTab>('overview')
+  // A "Trips Here" new-tab link (see FuelSavings.tsx's openPlaceTrips) lands
+  // here with ?tab=full&class=... — a fresh tab has no in-memory state to
+  // inherit, so the query string is what carries the tab/class filter over.
+  const [dataTab, setDataTab] = useState<DataTab>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'full' ? 'full' : 'overview',
+  )
   const [tripsBand, setTripsBand] = useState<'best' | 'worst' | null>(null)
-  const [classFilter, setClassFilter] = useState<string[]>([])
+  const [classFilter, setClassFilter] = useState<string[]>(() => {
+    const cls = new URLSearchParams(window.location.search).get('class')
+    return cls ? cls.split(',').filter(Boolean) : []
+  })
   const [truckFilter, setTruckFilter] = useState<string[]>([])
   const noData = fleetMode === 'empty'
   const [rangeEnd, setRangeEnd] = useState(() => {

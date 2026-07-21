@@ -467,10 +467,11 @@ button {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  margin-bottom: 6px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 999px;
+  margin-bottom: 14px;
 }
 .tf-search input {
   flex: 1;
@@ -484,11 +485,92 @@ button {
 .tf-search input::placeholder {
   color: var(--text-muted);
 }
+.tf-select-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tf-select-all {
+  color: var(--green);
+}
+.tf-select-all:hover {
+  color: var(--green-dim);
+}
+.tf-clear-all {
+  color: var(--text-dim);
+}
+.tf-clear-all:hover {
+  color: var(--text);
+}
+.tf-select-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.tf-chips-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tf-chip-sel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--green);
+}
+.tf-chip-sel button {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.tf-chip-sel button:hover {
+  color: var(--text);
+}
 .tf-scroll {
   flex: 1;
   overflow-y: auto;
   margin: 0 -14px;
   padding: 0 14px;
+}
+.tf-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.tf-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tf-scroll::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 999px;
+}
+.tf-truck-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  padding: 14px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.tf-truck-item:hover {
+  background: var(--surface-2);
+}
+.tf-truck-item.active {
+  background: rgba(46, 230, 166, 0.1);
+  color: var(--text);
 }
 .tf-menu .cf-item {
   padding: 14px 8px;
@@ -2905,9 +2987,18 @@ button {
   color: var(--text-muted);
   max-width: 170px;
 }
-.tam-detail {
-  flex: 0 0 420px;
-  width: 420px;
+.tam-detail-code {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.tam-detail-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* Full-width metrics bar shown between the direction toggle/legend and the
+   map grid when a state is selected — pushes the map down instead of
+   narrowing it like a side panel would. */
+.tam-metrics-bar {
   margin-top: 12px;
   padding: 16px;
   border-radius: 10px;
@@ -2925,25 +3016,16 @@ button {
   font-weight: 600;
   color: var(--text);
 }
-.tam-detail-code {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-.tam-detail-empty {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.tam-side-stats {
+.tam-metrics-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
 }
-.tam-side-stats .kpi { padding: 10px; }
-.tam-side-stats .value { font-size: 17px; }
-
-/* Income/Profit/Cost/Leakage and Trips Here on the state detail card each
-   split into two side-by-side figures (Out/In, or Leaving/Arriving) instead
-   of one combined total — see DualStatBox/TripsHereBox in FuelSavings.tsx. */
+.tam-metrics-row .kpi { padding: 10px; }
+.tam-metrics-row .value { font-size: 17px; }
+/* Income/Profit/Cost/Leakage and Trips Here each split into two
+   side-by-side figures (Out/In, or Leaving/Arriving) instead of one
+   combined total — see DualStatBox/TripsHereBox in FuelSavings.tsx. */
 .tam-dual-row {
   display: flex;
   gap: 14px;
@@ -2953,12 +3035,6 @@ button {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.tam-dual-clickable {
-  cursor: pointer;
-}
-.tam-dual-clickable:hover .tam-dual-value {
-  text-decoration: underline;
 }
 .tam-dual-value {
   font-size: 15px;

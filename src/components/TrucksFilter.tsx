@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Check, Search, Pencil, Plus } from 'lucide-react'
+import { ChevronDown, Check, Search, Pencil, Plus, Truck, X } from 'lucide-react'
 import AddCabModal from './AddCabModal'
 import GroupModal from './GroupModal'
 import { tripRows } from '../data'
@@ -89,6 +89,7 @@ export default function TrucksFilter({
   return (
     <div className="cf">
       <button className="filter" onClick={() => setOpen((o) => !o)}>
+        <Truck className="chev" size={15} />
         <span>Trucks:</span>
         <b>{label}</b>
         <ChevronDown className="chev" size={15} />
@@ -118,22 +119,44 @@ export default function TrucksFilter({
                 <div className="tf-search">
                   <Search size={15} color="var(--text-muted)" />
                   <input
-                    placeholder="Search"
+                    placeholder="Search truck ID..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                <div className="tf-scroll">
-                  <button className={`cf-item ${isAll ? 'active' : ''}`} onClick={reset}>
-                    All trucks
-                    {isAll && <Check size={17} className="cf-check" />}
+                <div className="tf-select-row">
+                  <button className="tf-select-all" onClick={() => onChange?.(trucks)}>
+                    Select all
                   </button>
+                  <button className="tf-clear-all" onClick={reset}>
+                    Clear all
+                  </button>
+                  <span className="tf-select-count">
+                    {selected.length}/{trucks.length} selected
+                  </span>
+                </div>
+                {selected.length > 0 && (
+                  <div className="tf-chips-selected">
+                    {selected.map((id) => (
+                      <span className="tf-chip-sel" key={id}>
+                        {id}
+                        <button
+                          aria-label={`Remove ${id}`}
+                          onClick={() => toggleTruck(id)}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="tf-scroll">
                   {visibleTrucks.map((id) => {
                     const active = selected.includes(id)
                     return (
                       <button
                         key={id}
-                        className={`cf-item ${active ? 'active' : ''}`}
+                        className={`tf-truck-item ${active ? 'active' : ''}`}
                         onClick={() => toggleTruck(id)}
                       >
                         {id}

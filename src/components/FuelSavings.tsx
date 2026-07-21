@@ -13,43 +13,6 @@ const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 // gallons directly, so this configurable rate estimates them.
 const IDLE_GPH = 0.8
 
-function StatBox({
-  label,
-  value,
-  tone,
-  caption,
-  onClick,
-}: {
-  label: string
-  value: string
-  tone?: 'pos' | 'neg'
-  caption?: string
-  onClick?: () => void
-}) {
-  return (
-    <div
-      className={`card kpi ${onClick ? 'tam-stat-clickable' : ''}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
-      <div className="kpi-head">
-        <span className="eyebrow">{label}</span>
-        {onClick && <ChevronRight size={13} className="tam-stat-chevron" />}
-      </div>
-      <div className="kpi-value-row">
-        <span
-          className="value"
-          style={tone === 'pos' ? { color: 'var(--green)' } : tone === 'neg' ? { color: 'var(--red)' } : undefined}
-        >
-          {value}
-        </span>
-      </div>
-      {caption && <div className="foot">{caption}</div>}
-    </div>
-  )
-}
-
 // A small centered modal for detail that's too much to cram into the
 // 320px-wide side panel — reuses the app's standard modal chrome.
 function SubDetailModal({
@@ -324,7 +287,34 @@ function computeStateStats(rows: TripRow[], code: string, name: string): StateSt
   }
 }
 
-// Income/Profit/Cost/Leakage on the state detail card each split into an
+function StatBox({
+  label,
+  value,
+  onClick,
+}: {
+  label: string
+  value: string
+  onClick?: () => void
+}) {
+  return (
+    <div
+      className={`card kpi ${onClick ? 'tam-stat-clickable' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
+      <div className="kpi-head">
+        <span className="eyebrow">{label}</span>
+        {onClick && <ChevronRight size={13} className="tam-stat-chevron" />}
+      </div>
+      <div className="kpi-value-row">
+        <span className="value">{value}</span>
+      </div>
+    </div>
+  )
+}
+
+// Income/Profit/Cost/Leakage on the state metrics card each split into an
 // Out (trips leaving the state) and In (trips arriving) figure side by side,
 // instead of one combined total — so you can see at a glance whether a
 // state is a net exporter or importer of a given metric.
@@ -368,15 +358,15 @@ function DualStatBox({
 
 function TripsHereBox({
   stats,
-  onSelectPlace,
+  onOpenPlaceTrips,
 }: {
   stats: StateStats
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
+  onOpenPlaceTrips?: (code: string, name: string) => void
 }) {
   return (
     <div
       className="card kpi tam-dual-stat tam-stat-clickable"
-      onClick={() => onSelectPlace?.(stats.code, stats.name, 'all')}
+      onClick={() => onOpenPlaceTrips?.(stats.code, stats.name)}
       role="button"
       tabIndex={0}
     >
@@ -385,8 +375,8 @@ function TripsHereBox({
         <span className="info-tip" tabIndex={-1}>
           <ChevronRight size={13} className="tam-stat-chevron" />
           <span className="info-tip-bubble" role="tooltip">
-            View all {stats.tripsHere} trip{stats.tripsHere === 1 ? '' : 's'} touching {stats.name} in the Trips
-            tab.
+            Opens a new tab with all {stats.tripsHere} trip{stats.tripsHere === 1 ? '' : 's'} touching {stats.name},
+            filtered in the Trips tab.
           </span>
         </span>
       </div>
@@ -404,22 +394,25 @@ function TripsHereBox({
   )
 }
 
-function StateDetailPanel({
+// Full-width bar (not a side panel) so the map never narrows when a state
+// is selected — sits between the direction toggle/legend and the map grid,
+// pushing content down instead of squeezing the SVG.
+function StateMetricsBar({
   stats,
   onClose,
   onSelectTrucks,
-  onSelectPlace,
+  onOpenPlaceTrips,
 }: {
   stats: StateStats
   onClose: () => void
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
+  onOpenPlaceTrips?: (code: string, name: string) => void
 }) {
   const [subModal, setSubModal] = useState<'trucks' | null>(null)
   const selectOne = (truck: string) => onSelectTrucks?.([truck])
 
   return (
-    <div className="tam-detail">
+    <div className="tam-metrics-bar">
       <div className="tam-detail-head">
         <span className="tam-detail-title">
           {stats.name} <span className="tam-detail-code">({stats.code})</span>
@@ -433,13 +426,13 @@ function StateDetailPanel({
         <p className="tam-detail-empty">No trips touched this state in the current selection.</p>
       ) : (
         <>
-          <div className="tam-side-stats">
+          <div className="tam-metrics-row">
             <StatBox
               label="Trucks Operated"
               value={String(stats.truckCount)}
               onClick={() => setSubModal('trucks')}
             />
-            <TripsHereBox stats={stats} onSelectPlace={onSelectPlace} />
+            <TripsHereBox stats={stats} onOpenPlaceTrips={onOpenPlaceTrips} />
             <DualStatBox
               label="Income"
               outValue={usd(stats.incomeOut)}
@@ -454,11 +447,7 @@ function StateDetailPanel({
               toneOut={stats.profitOut >= 0 ? 'pos' : 'neg'}
               toneIn={stats.profitIn >= 0 ? 'pos' : 'neg'}
             />
-            <DualStatBox
-              label="Cost"
-              outValue={usd(stats.costOut)}
-              inValue={usd(stats.costIn)}
-            />
+            <DualStatBox label="Cost" outValue={usd(stats.costOut)} inValue={usd(stats.costIn)} />
             <DualStatBox
               label="Leakage"
               outValue={usd(stats.leakageOut)}
@@ -485,11 +474,11 @@ const H = 480
 function TruckActivityMap({
   rows,
   onSelectTrucks,
-  onSelectPlace,
+  onOpenPlaceTrips,
 }: {
   rows: TripRow[]
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
+  onOpenPlaceTrips?: (code: string, name: string) => void
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -508,6 +497,22 @@ function TruckActivityMap({
     () => Object.fromEntries(Object.entries(stateHealth).map(([code, h]) => [code, netMarginPct(h)])),
     [stateHealth],
   )
+  // The state with the lowest net margin among states with any activity —
+  // selected by default so the metrics bar opens on the state that most
+  // needs attention, instead of an empty map.
+  const worstCode = useMemo(() => {
+    const active = Object.keys(stateCounts).filter((code) => stateCounts[code] > 0)
+    if (active.length === 0) return null
+    return active.reduce((worst, code) => (stateMargins[code] < stateMargins[worst] ? code : worst))
+  }, [stateCounts, stateMargins])
+
+  // Only fall back to the worst state when there's no valid manual
+  // selection (none yet, or the previously selected state has no trips
+  // under the current direction) — a deliberate user click should stick.
+  useEffect(() => {
+    setSelected((prev) => (prev && (stateCounts[prev] ?? 0) > 0 ? prev : worstCode))
+  }, [worstCode])
+
   const selectedStats = selected ? computeStateStats(rows, selected, CODE_TO_NAME[selected] ?? selected) : null
 
   useEffect(() => {
@@ -631,6 +636,16 @@ function TruckActivityMap({
         <span className="tam-legend-gradient" />
         <span className="tam-legend-label">Profitable</span>
       </div>
+
+      {selectedStats && (
+        <StateMetricsBar
+          stats={selectedStats}
+          onClose={() => setSelected(null)}
+          onSelectTrucks={onSelectTrucks}
+          onOpenPlaceTrips={onOpenPlaceTrips}
+        />
+      )}
+
       <div className="tam-body">
         <div className="tam-wrap" ref={wrapRef}>
           <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Profitability by state, net of leakage" />
@@ -679,15 +694,6 @@ function TruckActivityMap({
             )
           })()}
         </div>
-
-        {selectedStats && (
-          <StateDetailPanel
-            stats={selectedStats}
-            onClose={() => setSelected(null)}
-            onSelectTrucks={onSelectTrucks}
-            onSelectPlace={onSelectPlace}
-          />
-        )}
       </div>
     </section>
   )
@@ -919,15 +925,40 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
 export default function FuelSavings({
   classFilter = [],
   onSelectTrucks,
-  onSelectPlace,
 }: {
   classFilter?: string[]
   onSelectTrucks?: (trucks: string[]) => void
-  onSelectPlace?: (code: string, name: string, direction: 'outbound' | 'inbound' | 'all') => void
 }) {
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
   const moneySaved = rows.reduce((s, r) => s + r.actualSaving, 0)
   const moneyLeakage = rows.reduce((s, r) => s + r.totalExcessCost, 0)
+
+  // Opens the Trips card's target in a new *background* tab — clicking it
+  // shouldn't yank the user out of Fuel & Savings. window.open(url, '_blank')
+  // always steals focus, so instead this simulates a ctrl/cmd+click on an
+  // <a target="_blank">, which Chromium/Firefox treat like a real
+  // ctrl/cmd+click and open in the background. The target tab re-derives its
+  // Trips filter from these query params on load (see FullData.tsx).
+  const openPlaceTrips = (code: string, name: string) => {
+    const params = new URLSearchParams()
+    params.set('tab', 'full')
+    params.set('subtab', 'Trips')
+    params.set('placeCode', code)
+    params.set('placeName', name)
+    params.set('placeDir', 'all')
+    if (classFilter.length > 0) params.set('class', classFilter.join(','))
+
+    const link = document.createElement('a')
+    link.href = `${window.location.pathname}?${params.toString()}`
+    link.target = '_blank'
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    const isMac = navigator.platform.toUpperCase().includes('MAC')
+    link.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ctrlKey: !isMac, metaKey: isMac }),
+    )
+    document.body.removeChild(link)
+  }
 
   const [showAllTrucks, setShowAllTrucks] = useState(false)
   const truckStats = useMemo(() => computeTruckFuelStats(rows), [rows])
@@ -984,7 +1015,7 @@ export default function FuelSavings({
           </div>
         </div>
       </div>
-      <TruckActivityMap rows={rows} onSelectTrucks={onSelectTrucks} onSelectPlace={onSelectPlace} />
+      <TruckActivityMap rows={rows} onSelectTrucks={onSelectTrucks} onOpenPlaceTrips={openPlaceTrips} />
 
       {showAllTrucks && (
         <SubDetailModal
