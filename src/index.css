@@ -289,6 +289,94 @@ button {
 .cf-check {
   color: var(--green);
 }
+
+/* Deadhead filter dropdown — two descriptive options instead of a plain list,
+   the active one picked out with a green accent border. */
+.dh-menu {
+  width: 320px;
+  padding: 4px 0;
+}
+.dh-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+}
+.dh-option:last-child {
+  border-bottom: none;
+}
+.dh-option:hover {
+  background: var(--surface-2);
+}
+.dh-option.active {
+  background: rgba(46, 230, 166, 0.08);
+  border-left-color: var(--green);
+}
+.dh-option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.dh-option-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+/* Locked option (e.g. "In range only" on Trips/Fleet Analytics) — dimmed
+   like a disabled control. Hovering anywhere on the row (not just the icon)
+   reveals the explanation as a floating tooltip, so nothing shifts in place
+   the way swapping the row's own text did. The dimming lives on
+   .dh-option-content rather than the button itself — CSS opacity flattens
+   its whole subtree into one translucent layer, which would wash out the
+   (deliberately fully opaque) tooltip bubble sitting alongside it. */
+.dh-option.locked {
+  position: relative;
+  cursor: not-allowed;
+}
+.dh-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dh-option.locked .dh-option-content {
+  opacity: 0.55;
+}
+.dh-lock-icon {
+  color: var(--red);
+}
+.dh-lock-bubble {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 18px;
+  z-index: 20;
+  width: max-content;
+  max-width: 260px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #05070b;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.dh-option.locked:hover .dh-lock-bubble {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .cf-edit-btn {
   display: block;
   width: calc(100% - 24px);
@@ -571,6 +659,31 @@ button {
 .tf-truck-item.active {
   background: rgba(46, 230, 166, 0.1);
   color: var(--text);
+}
+.tf-truck-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tf-truck-item.disabled:hover {
+  background: none;
+}
+.tf-all-item {
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+.tf-limit-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: rgba(242, 88, 93, 0.08);
+  border: 1px solid rgba(242, 88, 93, 0.3);
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
 }
 .tf-menu .cf-item {
   padding: 14px 8px;
@@ -4815,15 +4928,27 @@ button {
 .ld-loadid-val { font-size: 16px; font-weight: 500; color: #E6E6E6; }
 .ld-loadid-sub { font-size: 13px; color: #686868; }
 
-/* Top area layout */
+/* Top area layout — the Earnings card spans both left columns as a full-width
+   row above Cost Summary/Fuel/Miles, which pushes the donut (Cost Summary)
+   down and shortens it, since it now only fills the remaining row instead of
+   the whole area's height. */
 .ld-top {
   display: grid;
   grid-template-columns: 380px 0.5fr 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "earnings earnings map"
+    "cost metrics map";
   gap: 15px;
 }
+/* Everything — Income, Executed margin, Optimal margin, Missed savings —
+   lives in one .ld-miles-row so it reads as a single row of equal-weight
+   stats, not a headline number stacked above a separate row. */
+.ld-earnings { grid-area: earnings; padding: 14px; display: flex; flex-direction: column; }
+.ld-earnings .ld-miles-row { margin-top: 14px; }
 
 /* Cost summary */
-.ld-cost { padding: 14px; display: flex; flex-direction: column; }
+.ld-cost { grid-area: cost; padding: 14px; display: flex; flex-direction: column; }
 .ld-card-head { display: flex; align-items: center; justify-content: space-between; }
 .ld-cost-title { font-size: 16px; font-weight: 600; color: #E6E6E6; }
 .ld-cost-back { display: flex; align-items: center; justify-content: center; }
@@ -4940,8 +5065,9 @@ button {
 }
 .ld-explore:hover { background: #19272f; }
 
-/* Metric grid */
-.ld-metrics { display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(3, 1fr); gap: 14px; }
+/* Metric grid — now just Fuel cost + Miles cost (Earnings moved out to its
+   own full-width row above). */
+.ld-metrics { grid-area: metrics; display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(2, 1fr); gap: 14px; }
 .ld-metric { padding: 20px; display: flex; flex-direction: column; }
 .ld-metric-q { font-size: 15px; font-weight: 500; color: #E6E6E6; line-height: 1.3; min-height: 2.6em; }
 .ld-metric-val {
@@ -4964,6 +5090,12 @@ button {
 .ld-miles-num-sub { font-size: 14px; font-weight: 600; color: #B7BEC7; font-variant-numeric: tabular-nums; }
 .ld-miles-lbl { font-size: 11px; font-weight: 500; color: #686868; text-transform: uppercase; letter-spacing: 0.04em; }
 .ld-miles-sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.08); flex: 0 0 auto; margin: 0 12px; }
+/* Label:value line pair (e.g. Earnings' "Cost $296" / "Margin $484") — same
+   font size for both sides so neither line reads as more or less important
+   than .ld-miles-num-sub elsewhere in the row. */
+.ld-miles-line { display: flex; align-items: baseline; gap: 8px; }
+.ld-miles-line-lbl { font-size: 14px; font-weight: 500; color: #8a94a6; min-width: 44px; }
+.ld-miles-line-val { font-size: 14px; font-weight: 600; color: #E6E6E6; font-variant-numeric: tabular-nums; }
 
 /* Missed-saving is the "act on this" number in every stat row — a warm tint
    and a filled chip pull it forward instead of it just being the column
@@ -4975,6 +5107,7 @@ button {
 
 /* Map panel */
 .ld-map {
+  grid-area: map;
   position: relative;
   border-radius: 13px;
   overflow: hidden;
@@ -5243,6 +5376,14 @@ button {
 .ld-tl-cost { font-size: 12px; font-weight: 600; color: #CDCDCD; line-height: 1.35; }
 
 @media (max-width: 1200px) {
-  .ld-top { grid-template-columns: 1fr; }
+  .ld-top {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-template-areas:
+      "earnings"
+      "cost"
+      "metrics"
+      "map";
+  }
   .ld-outcomes { grid-template-columns: repeat(2, 1fr); }
 }

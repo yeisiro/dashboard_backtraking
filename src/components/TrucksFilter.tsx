@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Check, Search, Pencil, Plus, Truck, X } from 'lucide-react'
+import { ChevronDown, Check, CheckCircle2, AlertCircle, Search, Pencil, Plus, Truck, X } from 'lucide-react'
 import AddCabModal from './AddCabModal'
 import GroupModal from './GroupModal'
 import { tripRows } from '../data'
@@ -29,6 +29,11 @@ const initialGroups: Group[] = [
 
 const CHIP_ROW = 4 // trucks shown before collapsing into "+N"
 
+// Individual trucks are capped at 10 — past that, filtering by group is the
+// intended path for larger fleets, so further truck rows disable instead of
+// letting the selection grow unbounded.
+const MAX_SELECTED = 10
+
 type GroupEditor =
   | { mode: 'new' }
   | { mode: 'edit'; group: Group }
@@ -52,10 +57,28 @@ export default function TrucksFilter({
   const [editor, setEditor] = useState<GroupEditor>(null)
 
   const isAll = selected.length === 0 && selectedGroups.length === 0
-  const label = isAll ? 'All' : `${selected.length + selectedGroups.length} selected`
+  // Once groups are mixed in, fall back to a plain combined count — the /10
+  // cap only applies to individual truck selection.
+  const fraction = `${selected.length}/${MAX_SELECTED} selected`
+  const label = isAll
+    ? 'All'
+    : selectedGroups.length > 0
+      ? `${selected.length + selectedGroups.length} selected`
+      : fraction
+  const rowCountText = isAll
+    ? `All ${trucks.length} selected`
+    : selectedGroups.length > 0
+      ? `${selected.length + selectedGroups.length} selected`
+      : fraction
+  const atLimit = selected.length >= MAX_SELECTED
 
-  const toggleTruck = (id: string) =>
-    onChange?.(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+  const toggleTruck = (id: string) => {
+    if (selected.includes(id)) {
+      onChange?.(selected.filter((x) => x !== id))
+    } else if (!atLimit) {
+      onChange?.([...selected, id])
+    }
+  }
   const toggleGroup = (id: string) =>
     setSelectedGroups((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const reset = () => {
@@ -125,15 +148,10 @@ export default function TrucksFilter({
                   />
                 </div>
                 <div className="tf-select-row">
-                  <button className="tf-select-all" onClick={() => onChange?.(trucks)}>
-                    Select all
-                  </button>
                   <button className="tf-clear-all" onClick={reset}>
                     Clear all
                   </button>
-                  <span className="tf-select-count">
-                    {selected.length}/{trucks.length} selected
-                  </span>
+                  <span className="tf-select-count">{rowCountText}</span>
                 </div>
                 {selected.length > 0 && (
                   <div className="tf-chips-selected">
@@ -150,17 +168,29 @@ export default function TrucksFilter({
                     ))}
                   </div>
                 )}
+                {atLimit && (
+                  <div className="tf-limit-banner">
+                    <AlertCircle size={15} />
+                    Limit reached — max {MAX_SELECTED} trucks selected
+                  </div>
+                )}
                 <div className="tf-scroll">
+                  <button className={`tf-truck-item tf-all-item ${isAll ? 'active' : ''}`} onClick={reset}>
+                    All trucks
+                    {isAll && <CheckCircle2 size={17} className="cf-check" />}
+                  </button>
                   {visibleTrucks.map((id) => {
                     const active = selected.includes(id)
+                    const disabled = !active && atLimit
                     return (
                       <button
                         key={id}
-                        className={`tf-truck-item ${active ? 'active' : ''}`}
+                        className={`tf-truck-item ${active ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
                         onClick={() => toggleTruck(id)}
+                        disabled={disabled}
                       >
                         {id}
-                        {active && <Check size={17} className="cf-check" />}
+                        {active && <CheckCircle2 size={17} className="cf-check" />}
                       </button>
                     )
                   })}

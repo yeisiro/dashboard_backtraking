@@ -10,7 +10,7 @@ import {
   Plus,
   Check,
   Package,
-  TrendingUp,
+  ArrowUpRight,
   Fuel,
   Route,
   MapPin,
@@ -1097,6 +1097,11 @@ export default function TripDetailModal({
   // is already a $ figure, the miles side is excessMilesCost (the $ that
   // excess miles cost, the same basis excessMiles above was derived from).
   const totalMissedSaving = missedSavingFuel + trip.excessMilesCost
+  // What the trip would have earned running the optimal plan (same optimal
+  // cost the Miles cost card already shows) — the Earnings card's own
+  // "Optimal" column pairs this against that cost so the reader sees what's
+  // driving it, right where the margin number is.
+  const optimalMargin = trip.income - trip.optimalCost
 
   // Pickup/delivery timing has no real scheduled time anywhere in this data
   // model — the timeline's own timeForT times above are already decorative
@@ -1140,28 +1145,6 @@ export default function TripDetailModal({
   }
 
   const cards: { q: string; value: React.ReactNode; icon: React.ReactNode }[] = [
-    {
-      q: 'Earnings',
-      value: (
-        <div className="ld-miles-row">
-          <div className="ld-miles-stat">
-            <span className="ld-miles-num">{money(trip.income)}</span>
-            <span className="ld-miles-lbl">Income</span>
-          </div>
-          <span className="ld-miles-sep" />
-          <div className="ld-miles-stat">
-            <span className="ld-miles-num">{money(trip.profit)}</span>
-            <span className="ld-miles-lbl">Profit</span>
-          </div>
-          <span className="ld-miles-sep" />
-          <div className="ld-miles-stat ld-miles-missed">
-            <span className="ld-miles-num">{money(totalMissedSaving)}</span>
-            <span className="ld-miles-lbl">Total missed savings</span>
-          </div>
-        </div>
-      ),
-      icon: <TrendingUp size={16} />,
-    },
     {
       // Money leads every column here — $ paid first, then the $/gal rate
       // that explains it, then the gallon volume behind it — since $ is
@@ -1415,8 +1398,44 @@ export default function TripDetailModal({
             </span>
           </div>
 
-          {/* Top: cost summary + metric grid + map */}
+          {/* Top: earnings + cost summary + metric grid + map */}
           <div className="ld-top">
+            <section className="ld-card ld-earnings">
+              <div className="ld-card-head">
+                <span className="ld-cost-title">Earnings</span>
+                <ArrowUpRight size={18} color="#686868" />
+              </div>
+              <div className="ld-miles-row">
+                <div className="ld-miles-stat">
+                  <span className="ld-miles-lbl">Income</span>
+                  <span className="ld-miles-num">{money(trip.income)}</span>
+                </div>
+                <span className="ld-miles-sep" />
+                <div className="ld-miles-stat">
+                  <span className="ld-miles-num">{money(trip.profit)}</span>
+                  <span className="ld-miles-num-sub">Margin</span>
+                  <span className="ld-miles-lbl">Executed</span>
+                </div>
+                <span className="ld-miles-sep" />
+                <div className="ld-miles-stat">
+                  <span className="ld-miles-line">
+                    <span className="ld-miles-line-lbl">Cost</span>
+                    <span className="ld-miles-line-val">{money(trip.optimalCost)}</span>
+                  </span>
+                  <span className="ld-miles-line">
+                    <span className="ld-miles-line-lbl">Margin</span>
+                    <span className="ld-miles-line-val">{money(optimalMargin)}</span>
+                  </span>
+                  <span className="ld-miles-lbl">Optimal</span>
+                </div>
+                <span className="ld-miles-sep" />
+                <div className="ld-miles-stat ld-miles-missed">
+                  <span className="ld-miles-num">{money(totalMissedSaving)}</span>
+                  <span className="ld-miles-lbl">Total missed savings</span>
+                </div>
+              </div>
+            </section>
+
             <section className="ld-card ld-cost">
               <div className="ld-card-head">
                 <span className="ld-cost-title">Trip Cost Summary</span>

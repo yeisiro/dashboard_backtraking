@@ -314,25 +314,52 @@ function StatBox({
   )
 }
 
-// Income/Profit/Cost/Leakage on the state metrics card each split into an
-// Out (trips leaving the state) and In (trips arriving) figure side by side,
-// instead of one combined total — so you can see at a glance whether a
-// state is a net exporter or importer of a given metric.
+// Human label for a single direction (never called with 'all').
+const DIRECTION_LABEL: Record<'outbound' | 'inbound', string> = { outbound: 'Outbound', inbound: 'Inbound' }
+
+// Income/Profit/Cost/Leakage on the state metrics card split into an Out
+// (trips leaving the state) and In (trips arriving) figure side by side when
+// the map is showing All — so you can see at a glance whether a state is a
+// net exporter or importer of a given metric. When a single direction is
+// selected, the opposite figure is always 0 (this state stat only ever holds
+// outbound or inbound rows), so it's dropped in favor of one value labeled
+// with the direction being viewed.
 function DualStatBox({
   label,
   outValue,
   inValue,
   toneOut,
   toneIn,
+  direction,
 }: {
   label: string
   outValue: string
   inValue: string
   toneOut?: 'pos' | 'neg'
   toneIn?: 'pos' | 'neg'
+  direction: MapDirection
 }) {
   const toneStyle = (tone?: 'pos' | 'neg') =>
     tone === 'pos' ? { color: 'var(--green)' } : tone === 'neg' ? { color: 'var(--red)' } : undefined
+
+  if (direction !== 'all') {
+    const value = direction === 'outbound' ? outValue : inValue
+    const tone = direction === 'outbound' ? toneOut : toneIn
+    return (
+      <div className="card kpi">
+        <div className="kpi-head">
+          <span className="eyebrow">{label}</span>
+        </div>
+        <div className="kpi-value-row">
+          <span className="value" style={toneStyle(tone)}>
+            {value}
+          </span>
+          <span className="tam-dual-label">{DIRECTION_LABEL[direction]}</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="card kpi tam-dual-stat">
       <div className="kpi-head">
@@ -358,15 +385,18 @@ function DualStatBox({
 
 function TripsHereBox({
   stats,
+  direction,
   onOpenPlaceTrips,
 }: {
   stats: StateStats
-  onOpenPlaceTrips?: (code: string, name: string) => void
+  direction: MapDirection
+  onOpenPlaceTrips?: (code: string, name: string, direction: MapDirection) => void
 }) {
+  const count = direction === 'outbound' ? stats.outboundRows.length : direction === 'inbound' ? stats.inboundRows.length : stats.tripsHere
   return (
     <div
-      className="card kpi tam-dual-stat tam-stat-clickable"
-      onClick={() => onOpenPlaceTrips?.(stats.code, stats.name)}
+      className={`card kpi tam-stat-clickable ${direction === 'all' ? 'tam-dual-stat' : ''}`}
+      onClick={() => onOpenPlaceTrips?.(stats.code, stats.name, direction)}
       role="button"
       tabIndex={0}
     >
@@ -375,21 +405,33 @@ function TripsHereBox({
         <span className="info-tip" tabIndex={-1}>
           <ChevronRight size={13} className="tam-stat-chevron" />
           <span className="info-tip-bubble" role="tooltip">
-            Opens a new tab with all {stats.tripsHere} trip{stats.tripsHere === 1 ? '' : 's'} touching {stats.name},
-            filtered in the Trips tab.
+            Opens a new tab with {count} trip{count === 1 ? '' : 's'}{' '}
+            {direction === 'outbound'
+              ? `leaving ${stats.name}`
+              : direction === 'inbound'
+                ? `arriving to ${stats.name}`
+                : `touching ${stats.name}`}
+            , filtered in the Trips tab.
           </span>
         </span>
       </div>
-      <div className="tam-dual-row">
-        <div className="tam-dual-metric">
-          <span className="tam-dual-value">{stats.outboundRows.length}</span>
-          <span className="tam-dual-label">Leaving</span>
+      {direction === 'all' ? (
+        <div className="tam-dual-row">
+          <div className="tam-dual-metric">
+            <span className="tam-dual-value">{stats.outboundRows.length}</span>
+            <span className="tam-dual-label">Leaving</span>
+          </div>
+          <div className="tam-dual-metric">
+            <span className="tam-dual-value">{stats.inboundRows.length}</span>
+            <span className="tam-dual-label">Arriving</span>
+          </div>
         </div>
-        <div className="tam-dual-metric">
-          <span className="tam-dual-value">{stats.inboundRows.length}</span>
-          <span className="tam-dual-label">Arriving</span>
+      ) : (
+        <div className="kpi-value-row">
+          <span className="value">{count}</span>
+          <span className="tam-dual-label">{DIRECTION_LABEL[direction]}</span>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -399,14 +441,16 @@ function TripsHereBox({
 // pushing content down instead of squeezing the SVG.
 function StateMetricsBar({
   stats,
+  direction,
   onClose,
   onSelectTrucks,
   onOpenPlaceTrips,
 }: {
   stats: StateStats
+  direction: MapDirection
   onClose: () => void
   onSelectTrucks?: (trucks: string[]) => void
-  onOpenPlaceTrips?: (code: string, name: string) => void
+  onOpenPlaceTrips?: (code: string, name: string, direction: MapDirection) => void
 }) {
   const [subModal, setSubModal] = useState<'trucks' | null>(null)
   const selectOne = (truck: string) => onSelectTrucks?.([truck])
@@ -432,13 +476,14 @@ function StateMetricsBar({
               value={String(stats.truckCount)}
               onClick={() => setSubModal('trucks')}
             />
-            <TripsHereBox stats={stats} onOpenPlaceTrips={onOpenPlaceTrips} />
+            <TripsHereBox stats={stats} direction={direction} onOpenPlaceTrips={onOpenPlaceTrips} />
             <DualStatBox
               label="Income"
               outValue={usd(stats.incomeOut)}
               inValue={usd(stats.incomeIn)}
               toneOut="pos"
               toneIn="pos"
+              direction={direction}
             />
             <DualStatBox
               label="Profit"
@@ -446,14 +491,16 @@ function StateMetricsBar({
               inValue={usd(stats.profitIn)}
               toneOut={stats.profitOut >= 0 ? 'pos' : 'neg'}
               toneIn={stats.profitIn >= 0 ? 'pos' : 'neg'}
+              direction={direction}
             />
-            <DualStatBox label="Cost" outValue={usd(stats.costOut)} inValue={usd(stats.costIn)} />
+            <DualStatBox label="Cost" outValue={usd(stats.costOut)} inValue={usd(stats.costIn)} direction={direction} />
             <DualStatBox
               label="Leakage"
               outValue={usd(stats.leakageOut)}
               inValue={usd(stats.leakageIn)}
               toneOut="neg"
               toneIn="neg"
+              direction={direction}
             />
           </div>
 
@@ -478,7 +525,7 @@ function TruckActivityMap({
 }: {
   rows: TripRow[]
   onSelectTrucks?: (trucks: string[]) => void
-  onOpenPlaceTrips?: (code: string, name: string) => void
+  onOpenPlaceTrips?: (code: string, name: string, direction: MapDirection) => void
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -640,6 +687,7 @@ function TruckActivityMap({
       {selectedStats && (
         <StateMetricsBar
           stats={selectedStats}
+          direction={mapDirection}
           onClose={() => setSelected(null)}
           onSelectTrucks={onSelectTrucks}
           onOpenPlaceTrips={onOpenPlaceTrips}
@@ -939,13 +987,13 @@ export default function FuelSavings({
   // <a target="_blank">, which Chromium/Firefox treat like a real
   // ctrl/cmd+click and open in the background. The target tab re-derives its
   // Trips filter from these query params on load (see FullData.tsx).
-  const openPlaceTrips = (code: string, name: string) => {
+  const openPlaceTrips = (code: string, name: string, direction: MapDirection) => {
     const params = new URLSearchParams()
     params.set('tab', 'full')
     params.set('subtab', 'Trips')
     params.set('placeCode', code)
     params.set('placeName', name)
-    params.set('placeDir', 'all')
+    params.set('placeDir', direction)
     if (classFilter.length > 0) params.set('class', classFilter.join(','))
 
     const link = document.createElement('a')

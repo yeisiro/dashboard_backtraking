@@ -10,7 +10,7 @@ import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailMo
 import FuelSavings, { parseLane } from './FuelSavings'
 
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel and Savings', 'Rewards'] as const
-type SubTab = (typeof SUBTABS)[number]
+export type SubTab = (typeof SUBTABS)[number]
 
 // V1 ("summary") drops the Rewards subtab; V2 ("dashboard") keeps the full set.
 const subtabsForView = (view: 'summary' | 'dashboard'): readonly SubTab[] =>
@@ -125,12 +125,14 @@ export default function FullData({
   truckFilter = [],
   onTruckFilterChange,
   view = 'dashboard',
+  onSubTabChange,
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
   truckFilter?: string[]
   onTruckFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
+  onSubTabChange?: (tab: SubTab) => void
 }) {
   // Landing here from a "Trips Here" new-tab link (see FuelSavings.tsx's
   // openPlaceTrips) — the query string is the only way a fresh tab can carry
@@ -140,6 +142,7 @@ export default function FullData({
     const subtab = new URLSearchParams(window.location.search).get('subtab')
     return (SUBTABS as readonly string[]).includes(subtab ?? '') ? (subtab as SubTab) : 'Trips'
   })
+  useEffect(() => onSubTabChange?.(tab), [tab, onSubTabChange])
   const [placeFilter, setPlaceFilter] = useState<{
     code: string
     name: string
@@ -1270,10 +1273,10 @@ function TripsTable({
         {placeFilter && (
           <div className="fd-place-chip">
             {placeFilter.direction === 'outbound'
-              ? 'Leaving'
+              ? 'Trips leaving'
               : placeFilter.direction === 'inbound'
-                ? 'Arriving to'
-                : 'Trips in'}{' '}
+                ? 'Trips arriving to'
+                : 'All trips in & out of'}{' '}
             {placeFilter.name}
             <button aria-label="Clear place filter" onClick={onClearPlaceFilter}>
               <X size={12} />

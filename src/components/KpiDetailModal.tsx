@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { deltaTone, deltaTrend, type KpiCard, type DetailMetric, type Tone } from '../data'
-import { usePeriod } from '../PeriodContext'
+import { usePeriod, currentPeriodLabel } from '../PeriodContext'
 
 interface Props {
   card: KpiCard
@@ -10,32 +10,31 @@ interface Props {
   onClose: () => void
 }
 
-// Timeline ranges. The API returns at most 2 months of data, and each period is
-// compared against an equal-length window just before it — so the widest series
-// is 60 days (30 selected + 30 prior). All ranges are shown daily.
-const TIMELINE_RANGES = [
-  { label: '15d', days: 15 },
-  { label: '30d', days: 30 },
-  { label: '60d', days: 60 },
-]
+// Fixed reference points used to derive the timeline chips shown for a given
+// global range N. The two reference values just below N are offered as
+// shorter zoom-ins, plus N itself (the full selected window).
+const REFERENCE_DAYS = [3, 5, 7, 15, 30, 60]
 
-// Default range mirrors the active date filter: 7d→15d, 15d→30d, 30d→60d
-// (the selected window plus its equal-length comparison window).
-function defaultRangeIdx(rangeDays: number): number {
-  const target = rangeDays * 2
-  const idx = TIMELINE_RANGES.findIndex((r) => r.days >= target)
-  return idx === -1 ? TIMELINE_RANGES.length - 1 : idx
+// Chips for a given global range N: the 2 reference values closest to (and
+// below) N, plus N itself. Never more than 3 chips. If N matches a reference
+// value exactly, that value is excluded from the "below N" set (it collapses
+// into the N chip itself).
+function timelineRangesFor(rangeDays: number): { label: string; days: number }[] {
+  const below = REFERENCE_DAYS.filter((d) => d < rangeDays).slice(-2)
+  return [...below.map((d) => ({ label: `${d}d`, days: d })), { label: `${rangeDays}d`, days: rangeDays }]
 }
 
 export default function KpiDetailModal({ card, compareLabel, summary = false, onClose }: Props) {
   const { rangeEnd, rangeDays } = usePeriod()
   const metrics = (summary && card.detailsSummary) || card.details || []
   const [selected, setSelected] = useState(0)
-  // Each card remembers its own timeline range (index into TIMELINE_RANGES).
+  // Each card remembers its own timeline range (index into the ranges below).
   const [ranges, setRanges] = useState<Record<number, number>>({})
   const active = metrics[selected]
-  const rangeIdx = ranges[selected] ?? defaultRangeIdx(rangeDays)
-  const range = TIMELINE_RANGES[rangeIdx]
+  const timelineRanges = timelineRangesFor(rangeDays)
+  // Default to the full selected window (last chip), matching the outer filter.
+  const rangeIdx = ranges[selected] ?? timelineRanges.length - 1
+  const range = timelineRanges[rangeIdx]
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -48,7 +47,10 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
         </div>
 
         <div className="modal-body">
-          <p className="cfm-sub">Select a metric, then pick its own time range below.</p>
+          <p className="cfm-sub">
+            Select a metric, then pick its own time range below. Showing{' '}
+            <strong>{currentPeriodLabel(rangeEnd, rangeDays)}</strong> ({rangeDays}d).
+          </p>
 
           <div className="kd-grid">
             {metrics.map((m, i) => (
@@ -128,7 +130,7 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
           {active && (
             <div className="kd-timeline">
               <div className="kd-range">
-                {TIMELINE_RANGES.map((r, i) => (
+                {timelineRanges.map((r, i) => (
                   <button
                     key={r.label}
                     className={`kd-range-btn ${i === rangeIdx ? 'active' : ''}`}

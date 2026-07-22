@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar, { type View } from './components/Sidebar'
 import Header from './components/Header'
 import Toolbar, { type DataTab } from './components/Toolbar'
+import { type DeadheadMode } from './components/DeadheadFilter'
 import KpiCards from './components/KpiCards'
 import MoneyLeakage from './components/MoneyLeakage'
 import PotentialRecovery, { type FleetMode } from './components/PotentialRecovery'
 import LiveOperations from './components/LiveOperations'
 import MarketMap from './components/MarketMap'
-import FullData from './components/FullData'
+import FullData, { type SubTab } from './components/FullData'
 import { PeriodContext, initialCompareRange } from './PeriodContext'
 
 export default function App() {
@@ -28,6 +29,16 @@ export default function App() {
     return cls ? cls.split(',').filter(Boolean) : []
   })
   const [truckFilter, setTruckFilter] = useState<string[]>([])
+  const [deadheadMode, setDeadheadMode] = useState<DeadheadMode>('in-range')
+  const [fullDataSubTab, setFullDataSubTab] = useState<SubTab>('Trips')
+  // Trips and Fleet Analytics always need each trip's untouched full
+  // deadhead to add up right, so the Deadhead filter locks to "Full trip"
+  // while either subtab is active.
+  const deadheadLocked =
+    dataTab === 'full' && (fullDataSubTab === 'Trips' || fullDataSubTab === 'Fleet Analytics')
+  useEffect(() => {
+    if (deadheadLocked) setDeadheadMode('full-trip')
+  }, [deadheadLocked])
   const noData = fleetMode === 'empty'
   const [rangeEnd, setRangeEnd] = useState(() => {
     const t = new Date()
@@ -55,6 +66,9 @@ export default function App() {
               truckFilter={truckFilter}
               onTruckFilterChange={setTruckFilter}
               view={view}
+              deadheadMode={deadheadMode}
+              onDeadheadModeChange={setDeadheadMode}
+              deadheadLocked={deadheadLocked}
             />
             {dataTab === 'full' ? (
               <FullData
@@ -63,6 +77,7 @@ export default function App() {
                 truckFilter={truckFilter}
                 onTruckFilterChange={setTruckFilter}
                 view={view}
+                onSubTabChange={setFullDataSubTab}
               />
             ) : (
               <>

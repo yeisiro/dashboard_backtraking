@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
 import DateFilter from './DateFilter'
+import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal from './ConnectFleetModal'
 
 export type DataTab = 'overview' | 'full'
@@ -15,6 +16,9 @@ export default function Toolbar({
   truckFilter = [],
   onTruckFilterChange,
   view = 'dashboard',
+  deadheadMode = 'in-range',
+  onDeadheadModeChange,
+  deadheadLocked = false,
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
@@ -23,6 +27,9 @@ export default function Toolbar({
   truckFilter?: string[]
   onTruckFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
+  deadheadMode?: DeadheadMode
+  onDeadheadModeChange?: (next: DeadheadMode) => void
+  deadheadLocked?: boolean
 }) {
   const [showConnect, setShowConnect] = useState(false)
 
@@ -43,10 +50,11 @@ export default function Toolbar({
         </button>
       </div>
       <div className="filters">
+        <DeadheadFilter mode={deadheadMode} onChange={onDeadheadModeChange} locked={deadheadLocked} />
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
         <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
         <DateFilter />
-        {!(view === 'summary' && tab === 'overview') && (
+        {!(view === 'summary' && tab === 'overview') && tab !== 'full' && (
           <button className="btn-primary" onClick={() => setShowConnect(true)}>
             Connect Fleet
             <Plus size={15} />
