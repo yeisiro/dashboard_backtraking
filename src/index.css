@@ -816,50 +816,33 @@ button {
   left: auto;
   right: 0;
 }
-/* Two-up calendar with a preset rail on the left (see DateFilter.tsx). */
+/* Two-up calendar with a row of preset pills across the top (see DateFilter.tsx). */
 .df-menu.df-menu-2 {
   width: auto;
   display: flex;
-  gap: 24px;
+  flex-direction: column;
+  gap: 20px;
   padding: 22px;
 }
-.df-side {
+.df-presets {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 152px;
-  flex: 0 0 152px;
-  padding-right: 22px;
-  border-right: 1px solid var(--border);
+  gap: 10px;
 }
-.df-side-btn {
-  text-align: left;
-  padding: 11px 14px;
-  border-radius: 10px;
+.df-preset {
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--surface-2);
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  border: 1px solid transparent;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s, color 0.12s;
 }
-.df-side-btn:hover {
-  background: var(--surface-2);
+.df-preset:hover {
+  background: var(--surface-3);
 }
-.df-side-btn.active {
-  border-color: rgba(46, 230, 166, 0.4);
-  background: rgba(46, 230, 166, 0.09);
-  color: var(--green);
-}
-.df-reset {
-  text-align: left;
-  padding: 11px 14px;
-  margin-top: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--red);
-}
-.df-reset:hover {
-  text-decoration: underline;
+.df-preset.active {
+  background: var(--green);
+  color: #06231a;
 }
 .df-cals {
   display: flex;
@@ -1851,6 +1834,17 @@ button {
   font-size: 13px;
   font-weight: 700;
   color: var(--green);
+}
+.cfm-sync-range {
+  margin-top: 16px;
+  max-width: 340px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.cfm-sync-range b {
+  color: var(--text);
+  font-weight: 700;
 }
 
 /* auth segmented + form */
@@ -5466,6 +5460,28 @@ button {
 .ld-map-round { padding: 8px; border-radius: 50%; color: #9A9A9A; }
 .ld-map-zoom { display: flex; gap: 6px; }
 .ld-map-full { margin-left: auto; }
+.ld-map-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ld-map-right .ld-map-full {
+  margin-left: 0;
+}
+.ld-map-sync {
+  padding: 8px 18px;
+  background: #82cabf;
+  border-color: #82cabf;
+  color: #06231d;
+}
+.ld-map-sync:hover:not(:disabled) {
+  background: #93d4ca;
+}
+.ld-map-sync:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
 .ld-map-scrub {
   position: absolute;
   left: 16px;
@@ -5711,6 +5727,73 @@ button {
       "map";
   }
   .ld-outcomes { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Background sync bar ---------- */
+.syncbar {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.syncbar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(46, 230, 166, 0.08);
+  border-right: 2px solid var(--green);
+  transition: width 0.12s linear;
+  pointer-events: none;
+}
+.syncbar.done .syncbar-fill {
+  border-right-color: transparent;
+}
+.syncbar-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.syncbar-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.syncbar-status .refresh-spin {
+  color: var(--green);
+}
+.syncbar-icon.done {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--green);
+  color: #06231a;
+}
+.syncbar-pct {
+  color: var(--green);
+  font-weight: 700;
+}
+.syncbar-range {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.syncbar-range b {
+  color: var(--text);
+  font-weight: 700;
+}
+.syncbar-hint {
+  color: var(--text-muted);
 }
 
 /* ---------- Toast ---------- */

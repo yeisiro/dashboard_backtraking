@@ -18,6 +18,7 @@ import {
   Truck,
   ChevronLeft,
   Clock,
+  RefreshCw,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
@@ -644,6 +645,15 @@ export default function TripDetailModal({
   const [hoverDev, setHoverDev] = useState(false)
   const [hoverRepo, setHoverRepo] = useState(false)
   const [fullMap, setFullMap] = useState(false)
+  // Sync-from-map: re-pull the trip's telematics without leaving the map. Held
+  // briefly since the (mock) data returns instantly — same idea as the header
+  // Refresh, but surfaced on the map the way the ELD status panel does.
+  const [mapSyncing, setMapSyncing] = useState(false)
+  const syncMap = () => {
+    if (mapSyncing) return
+    setMapSyncing(true)
+    setTimeout(() => setMapSyncing(false), 1400)
+  }
 
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
 
@@ -1504,9 +1514,19 @@ export default function TripDetailModal({
                     <Minus size={16} />
                   </button>
                 </div>
-                <button className="ld-map-btn ld-map-full" onClick={() => setFullMap(true)}>
-                  Open full map <Maximize2 size={14} />
-                </button>
+                <div className="ld-map-right">
+                  <button
+                    className="ld-map-btn ld-map-sync"
+                    onClick={syncMap}
+                    disabled={mapSyncing}
+                  >
+                    <RefreshCw size={14} className={mapSyncing ? 'refresh-spin' : ''} />
+                    {mapSyncing ? 'Syncing…' : 'Sync'}
+                  </button>
+                  <button className="ld-map-btn ld-map-full" onClick={() => setFullMap(true)}>
+                    Open full map <Maximize2 size={14} />
+                  </button>
+                </div>
               </div>
 
               <svg

@@ -1,28 +1,10 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
-import { usePeriod, prevPeriodLabel } from '../PeriodContext'
+import { usePeriod, compareLabelFor, prevPeriodLabel } from '../PeriodContext'
 
-// Quick-pick presets shown in the left rail. Each maps to a concrete
-// start/end range computed off "today" (see rangeForPreset).
-const PRESETS = [
-  'This Week',
-  'Last Week',
-  'Current Month',
-  'Last Month',
-  'This Year',
-  'Last Year',
-] as const
+// Quick-pick presets shown as pills across the top of the picker.
+const PRESETS = ['Custom', 'Last 7 days', 'Last 15 days', 'Last 30 days'] as const
 type Preset = (typeof PRESETS)[number]
-
-// Every preset compares against the equivalent window right before it.
-const COMPARE_LABEL: Record<Preset, string> = {
-  'This Week': 'vs prev week',
-  'Last Week': 'vs prev week',
-  'Current Month': 'vs prev month',
-  'Last Month': 'vs prev month',
-  'This Year': 'vs prev year',
-  'Last Year': 'vs prev year',
-}
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const monthName = (d: Date) => d.toLocaleString('en-US', { month: 'long' })
@@ -47,27 +29,12 @@ function daysBetween(start: Date, end: Date) {
   return Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / 86400000) + 1
 }
 
-// Sunday-first range for each preset, anchored on today.
-function rangeForPreset(preset: Preset): { start: Date; end: Date } {
-  const t = startOfDay(new Date())
-  switch (preset) {
-    case 'This Week': {
-      const sun = addDays(t, -t.getDay())
-      return { start: sun, end: addDays(sun, 6) }
-    }
-    case 'Last Week': {
-      const sun = addDays(t, -t.getDay() - 7)
-      return { start: sun, end: addDays(sun, 6) }
-    }
-    case 'Current Month':
-      return { start: new Date(t.getFullYear(), t.getMonth(), 1), end: new Date(t.getFullYear(), t.getMonth() + 1, 0) }
-    case 'Last Month':
-      return { start: new Date(t.getFullYear(), t.getMonth() - 1, 1), end: new Date(t.getFullYear(), t.getMonth(), 0) }
-    case 'This Year':
-      return { start: new Date(t.getFullYear(), 0, 1), end: new Date(t.getFullYear(), 11, 31) }
-    case 'Last Year':
-      return { start: new Date(t.getFullYear() - 1, 0, 1), end: new Date(t.getFullYear() - 1, 11, 31) }
-  }
+function daysForPreset(p: Preset): number {
+  return p === 'Last 15 days' ? 15 : p === 'Last 30 days' ? 30 : 7
+}
+function rangeForPreset(p: Preset): { start: Date; end: Date } {
+  const end = startOfDay(new Date())
+  return { start: addDays(end, -(daysForPreset(p) - 1)), end }
 }
 
 function formatLabel(start: Date | null, end: Date | null) {
@@ -81,8 +48,7 @@ function formatLabel(start: Date | null, end: Date | null) {
 
 // 42 cells (6 rows × 7), Sunday-first, filling the leading/trailing week with
 // the neighbouring months' days so the grid is always a full rectangle. Each
-// cell carries whether it belongs to the displayed month (spill days render
-// muted) — see the image reference.
+// cell carries whether it belongs to the displayed month (spill days render muted).
 function monthCells(year: number, month: number): { date: Date; inMonth: boolean }[] {
   const startOffset = new Date(year, month, 1).getDay() // 0 = Sunday
   const gridStart = new Date(year, month, 1 - startOffset)
@@ -95,45 +61,42 @@ function monthCells(year: number, month: number): { date: Date; inMonth: boolean
 export default function DateFilter() {
   const { rangeDays, setPeriod } = usePeriod()
   const [open, setOpen] = useState(false)
-  const [preset, setPreset] = useState<Preset | null>(null)
-  // Default selection preserves the dashboard's original "last 7 days ending
-  // today" window, so opening the picker doesn't shift what the KPIs mean.
-  const initEnd = startOfDay(new Date())
-  const initStart = addDays(initEnd, -6)
-  const [start, setStart] = useState<Date | null>(initStart)
-  const [end, setEnd] = useState<Date | null>(initEnd)
+  const [preset, setPreset] = useState<Preset>('Last 7 days')
+  const init = rangeForPreset('Last 7 days')
+  const [start, setStart] = useState<Date | null>(init.start)
+  const [end, setEnd] = useState<Date | null>(init.end)
   // Left month of the two-up calendar; the right month is always view + 1.
-  const [view, setView] = useState<Date>(new Date(initStart.getFullYear(), initStart.getMonth(), 1))
+  const [view, setView] = useState<Date>(new Date(init.start.getFullYear(), init.start.getMonth(), 1))
 
   const choosePreset = (p: Preset) => {
     setPreset(p)
+    if (p === 'Custom') {
+      setStart(null)
+      setEnd(null)
+      // Keep the current window length until the user picks a full range.
+      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
+      return
+    }
     const r = rangeForPreset(p)
-    const days = daysBetween(r.start, r.end)
+    const days = daysForPreset(p)
     setStart(r.start)
     setEnd(r.end)
     setView(new Date(r.start.getFullYear(), r.start.getMonth(), 1))
-    setPeriod(COMPARE_LABEL[p], days, prevPeriodLabel(r.start, days), r.end)
-  }
-
-  const reset = () => {
-    setPreset(null)
-    setStart(null)
-    setEnd(null)
-    setPeriod('vs prev period', rangeDays, '')
+    setPeriod(compareLabelFor(p, null), days, prevPeriodLabel(r.start, days), r.end)
   }
 
   const clickDay = (day: Date) => {
-    setPreset(null)
+    setPreset('Custom')
     if (!start || (start && end)) {
       setStart(day)
       setEnd(null)
-      setPeriod('vs prev period', rangeDays, '')
+      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
     } else if (day < start) {
       setStart(day)
     } else {
       setEnd(day)
       const days = daysBetween(start, day)
-      setPeriod(`vs prev ${days}d`, days, prevPeriodLabel(start, days), startOfDay(day))
+      setPeriod(compareLabelFor('Custom', days), days, prevPeriodLabel(start, days), startOfDay(day))
     }
   }
 
@@ -209,19 +172,16 @@ export default function DateFilter() {
         <>
           <div className="cf-backdrop" onClick={() => setOpen(false)} />
           <div className="cf-menu df-menu df-menu-2">
-            <div className="df-side">
+            <div className="df-presets">
               {PRESETS.map((p) => (
                 <button
                   key={p}
-                  className={`df-side-btn ${preset === p ? 'active' : ''}`}
+                  className={`df-preset ${preset === p ? 'active' : ''}`}
                   onClick={() => choosePreset(p)}
                 >
                   {p}
                 </button>
               ))}
-              <button className="df-reset" onClick={reset}>
-                Reset
-              </button>
             </div>
 
             <div className="df-cals">

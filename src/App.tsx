@@ -9,6 +9,9 @@ import PotentialRecovery, { type FleetMode } from './components/PotentialRecover
 import LiveOperations from './components/LiveOperations'
 import MarketMap from './components/MarketMap'
 import FullData, { type SubTab } from './components/FullData'
+import SyncBar from './components/SyncBar'
+import Toast from './components/Toast'
+import { type SyncState } from './components/ConnectFleetModal'
 import { PeriodContext, initialCompareRange } from './PeriodContext'
 
 export default function App() {
@@ -51,6 +54,49 @@ export default function App() {
     if (end) setRangeEnd(end)
   }
 
+  // ── Background fleet sync ──────────────────────────────────────────────
+  // Owned here (not in ConnectFleetModal) so it keeps running after the user
+  // leaves the connect flow, driving the top SyncBar across V1 and V2.
+  const [sync, setSync] = useState<SyncState | null>(null)
+  const [syncToast, setSyncToast] = useState(false)
+
+  // The sync fills over a window that scales with how much history was asked
+  // for — a full year of data takes much longer than a single month.
+  const SYNC_SECONDS: Record<number, number> = { 1: 5, 3: 10, 6: 30, 12: 90 }
+
+  const startSync = (months: number) => {
+    const t = new Date()
+    const target = new Date(t.getFullYear(), t.getMonth(), t.getDate())
+    const start = new Date(target.getFullYear(), target.getMonth() - months, target.getDate())
+    const seconds = SYNC_SECONDS[months] ?? 10
+    // 10 ticks/sec (100ms), so inc per tick = 100% / (seconds × 10).
+    const inc = 100 / (seconds * 10)
+    setSync({ progress: 0, start, target, done: false, inc })
+  }
+
+  // Tick progress to 100 at the pace set by `inc`. Deps are (active, done) —
+  // both stable across the per-tick progress updates, so the interval isn't
+  // torn down each tick.
+  useEffect(() => {
+    if (!sync || sync.done) return
+    const id = setInterval(() => {
+      setSync((s) => {
+        if (!s || s.done) return s
+        const next = Math.min(100, s.progress + s.inc)
+        return { ...s, progress: next, done: next >= 100 }
+      })
+    }, 100)
+    return () => clearInterval(id)
+  }, [sync === null, sync?.done])
+
+  // On completion: fire the toast, then retire the bar after a short beat.
+  useEffect(() => {
+    if (!sync?.done) return
+    setSyncToast(true)
+    const t = setTimeout(() => setSync(null), 4000)
+    return () => clearTimeout(t)
+  }, [sync?.done])
+
   return (
     <PeriodContext.Provider value={{ compareLabel, compareRange, rangeDays, rangeEnd, setPeriod }}>
       <div className="app">
@@ -58,6 +104,7 @@ export default function App() {
         <div className="main">
           <Header />
           <main className="content">
+            {sync && <SyncBar sync={sync} />}
             <Toolbar
               tab={dataTab}
               onTabChange={setDataTab}
@@ -69,6 +116,8 @@ export default function App() {
               deadheadMode={deadheadMode}
               onDeadheadModeChange={setDeadheadMode}
               deadheadLocked={deadheadLocked}
+              onStartSync={startSync}
+              sync={sync}
             />
             {dataTab === 'full' ? (
               <FullData
@@ -124,6 +173,12 @@ export default function App() {
             </div>
           </main>
         </div>
+        {syncToast && (
+          <Toast
+            message="Fleet connected — your operation is ready in the dashboard."
+            onDone={() => setSyncToast(false)}
+          />
+        )}
       </div>
     </PeriodContext.Provider>
   )

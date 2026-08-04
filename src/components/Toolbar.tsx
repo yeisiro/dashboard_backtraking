@@ -4,9 +4,8 @@ import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
 import DateFilter from './DateFilter'
 import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
-import ConnectFleetModal from './ConnectFleetModal'
+import ConnectFleetModal, { type SyncState } from './ConnectFleetModal'
 import RefreshButton from './RefreshButton'
-import Toast from './Toast'
 
 export type DataTab = 'overview' | 'full'
 
@@ -21,6 +20,8 @@ export default function Toolbar({
   deadheadMode = 'in-range',
   onDeadheadModeChange,
   deadheadLocked = false,
+  onStartSync,
+  sync,
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
@@ -32,9 +33,10 @@ export default function Toolbar({
   deadheadMode?: DeadheadMode
   onDeadheadModeChange?: (next: DeadheadMode) => void
   deadheadLocked?: boolean
+  onStartSync?: (months: number) => void
+  sync?: SyncState | null
 }) {
   const [showConnect, setShowConnect] = useState(false)
-  const [connectedToast, setConnectedToast] = useState(false)
 
   return (
     <div className="toolbar">
@@ -69,16 +71,8 @@ export default function Toolbar({
       {showConnect && (
         <ConnectFleetModal
           onClose={() => setShowConnect(false)}
-          onComplete={() => {
-            setShowConnect(false)
-            setConnectedToast(true)
-          }}
-        />
-      )}
-      {connectedToast && (
-        <Toast
-          message="Fleet connected — your operation is ready in the dashboard."
-          onDone={() => setConnectedToast(false)}
+          onStartSync={onStartSync}
+          sync={sync}
         />
       )}
     </div>

@@ -61,12 +61,24 @@ const CABINS: string[] = [
 ]
 
 const PERIODS = [
-  { key: '1m', label: '1 month' },
-  { key: '3m', label: '3 months' },
-  { key: '6m', label: '6 months' },
-  { key: '1y', label: '1 year' },
+  { key: '1m', label: '1 month', months: 1 },
+  { key: '3m', label: '3 months', months: 3 },
+  { key: '6m', label: '6 months', months: 6 },
+  { key: '1y', label: '1 year', months: 12 },
 ] as const
 type PeriodKey = (typeof PERIODS)[number]['key']
+
+// Live sync state, owned by App so it survives closing this modal and drives
+// the top SyncBar. Shared shape (structural typing avoids a circular import).
+export interface SyncState {
+  progress: number
+  start: Date // oldest date being synced (fixed)
+  target: Date // newest date = today (final end of the window)
+  done: boolean
+  inc: number // progress added per 100ms tick — scales the fill to the range size
+}
+
+const money2 = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 const STEP_LABELS = ['ELD', 'TMS', 'Cabins', 'Data range']
 function stepIndexOf(step: Step): number {
@@ -78,10 +90,14 @@ function stepIndexOf(step: Step): number {
 
 interface Props {
   onClose: () => void
-  onComplete?: () => void
+  // Kick off the background sync (App owns it). The modal then shows a live
+  // view the user can leave via "Continue in background".
+  onStartSync?: (months: number) => void
+  // Live sync state fed back from App while the modal stays open.
+  sync?: SyncState | null
 }
 
-export default function ConnectFleetModal({ onClose, onComplete }: Props) {
+export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props) {
   const [step, setStep] = useState<Step>('eld')
 
   // ELD + TMS selection/credentials.
@@ -95,10 +111,10 @@ export default function ConnectFleetModal({ onClose, onComplete }: Props) {
   const [cabinQuery, setCabinQuery] = useState('')
   const [selectedCabins, setSelectedCabins] = useState<string[]>([])
 
-  // Data range + sync progress.
+  // Data range (sync progress itself lives in App, read via the `sync` prop).
   const [range, setRange] = useState<PeriodKey>('3m')
   const [rangeOpen, setRangeOpen] = useState(false)
-  const [progress, setProgress] = useState(0)
+  const progress = sync?.progress ?? 0
 
   const eldComplete = !!eld && eld.fields.every((f) => (eldValues[f.key] ?? '').trim())
   const tmsFiltered = tmsList.filter((t) => t.name.toLowerCase().includes(tmsQuery.toLowerCase()))
@@ -116,22 +132,21 @@ export default function ConnectFleetModal({ onClose, onComplete }: Props) {
       allShownSelected ? p.filter((c) => !cabinsFiltered.includes(c)) : [...new Set([...p, ...cabinsFiltered])],
     )
 
-  // Sync playback — fill to 100% over ~5s, then finish with a toast.
-  useEffect(() => {
-    if (step !== 'syncing') return
-    setProgress(0)
-    const id = setInterval(() => {
-      setProgress((p) => Math.min(100, p + 2))
-    }, 100)
-    return () => clearInterval(id)
-  }, [step])
-
+  // Once the sync finishes, close the modal (App keeps the completion toast +
+  // the top bar). If the user left earlier via "Continue in background", the
+  // modal is already gone and this never runs.
   useEffect(() => {
     if (step === 'syncing' && progress >= 100) {
-      const t = setTimeout(() => (onComplete ? onComplete() : onClose()), 550)
+      const t = setTimeout(() => onClose(), 700)
       return () => clearTimeout(t)
     }
-  }, [step, progress, onComplete, onClose])
+  }, [step, progress, onClose])
+
+  // The newest date available so far — grows from `start` toward `target` as
+  // the back-to-front sync catches up.
+  const availableEnd = sync
+    ? new Date(sync.start.getTime() + (sync.target.getTime() - sync.start.getTime()) * (progress / 100))
+    : new Date()
 
   const syncMessage =
     progress < 25
@@ -385,14 +400,20 @@ export default function ConnectFleetModal({ onClose, onComplete }: Props) {
               <button className="btn-text" onClick={onClose}>
                 Cancel
               </button>
-              <button className="btn-pill" onClick={() => setStep('syncing')}>
+              <button
+                className="btn-pill"
+                onClick={() => {
+                  onStartSync?.(PERIODS.find((p) => p.key === range)?.months ?? 3)
+                  setStep('syncing')
+                }}
+              >
                 Start sync
               </button>
             </div>
           </>
         )}
 
-        {/* ---------- Syncing ---------- */}
+        {/* ---------- Syncing (live; leavable) ---------- */}
         {step === 'syncing' && (
           <div className="modal-body cfm-center cfm-sync">
             <h3 className="cfm-status-title">Syncing your operation</h3>
@@ -400,7 +421,16 @@ export default function ConnectFleetModal({ onClose, onComplete }: Props) {
             <div className="cfm-progress">
               <div className="cfm-progress-fill" style={{ width: `${progress}%` }} />
             </div>
-            <span className="cfm-progress-pct">{progress}%</span>
+            <span className="cfm-progress-pct">{Math.round(progress)}%</span>
+            {sync && (
+              <p className="cfm-sync-range">
+                We sync oldest → newest, so your dashboard already has data from{' '}
+                <b>{money2(sync.start)}</b> through <b>{money2(availableEnd)}</b>.
+              </p>
+            )}
+            <button className="cfm-go" onClick={onClose}>
+              Continue in background
+            </button>
           </div>
         )}
       </div>
