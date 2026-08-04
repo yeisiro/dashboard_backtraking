@@ -24,6 +24,7 @@ import { feature, mesh } from 'topojson-client'
 import type { FeatureCollection, MultiLineString } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
 import { costSegments, costGroupPct, type TripRow } from '../data'
+import RefreshButton from './RefreshButton'
 
 const money = (n: number) => '$' + Math.round(n).toLocaleString()
 
@@ -1333,9 +1334,12 @@ export default function TripDetailModal({
             </span>
             Operation details
           </span>
-          <button className="ld-close" onClick={onClose} aria-label="Close">
-            <X size={30} color="#9A9A9A" />
-          </button>
+          <div className="ld-head-actions">
+            <RefreshButton className="ld-refresh" label="Refresh trip data" size={18} />
+            <button className="ld-close" onClick={onClose} aria-label="Close">
+              <X size={30} color="#9A9A9A" />
+            </button>
+          </div>
         </div>
 
         <div className="ld-body">

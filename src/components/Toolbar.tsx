@@ -5,6 +5,8 @@ import TrucksFilter from './TrucksFilter'
 import DateFilter from './DateFilter'
 import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal from './ConnectFleetModal'
+import RefreshButton from './RefreshButton'
+import Toast from './Toast'
 
 export type DataTab = 'overview' | 'full'
 
@@ -32,6 +34,7 @@ export default function Toolbar({
   deadheadLocked?: boolean
 }) {
   const [showConnect, setShowConnect] = useState(false)
+  const [connectedToast, setConnectedToast] = useState(false)
 
   return (
     <div className="toolbar">
@@ -54,6 +57,7 @@ export default function Toolbar({
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
         <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
         <DateFilter />
+        <RefreshButton label="Refresh data" />
         {!(view === 'summary' && tab === 'overview') && tab !== 'full' && (
           <button className="btn-primary" onClick={() => setShowConnect(true)}>
             Connect Fleet
@@ -62,7 +66,21 @@ export default function Toolbar({
         )}
       </div>
 
-      {showConnect && <ConnectFleetModal onClose={() => setShowConnect(false)} />}
+      {showConnect && (
+        <ConnectFleetModal
+          onClose={() => setShowConnect(false)}
+          onComplete={() => {
+            setShowConnect(false)
+            setConnectedToast(true)
+          }}
+        />
+      )}
+      {connectedToast && (
+        <Toast
+          message="Fleet connected — your operation is ready in the dashboard."
+          onDone={() => setConnectedToast(false)}
+        />
+      )}
     </div>
   )
 }

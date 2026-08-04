@@ -1,11 +1,30 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
-import { usePeriod, compareLabelFor, prevPeriodLabel } from '../PeriodContext'
+import { usePeriod, prevPeriodLabel } from '../PeriodContext'
 
-const presets = ['Custom', 'Last 7 days', 'Last 15 days', 'Last 30 days'] as const
-type Preset = (typeof presets)[number]
+// Quick-pick presets shown in the left rail. Each maps to a concrete
+// start/end range computed off "today" (see rangeForPreset).
+const PRESETS = [
+  'This Week',
+  'Last Week',
+  'Current Month',
+  'Last Month',
+  'This Year',
+  'Last Year',
+] as const
+type Preset = (typeof PRESETS)[number]
 
-const dow = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+// Every preset compares against the equivalent window right before it.
+const COMPARE_LABEL: Record<Preset, string> = {
+  'This Week': 'vs prev week',
+  'Last Week': 'vs prev week',
+  'Current Month': 'vs prev month',
+  'Last Month': 'vs prev month',
+  'This Year': 'vs prev year',
+  'Last Year': 'vs prev year',
+}
+
+const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const monthName = (d: Date) => d.toLocaleString('en-US', { month: 'long' })
 const monthShort = (d: Date) => d.toLocaleString('en-US', { month: 'short' })
 
@@ -24,11 +43,31 @@ function sameDay(a: Date, b: Date) {
     a.getDate() === b.getDate()
   )
 }
+function daysBetween(start: Date, end: Date) {
+  return Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / 86400000) + 1
+}
 
+// Sunday-first range for each preset, anchored on today.
 function rangeForPreset(preset: Preset): { start: Date; end: Date } {
-  const end = startOfDay(new Date())
-  const days = preset === 'Last 15 days' ? 15 : preset === 'Last 30 days' ? 30 : 7
-  return { start: addDays(end, -(days - 1)), end }
+  const t = startOfDay(new Date())
+  switch (preset) {
+    case 'This Week': {
+      const sun = addDays(t, -t.getDay())
+      return { start: sun, end: addDays(sun, 6) }
+    }
+    case 'Last Week': {
+      const sun = addDays(t, -t.getDay() - 7)
+      return { start: sun, end: addDays(sun, 6) }
+    }
+    case 'Current Month':
+      return { start: new Date(t.getFullYear(), t.getMonth(), 1), end: new Date(t.getFullYear(), t.getMonth() + 1, 0) }
+    case 'Last Month':
+      return { start: new Date(t.getFullYear(), t.getMonth() - 1, 1), end: new Date(t.getFullYear(), t.getMonth(), 0) }
+    case 'This Year':
+      return { start: new Date(t.getFullYear(), 0, 1), end: new Date(t.getFullYear(), 11, 31) }
+    case 'Last Year':
+      return { start: new Date(t.getFullYear() - 1, 0, 1), end: new Date(t.getFullYear() - 1, 11, 31) }
+  }
 }
 
 function formatLabel(start: Date | null, end: Date | null) {
@@ -40,60 +79,123 @@ function formatLabel(start: Date | null, end: Date | null) {
   return `${monthShort(start)} ${start.getDate()} - ${monthShort(end)} ${end.getDate()}, ${end.getFullYear()}`
 }
 
+// 42 cells (6 rows × 7), Sunday-first, filling the leading/trailing week with
+// the neighbouring months' days so the grid is always a full rectangle. Each
+// cell carries whether it belongs to the displayed month (spill days render
+// muted) — see the image reference.
+function monthCells(year: number, month: number): { date: Date; inMonth: boolean }[] {
+  const startOffset = new Date(year, month, 1).getDay() // 0 = Sunday
+  const gridStart = new Date(year, month, 1 - startOffset)
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)
+    return { date: d, inMonth: d.getMonth() === month }
+  })
+}
+
 export default function DateFilter() {
   const { rangeDays, setPeriod } = usePeriod()
   const [open, setOpen] = useState(false)
-  const [preset, setPreset] = useState<Preset>('Last 7 days')
-  const init = rangeForPreset('Last 7 days')
-  const [start, setStart] = useState<Date | null>(init.start)
-  const [end, setEnd] = useState<Date | null>(init.end)
-  const [view, setView] = useState<Date>(new Date(init.end.getFullYear(), init.end.getMonth(), 1))
+  const [preset, setPreset] = useState<Preset | null>(null)
+  // Default selection preserves the dashboard's original "last 7 days ending
+  // today" window, so opening the picker doesn't shift what the KPIs mean.
+  const initEnd = startOfDay(new Date())
+  const initStart = addDays(initEnd, -6)
+  const [start, setStart] = useState<Date | null>(initStart)
+  const [end, setEnd] = useState<Date | null>(initEnd)
+  // Left month of the two-up calendar; the right month is always view + 1.
+  const [view, setView] = useState<Date>(new Date(initStart.getFullYear(), initStart.getMonth(), 1))
 
   const choosePreset = (p: Preset) => {
     setPreset(p)
-    if (p === 'Custom') {
-      setStart(null)
-      setEnd(null)
-      // Keep the current window length until the user picks a full range.
-      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
-      return
-    }
     const r = rangeForPreset(p)
-    const days = p === 'Last 15 days' ? 15 : p === 'Last 30 days' ? 30 : 7
+    const days = daysBetween(r.start, r.end)
     setStart(r.start)
     setEnd(r.end)
-    setView(new Date(r.end.getFullYear(), r.end.getMonth(), 1))
-    setPeriod(compareLabelFor(p, null), days, prevPeriodLabel(r.start, days), r.end)
+    setView(new Date(r.start.getFullYear(), r.start.getMonth(), 1))
+    setPeriod(COMPARE_LABEL[p], days, prevPeriodLabel(r.start, days), r.end)
+  }
+
+  const reset = () => {
+    setPreset(null)
+    setStart(null)
+    setEnd(null)
+    setPeriod('vs prev period', rangeDays, '')
   }
 
   const clickDay = (day: Date) => {
-    setPreset('Custom')
+    setPreset(null)
     if (!start || (start && end)) {
       setStart(day)
       setEnd(null)
-      setPeriod(compareLabelFor('Custom', null), rangeDays, '')
+      setPeriod('vs prev period', rangeDays, '')
     } else if (day < start) {
       setStart(day)
     } else {
       setEnd(day)
-      const days = Math.round((startOfDay(day).getTime() - startOfDay(start).getTime()) / 86400000) + 1
-      setPeriod(compareLabelFor('Custom', days), days, prevPeriodLabel(start, days), startOfDay(day))
+      const days = daysBetween(start, day)
+      setPeriod(`vs prev ${days}d`, days, prevPeriodLabel(start, days), startOfDay(day))
     }
   }
 
-  // Build the month grid (Monday-first).
-  const year = view.getFullYear()
-  const month = view.getMonth()
-  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells: (Date | null)[] = []
-  for (let i = 0; i < firstOffset; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
+  const inRange = (d: Date) => !!(start && end && d >= startOfDay(start) && d <= startOfDay(end))
+  const dayClass = (d: Date, inMonth: boolean) => {
+    const cls = ['df-day']
+    if (!inMonth) cls.push('spill')
+    if (inRange(d)) cls.push('in-range')
+    if (start && sameDay(d, start)) cls.push('endpoint', 'is-start')
+    if (end && sameDay(d, end)) cls.push('endpoint', 'is-end')
+    return cls.join(' ')
+  }
 
-  const inRange = (d: Date) =>
-    start && end && d >= startOfDay(start) && d <= startOfDay(end)
-  const isEndpoint = (d: Date) =>
-    (start && sameDay(d, start)) || (end && sameDay(d, end))
+  const renderMonth = (monthDate: Date, side: 'left' | 'right') => {
+    const y = monthDate.getFullYear()
+    const m = monthDate.getMonth()
+    return (
+      <div className="df-cal">
+        <div className="df-cal-head">
+          {side === 'left' ? (
+            <button
+              className="df-navbtn"
+              onClick={() => setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))}
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          ) : (
+            <span className="df-navbtn-spacer" />
+          )}
+          <span className="df-month">
+            {monthName(monthDate)} {y}
+          </span>
+          {side === 'right' ? (
+            <button
+              className="df-navbtn"
+              onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
+              aria-label="Next month"
+            >
+              <ChevronRight size={18} />
+            </button>
+          ) : (
+            <span className="df-navbtn-spacer" />
+          )}
+        </div>
+        <div className="df-grid">
+          {DOW.map((d, i) => (
+            <span className="df-dow" key={i}>
+              {d}
+            </span>
+          ))}
+          {monthCells(y, m).map(({ date, inMonth }, i) => (
+            <button key={i} className={dayClass(date, inMonth)} onClick={() => clickDay(date)}>
+              {date.getDate()}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const rightView = new Date(view.getFullYear(), view.getMonth() + 1, 1)
 
   return (
     <div className="cf">
@@ -106,62 +208,25 @@ export default function DateFilter() {
       {open && (
         <>
           <div className="cf-backdrop" onClick={() => setOpen(false)} />
-          <div className="cf-menu df-menu">
-            <div className="df-presets">
-              {presets.map((p) => (
+          <div className="cf-menu df-menu df-menu-2">
+            <div className="df-side">
+              {PRESETS.map((p) => (
                 <button
                   key={p}
-                  className={`df-preset ${preset === p ? 'active' : ''}`}
+                  className={`df-side-btn ${preset === p ? 'active' : ''}`}
                   onClick={() => choosePreset(p)}
                 >
                   {p}
                 </button>
               ))}
+              <button className="df-reset" onClick={reset}>
+                Reset
+              </button>
             </div>
 
-            <div className="df-cal-head">
-              <span className="df-month">
-                {monthName(view)} {year}
-              </span>
-              <div className="df-nav">
-                <button
-                  onClick={() => setView(new Date(year, month - 1, 1))}
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <button
-                  onClick={() => setView(new Date(year, month + 1, 1))}
-                  aria-label="Next month"
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="df-grid">
-              {dow.map((d, i) => (
-                <span className="df-dow" key={i}>
-                  {d}
-                </span>
-              ))}
-              {cells.map((d, i) =>
-                d ? (
-                  <button
-                    key={i}
-                    className={`df-day ${inRange(d) ? 'in-range' : ''} ${
-                      isEndpoint(d) ? 'endpoint' : ''
-                    } ${start && sameDay(d, start) ? 'is-start' : ''} ${
-                      end && sameDay(d, end) ? 'is-end' : ''
-                    }`}
-                    onClick={() => clickDay(d)}
-                  >
-                    {d.getDate()}
-                  </button>
-                ) : (
-                  <span key={i} className="df-day empty" />
-                ),
-              )}
+            <div className="df-cals">
+              {renderMonth(view, 'left')}
+              {renderMonth(rightView, 'right')}
             </div>
           </div>
         </>

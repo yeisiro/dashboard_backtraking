@@ -568,6 +568,28 @@ export const trips: Trip[] = [
   { id: '#4521', cls: 'C', alert: 'no current alert', alertTone: 'gray', route: 'CHI → MEM', leakLabel: 'Leak wk:', leakValue: '-$310', leakTone: 'red' },
 ]
 
+// Live Operation Monitoring → Inactive tab (V2 only). Trucks with no load
+// assigned that have been sitting still for a while. `idleHours` is the source
+// of truth — the "3d 6h" label and the severity tone are both derived from it
+// (see formatIdle / idleTone in LiveOperations), so a single number stays
+// consistent between how long it reads and how alarming it looks.
+// `lastLoadDays` powers the hover tooltip ("Last assigned load N days ago").
+export interface InactiveTruck {
+  id: string
+  cls: 'A' | 'B' | 'C' | 'D'
+  location: string // where it's parked right now
+  idleHours: number // hours since it last moved
+  lastLoadDays: number // days since its last assigned load
+}
+
+export const inactiveTrucks: InactiveTruck[] = [
+  { id: '#7712', cls: 'D', location: 'Laredo, TX yard', idleHours: 102, lastLoadDays: 15 },
+  { id: '#3390', cls: 'C', location: 'Memphis, TN hub', idleHours: 74, lastLoadDays: 9 },
+  { id: '#5088', cls: 'B', location: 'Kansas City, MO', idleHours: 53, lastLoadDays: 6 },
+  { id: '#2210', cls: 'A', location: 'Dallas, TX yard', idleHours: 32, lastLoadDays: 4 },
+  { id: '#6675', cls: 'C', location: 'Charlotte, NC', idleHours: 27, lastLoadDays: 3 },
+]
+
 // Full Data → Trips table. One row per completed trip. Values are numeric so the
 // table can sort exactly and format at render. Several fields are derived from a
 // smaller base (see TRIP_BASE + buildTrip) to keep the data honest and compact.
