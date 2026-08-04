@@ -115,7 +115,11 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
                         {t.alert}
                       </span>
                     </div>
-                    <div className="trip-route">{t.route}</div>
+                    <div className="trip-route">
+                      <span className="trip-load">{t.loadRef}</span>
+                      <span className="trip-route-sep">·</span>
+                      {t.route}
+                    </div>
                   </div>
                   <div className="trip-leak">
                     {t.leakLabel && <span style={{ color: 'var(--text-muted)' }}>{t.leakLabel} </span>}
