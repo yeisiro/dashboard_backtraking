@@ -6,6 +6,9 @@ import { usePeriod, compareLabelFor, prevPeriodLabel } from '../PeriodContext'
 const PRESETS = ['Custom', 'Last 7 days', 'Last 15 days', 'Last 30 days'] as const
 type Preset = (typeof PRESETS)[number]
 
+// Longest range the backend will pull in one request.
+const MAX_DAYS = 31
+
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const monthName = (d: Date) => d.toLocaleString('en-US', { month: 'long' })
 const monthShort = (d: Date) => d.toLocaleString('en-US', { month: 'short' })
@@ -65,11 +68,13 @@ export default function DateFilter() {
   const init = rangeForPreset('Last 7 days')
   const [start, setStart] = useState<Date | null>(init.start)
   const [end, setEnd] = useState<Date | null>(init.end)
+  const [error, setError] = useState<string | null>(null)
   // Left month of the two-up calendar; the right month is always view + 1.
   const [view, setView] = useState<Date>(new Date(init.start.getFullYear(), init.start.getMonth(), 1))
 
   const choosePreset = (p: Preset) => {
     setPreset(p)
+    setError(null)
     if (p === 'Custom') {
       setStart(null)
       setEnd(null)
@@ -88,14 +93,24 @@ export default function DateFilter() {
   const clickDay = (day: Date) => {
     setPreset('Custom')
     if (!start || (start && end)) {
+      // Starting a fresh selection — clear any previous over-limit warning.
+      setError(null)
       setStart(day)
       setEnd(null)
       setPeriod(compareLabelFor('Custom', null), rangeDays, '')
     } else if (day < start) {
+      setError(null)
       setStart(day)
     } else {
-      setEnd(day)
       const days = daysBetween(start, day)
+      if (days > MAX_DAYS) {
+        // Over the limit: keep the start pinned, don't apply the range, and tell
+        // the user why nothing changed.
+        setError(`Your selection is ${days} days. You can only pull up to ${MAX_DAYS} consecutive days at a time.`)
+        return
+      }
+      setError(null)
+      setEnd(day)
       setPeriod(compareLabelFor('Custom', days), days, prevPeriodLabel(start, days), startOfDay(day))
     }
   }
@@ -188,6 +203,12 @@ export default function DateFilter() {
               {renderMonth(view, 'left')}
               {renderMonth(rightView, 'right')}
             </div>
+
+            {error && (
+              <p className="df-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
         </>
       )}

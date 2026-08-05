@@ -848,6 +848,18 @@ button {
   display: flex;
   gap: 30px;
 }
+.df-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(242, 88, 93, 0.1);
+  border: 1px solid rgba(242, 88, 93, 0.35);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 600;
+}
 .df-cal {
   width: 280px;
 }
