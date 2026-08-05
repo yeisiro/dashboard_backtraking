@@ -551,7 +551,7 @@ export const planFixes: Recommendation[] = [
 
 export interface Trip {
   id: string
-  cls: 'C' | 'D'
+  cls: 'A' | 'B' | 'C' | 'D'
   loadRef: string // load id of the trip currently being executed
   alert: string
   alertTone: Tone
@@ -561,35 +561,94 @@ export interface Trip {
   leakTone: Tone
 }
 
-export const trips: Trip[] = [
-  { id: '#4521', cls: 'D', loadRef: '0335922', alert: 'Off-route now (I-30)', alertTone: 'orange', route: 'ATL → DAL', leakLabel: 'Leak wk:', leakValue: '-$465', leakTone: 'red' },
-  { id: '#4521', cls: 'D', loadRef: '3476824', alert: 'Fuel outside corridor', alertTone: 'orange', route: 'JAX → NSH', leakLabel: 'Leak wk:', leakValue: '-$280', leakTone: 'red' },
-  { id: '#4521', cls: 'C', loadRef: '0366889', alert: 'Idle 28 min · MS hub', alertTone: 'yellow', route: 'MIA → HOU', leakLabel: 'Leak wk:', leakValue: '-$390', leakTone: 'red' },
-  { id: '#4521', cls: 'C', loadRef: '1180045', alert: 'HOS limit approaching', alertTone: 'yellow', route: 'CHI → ATL', leakLabel: '', leakValue: 'no leak yet', leakTone: 'gray' },
-  { id: '#4521', cls: 'C', loadRef: '4408117', alert: 'no current alert', alertTone: 'gray', route: 'CHI → MEM', leakLabel: 'Leak wk:', leakValue: '-$310', leakTone: 'red' },
+const FLEET_CLASSES: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+
+const ACTIVE_ROUTES = [
+  'ATL → DAL', 'JAX → NSH', 'MIA → HOU', 'CHI → ATL', 'CHI → MEM',
+  'LAX → PHX', 'SEA → PDX', 'DEN → SLC', 'KC → STL', 'CLT → JAX',
+  'DAL → HOU', 'IND → CHI', 'NSH → MEM', 'ORL → MIA', 'PHX → LAX',
+  'SLC → DEN', 'STL → KC', 'PDX → SEA', 'HOU → DAL', 'MEM → NSH',
+]
+const ACTIVE_ALERTS: Array<{ a: string; t: Tone }> = [
+  { a: 'Off-route now (I-30)', t: 'orange' },
+  { a: 'Fuel outside corridor', t: 'orange' },
+  { a: 'Idle 28 min · MS hub', t: 'yellow' },
+  { a: 'HOS limit approaching', t: 'yellow' },
+  { a: 'Detour · weather hold', t: 'yellow' },
+  { a: 'Hard brake event', t: 'orange' },
+  { a: 'no current alert', t: 'gray' },
 ]
 
+// 32 active trips — a realistic board. Generated deterministically off the
+// index so the list is stable across reloads.
+export const trips: Trip[] = Array.from({ length: 32 }, (_, i) => {
+  const alert = ACTIVE_ALERTS[i % ACTIVE_ALERTS.length]
+  const noLeak = alert.t === 'gray' && i % 3 === 0
+  const leak = 120 + ((i * 37) % 420)
+  return {
+    id: '#' + (4000 + i * 13),
+    cls: FLEET_CLASSES[i % 4],
+    loadRef: String(300000 + i * 40993).slice(-7).padStart(7, '0'),
+    alert: alert.a,
+    alertTone: alert.t,
+    route: ACTIVE_ROUTES[i % ACTIVE_ROUTES.length],
+    leakLabel: noLeak ? '' : 'Leak wk:',
+    leakValue: noLeak ? 'no leak yet' : '-$' + leak,
+    leakTone: noLeak ? 'gray' : 'red',
+  }
+})
+
 // Live Operation Monitoring → Inactive tab (V2 only). Trucks with no load
-// assigned that have been sitting still for a while. `idleHours` is the source
-// of truth — the "3d 6h" label and the severity tone are both derived from it
-// (see formatIdle / idleTone in LiveOperations), so a single number stays
-// consistent between how long it reads and how alarming it looks.
-// `lastLoadDays` powers the hover tooltip ("Last assigned load N days ago").
+// assigned. `unassignedDays` (days since a load was last assigned) is the
+// source of truth — it drives the displayed metric, the severity tone, and the
+// sort order (see LiveOperations), so a single number stays consistent.
 export interface InactiveTruck {
   id: string
   cls: 'A' | 'B' | 'C' | 'D'
   location: string // where it's parked right now
-  idleHours: number // hours since it last moved
-  lastLoadDays: number // days since its last assigned load
+  unassignedDays: number // days since a load was last assigned to this truck
 }
 
-export const inactiveTrucks: InactiveTruck[] = [
-  { id: '#7712', cls: 'D', location: 'Laredo, TX yard', idleHours: 102, lastLoadDays: 15 },
-  { id: '#3390', cls: 'C', location: 'Memphis, TN hub', idleHours: 74, lastLoadDays: 9 },
-  { id: '#5088', cls: 'B', location: 'Kansas City, MO', idleHours: 53, lastLoadDays: 6 },
-  { id: '#2210', cls: 'A', location: 'Dallas, TX yard', idleHours: 32, lastLoadDays: 4 },
-  { id: '#6675', cls: 'C', location: 'Charlotte, NC', idleHours: 27, lastLoadDays: 3 },
+const INACTIVE_LOCATIONS = [
+  'El Paso, TX', 'Laredo, TX yard', 'Fresno, CA', 'Memphis, TN hub', 'Savannah, GA',
+  'Kansas City, MO', 'Dallas, TX yard', 'Charlotte, NC', 'Columbus, OH', 'Reno, NV',
+  'Tucson, AZ', 'Boise, ID', 'Omaha, NE', 'Little Rock, AR', 'Toledo, OH',
+  'Fargo, ND', 'Mobile, AL', 'Spokane, WA', 'Amarillo, TX', 'Macon, GA',
 ]
+
+// 20 idle cabins with no load assigned. `unassignedDays` spreads across a
+// realistic range so the sort has something to chew on.
+export const inactiveTrucks: InactiveTruck[] = Array.from({ length: 20 }, (_, i) => ({
+  id: '#' + (1000 + i * 137),
+  cls: FLEET_CLASSES[i % 4],
+  location: INACTIVE_LOCATIONS[i % INACTIVE_LOCATIONS.length],
+  unassignedDays: 1 + ((i * 11) % 39),
+}))
+
+// ── Fleet connect / manage ────────────────────────────────────────────────
+// Sync windows offered when linking cabins, and the pool of cabins we
+// "discover" across a connected TMS + ELD. Shared by the connect wizard and
+// the manage-fleet view.
+export const SYNC_PERIODS = [
+  { key: '1m', label: '1 month', months: 1 },
+  { key: '3m', label: '3 months', months: 3 },
+  { key: '6m', label: '6 months', months: 6 },
+  { key: '1y', label: '1 year', months: 12 },
+] as const
+export type PeriodKey = (typeof SYNC_PERIODS)[number]['key']
+export const monthsForPeriod = (key: PeriodKey) => SYNC_PERIODS.find((p) => p.key === key)?.months ?? 3
+export const labelForPeriod = (key: PeriodKey) => SYNC_PERIODS.find((p) => p.key === key)?.label ?? key
+
+export const CABIN_POOL: string[] = [
+  '4', '7003', '2077', '7001', '7002',
+  ...Array.from({ length: 82 }, (_, i) => String(1000 + i * 17)),
+]
+
+// A cabin the operator has linked, with the history window we sync for it.
+export interface FleetCabin {
+  id: string
+  range: PeriodKey
+}
 
 // Full Data → Trips table. One row per completed trip. Values are numeric so the
 // table can sort exactly and format at render. Several fields are derived from a

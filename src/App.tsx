@@ -12,6 +12,7 @@ import FullData, { type SubTab } from './components/FullData'
 import SyncBar from './components/SyncBar'
 import Toast from './components/Toast'
 import { type SyncState } from './components/ConnectFleetModal'
+import { type FleetCabin, type PeriodKey, monthsForPeriod } from './data'
 import { PeriodContext, initialCompareRange } from './PeriodContext'
 
 export default function App() {
@@ -54,9 +55,10 @@ export default function App() {
     if (end) setRangeEnd(end)
   }
 
-  // ── Background fleet sync ──────────────────────────────────────────────
-  // Owned here (not in ConnectFleetModal) so it keeps running after the user
-  // leaves the connect flow, driving the top SyncBar across V1 and V2.
+  // ── Fleet + background sync ────────────────────────────────────────────
+  // The linked cabins (and each one's sync window) live here so the flip from
+  // "Connect Fleet" → "Manage Fleet" and the manage view survive across V1/V2.
+  const [fleet, setFleet] = useState<FleetCabin[]>([])
   const [sync, setSync] = useState<SyncState | null>(null)
   const [syncToast, setSyncToast] = useState(false)
 
@@ -64,7 +66,7 @@ export default function App() {
   // for — a full year of data takes much longer than a single month.
   const SYNC_SECONDS: Record<number, number> = { 1: 5, 3: 10, 6: 30, 12: 90 }
 
-  const startSync = (months: number) => {
+  const runSync = (months: number) => {
     const t = new Date()
     const target = new Date(t.getFullYear(), t.getMonth(), t.getDate())
     const start = new Date(target.getFullYear(), target.getMonth() - months, target.getDate())
@@ -73,6 +75,24 @@ export default function App() {
     const inc = 100 / (seconds * 10)
     setSync({ progress: 0, start, target, done: false, inc })
   }
+
+  // Add cabins to the fleet at a given window (dedupe by id, newest wins).
+  const addCabins = (cabinIds: string[], range: PeriodKey) => {
+    if (cabinIds.length === 0) return
+    setFleet((prev) => {
+      const map = new Map(prev.map((c) => [c.id, c]))
+      cabinIds.forEach((id) => map.set(id, { id, range }))
+      return [...map.values()]
+    })
+  }
+  // Connect wizard: link the chosen cabins and immediately start syncing them.
+  const linkCabins = (cabinIds: string[], range: PeriodKey) => {
+    addCabins(cabinIds, range)
+    runSync(monthsForPeriod(range))
+  }
+  const updateCabinRange = (id: string, range: PeriodKey) =>
+    setFleet((prev) => prev.map((c) => (c.id === id ? { ...c, range } : c)))
+  const removeCabin = (id: string) => setFleet((prev) => prev.filter((c) => c.id !== id))
 
   // Tick progress to 100 at the pace set by `inc`. Deps are (active, done) —
   // both stable across the per-tick progress updates, so the interval isn't
@@ -116,8 +136,13 @@ export default function App() {
               deadheadMode={deadheadMode}
               onDeadheadModeChange={setDeadheadMode}
               deadheadLocked={deadheadLocked}
-              onStartSync={startSync}
+              onStartSync={linkCabins}
               sync={sync}
+              fleet={fleet}
+              onUpdateCabinRange={updateCabinRange}
+              onRemoveCabin={removeCabin}
+              onAddCabins={addCabins}
+              onSyncFleet={runSync}
             />
             {dataTab === 'full' ? (
               <FullData

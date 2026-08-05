@@ -1,24 +1,24 @@
-import { useState } from 'react'
-import { ArrowUpRight, AlertTriangle, Truck, TrendingDown, Info, Clock, MapPin } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowUpRight, AlertTriangle, Truck, TrendingDown, Info, MapPin, ArrowUp, ArrowDown } from 'lucide-react'
 import { trips, inactiveTrucks, type Tone } from '../data'
 import EmptyState from './EmptyState'
 
-// "102" hours reads as "4d 6h" — days + hours is how a dispatcher thinks about
-// how long a truck has been sitting, not a raw hour count.
-function formatIdle(hours: number): string {
-  const d = Math.floor(hours / 24)
-  const h = hours % 24
-  if (d === 0) return `${h}h`
-  return h === 0 ? `${d}d` : `${d}d ${h}h`
+const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`
+
+// The longer a truck goes without a load assigned, the more it matters: a
+// couple of days is normal churn, a week is worth a look, two-plus weeks of a
+// truck earning nothing is a real problem.
+function unassignedTone(days: number): Extract<Tone, 'yellow' | 'orange' | 'red'> {
+  if (days >= 14) return 'red'
+  if (days >= 7) return 'orange'
+  return 'yellow'
 }
 
-// How alarming the idle is scales with how long it's been sitting: a day is
-// noise, two days is worth a look, three-plus days of a truck earning nothing
-// is a real problem.
-function idleTone(hours: number): Extract<Tone, 'yellow' | 'orange' | 'red'> {
-  if (hours >= 72) return 'red'
-  if (hours >= 48) return 'orange'
-  return 'yellow'
+// Absolute date a load was last assigned, for the exact-date hover tooltip.
+function sinceDate(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const TONE_COLOR: Record<'yellow' | 'orange' | 'red', string> = {
@@ -28,13 +28,22 @@ const TONE_COLOR: Record<'yellow' | 'orange' | 'red', string> = {
 }
 
 type LiveTab = 'active' | 'inactive'
+type SortDir = 'desc' | 'asc'
 
 export default function LiveOperations({ noData = false }: { noData?: boolean }) {
   const [tab, setTab] = useState<LiveTab>('active')
-  const longestIdle = inactiveTrucks.reduce((m, t) => Math.max(m, t.idleHours), 0)
+  // Sort the inactive list by time-without-a-load; default longest-first.
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const sortedInactive = useMemo(
+    () =>
+      [...inactiveTrucks].sort((a, b) =>
+        sortDir === 'desc' ? b.unassignedDays - a.unassignedDays : a.unassignedDays - b.unassignedDays,
+      ),
+    [sortDir],
+  )
 
   return (
-    <section className="card">
+    <section className="card live-card">
       <div className="live-head">
         <div className="title">
           <i className="dot green" />
@@ -86,6 +95,7 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
                 </span>
               </div>
 
+              <div className="live-list">
               {trips.map((t, i) => (
                 <div className="trip" key={i}>
                   <span className="truck-id">{t.id}</span>
@@ -129,52 +139,57 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
                   </div>
                 </div>
               ))}
+              </div>
             </>
           ) : (
             <>
               <div className="live-leak">
                 <span className="big">{inactiveTrucks.length}</span>
-                <span className="lbl">Trucks idle · no load</span>
-                <span className="hour" style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                  <Clock size={12} style={{ verticalAlign: '-1px' }} /> longest{' '}
-                  <span style={{ color: TONE_COLOR[idleTone(longestIdle)], fontWeight: 600 }}>
-                    {formatIdle(longestIdle)}
-                  </span>{' '}
-                  idle
-                </span>
+                <span className="lbl">Trucks with no load assigned</span>
+                <button
+                  className="live-sort"
+                  onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+                  aria-label="Toggle sort order by time since last load"
+                  title={sortDir === 'desc' ? 'Longest since last load first' : 'Shortest since last load first'}
+                >
+                  {sortDir === 'desc' ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
+                </button>
               </div>
 
-              {inactiveTrucks.map((t, i) => {
-                const tone = idleTone(t.idleHours)
-                return (
-                  <div className="trip" key={i}>
-                    <span className="truck-id">{t.id}</span>
-                    <span className={`class-badge ${t.cls.toLowerCase()}`}>
-                      <Truck size={11} />
-                      CLASS {t.cls}
-                    </span>
-                    <div className="trip-mid">
-                      <div className="trip-alert">
-                        <MapPin size={12} color="var(--text-muted)" />
-                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{t.location}</span>
-                        <span className="info-tip" tabIndex={0}>
-                          <Info size={12} color="var(--text-muted)" />
-                          <span className="info-tip-bubble" role="tooltip">
-                            Last assigned load {t.lastLoadDays} days ago
-                          </span>
-                        </span>
-                      </div>
-                      <div className="trip-route">Current location</div>
-                    </div>
-                    <div className="trip-leak">
-                      <span style={{ color: 'var(--text-muted)' }}>Idle </span>
-                      <span style={{ color: TONE_COLOR[tone], fontWeight: 600 }}>
-                        {formatIdle(t.idleHours)}
+              <div className="live-list">
+                {sortedInactive.map((t) => {
+                  const tone = unassignedTone(t.unassignedDays)
+                  return (
+                    <div className="trip" key={t.id}>
+                      <span className="truck-id">{t.id}</span>
+                      <span className={`class-badge ${t.cls.toLowerCase()}`}>
+                        <Truck size={11} />
+                        CLASS {t.cls}
                       </span>
+                      <div className="trip-mid">
+                        <div className="trip-alert">
+                          <MapPin size={12} color="var(--text-muted)" />
+                          <span style={{ color: 'var(--text)', fontWeight: 500 }}>{t.location}</span>
+                          <span className="info-tip" tabIndex={0}>
+                            <Info size={12} color="var(--text-muted)" />
+                            <span className="info-tip-bubble" role="tooltip">
+                              Last load assigned {sinceDate(t.unassignedDays)}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="trip-route">Current location</div>
+                      </div>
+                      <div className="trip-leak">
+                        <span style={{ color: 'var(--text-muted)' }}>Last Load </span>
+                        <span style={{ color: TONE_COLOR[tone], fontWeight: 600 }}>
+                          {plural(t.unassignedDays, 'day')}
+                        </span>
+                        <span style={{ color: 'var(--text-muted)' }}> ago</span>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </>
           )}
         </>

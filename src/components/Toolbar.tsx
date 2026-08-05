@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Settings2 } from 'lucide-react'
 import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
 import DateFilter from './DateFilter'
 import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal, { type SyncState } from './ConnectFleetModal'
+import ManageFleetModal from './ManageFleetModal'
 import RefreshButton from './RefreshButton'
+import { type FleetCabin, type PeriodKey } from '../data'
 
 export type DataTab = 'overview' | 'full'
 
@@ -22,6 +24,11 @@ export default function Toolbar({
   deadheadLocked = false,
   onStartSync,
   sync,
+  fleet = [],
+  onUpdateCabinRange,
+  onRemoveCabin,
+  onAddCabins,
+  onSyncFleet,
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
@@ -33,10 +40,17 @@ export default function Toolbar({
   deadheadMode?: DeadheadMode
   onDeadheadModeChange?: (next: DeadheadMode) => void
   deadheadLocked?: boolean
-  onStartSync?: (months: number) => void
+  onStartSync?: (cabinIds: string[], range: PeriodKey) => void
   sync?: SyncState | null
+  fleet?: FleetCabin[]
+  onUpdateCabinRange?: (id: string, range: PeriodKey) => void
+  onRemoveCabin?: (id: string) => void
+  onAddCabins?: (ids: string[], range: PeriodKey) => void
+  onSyncFleet?: (months: number) => void
 }) {
   const [showConnect, setShowConnect] = useState(false)
+  const [showManage, setShowManage] = useState(false)
+  const connected = fleet.length > 0
 
   return (
     <div className="toolbar">
@@ -61,10 +75,17 @@ export default function Toolbar({
         <DateFilter />
         <RefreshButton label="Refresh data" />
         {!(view === 'summary' && tab === 'overview') && tab !== 'full' && (
-          <button className="btn-primary" onClick={() => setShowConnect(true)}>
-            Connect Fleet
-            <Plus size={15} />
-          </button>
+          connected ? (
+            <button className="btn-primary" onClick={() => setShowManage(true)}>
+              Manage Fleet
+              <Settings2 size={15} />
+            </button>
+          ) : (
+            <button className="btn-primary" onClick={() => setShowConnect(true)}>
+              Connect Fleet
+              <Plus size={15} />
+            </button>
+          )
         )}
       </div>
 
@@ -73,6 +94,16 @@ export default function Toolbar({
           onClose={() => setShowConnect(false)}
           onStartSync={onStartSync}
           sync={sync}
+        />
+      )}
+      {showManage && (
+        <ManageFleetModal
+          onClose={() => setShowManage(false)}
+          fleet={fleet}
+          onUpdateRange={(id, range) => onUpdateCabinRange?.(id, range)}
+          onRemove={(id) => onRemoveCabin?.(id)}
+          onAddCabins={(ids, range) => onAddCabins?.(ids, range)}
+          onSync={(months) => onSyncFleet?.(months)}
         />
       )}
     </div>

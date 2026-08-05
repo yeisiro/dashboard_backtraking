@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowLeft, ChevronRight, ChevronDown, Search, Check } from 'lucide-react'
+import { CABIN_POOL, SYNC_PERIODS, type PeriodKey } from '../data'
 
 // End-to-end onboarding wizard: connect the ELD, then the TMS, link the cabins
 // we discover across both, pick how much history to pull, and watch it sync.
@@ -53,20 +54,10 @@ const eldList: Eld[] = [
   },
 ]
 
-// Cabins "discovered" across the connected TMS + ELD — the pool the Link step
-// lets the user pick from. Deterministic so the list is stable across renders.
-const CABINS: string[] = [
-  '4', '7003', '2077', '7001', '7002',
-  ...Array.from({ length: 82 }, (_, i) => String(1000 + i * 17)),
-]
-
-const PERIODS = [
-  { key: '1m', label: '1 month', months: 1 },
-  { key: '3m', label: '3 months', months: 3 },
-  { key: '6m', label: '6 months', months: 6 },
-  { key: '1y', label: '1 year', months: 12 },
-] as const
-type PeriodKey = (typeof PERIODS)[number]['key']
+// Cabins "discovered" across the connected TMS + ELD, and the sync windows on
+// offer, both shared with the manage-fleet view (see data.ts).
+const CABINS = CABIN_POOL
+const PERIODS = SYNC_PERIODS
 
 // Live sync state, owned by App so it survives closing this modal and drives
 // the top SyncBar. Shared shape (structural typing avoids a circular import).
@@ -90,9 +81,9 @@ function stepIndexOf(step: Step): number {
 
 interface Props {
   onClose: () => void
-  // Kick off the background sync (App owns it). The modal then shows a live
-  // view the user can leave via "Continue in background".
-  onStartSync?: (months: number) => void
+  // Link the chosen cabins at the chosen window and kick off the background
+  // sync (App owns both). The modal then shows a live view the user can leave.
+  onStartSync?: (cabinIds: string[], range: PeriodKey) => void
   // Live sync state fed back from App while the modal stays open.
   sync?: SyncState | null
 }
@@ -403,7 +394,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
               <button
                 className="btn-pill"
                 onClick={() => {
-                  onStartSync?.(PERIODS.find((p) => p.key === range)?.months ?? 3)
+                  onStartSync?.(selectedCabins, range)
                   setStep('syncing')
                 }}
               >
