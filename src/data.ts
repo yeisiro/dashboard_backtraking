@@ -659,17 +659,19 @@ export const CABIN_POOL: string[] = [
   ...Array.from({ length: 82 }, (_, i) => String(1000 + i * 17)),
 ]
 
-// A cabin the operator has linked, with the history window we sync for it.
+// A cabin the operator has linked, with the date window already synced for it
+// (drives the "Synced Feb 5 – Aug 5" readout and the on-demand re-sync).
 export interface FleetCabin {
   id: string
-  range: PeriodKey
+  syncedFrom: Date // oldest date synced
+  syncedTo: Date // newest date synced
 }
 
-// A driver the operator has linked, with the history window we sync for them.
+// A driver the operator has linked. Drivers carry no sync window — linking just
+// adds them to the DB.
 export interface FleetDriver {
   id: string
   name: string
-  range: PeriodKey
 }
 
 // Integration providers, shared by the connect wizard and the manage

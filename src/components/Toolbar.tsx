@@ -31,14 +31,11 @@ export default function Toolbar({
   fleet = [],
   drivers = [],
   integrations = [],
-  onUpdateCabinRange,
+  onSyncCabins,
   onRemoveCabin,
-  onAddCabins,
-  onUpdateDriverRange,
-  onRemoveDriver,
   onAddDrivers,
+  onRemoveDriver,
   onRemoveIntegration,
-  onSyncFleet,
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
@@ -58,14 +55,11 @@ export default function Toolbar({
   fleet?: FleetCabin[]
   drivers?: FleetDriver[]
   integrations?: Integration[]
-  onUpdateCabinRange?: (id: string, range: PeriodKey) => void
+  onSyncCabins?: (ids: string[], from: Date, to: Date) => void
   onRemoveCabin?: (id: string) => void
-  onAddCabins?: (ids: string[], range: PeriodKey) => void
-  onUpdateDriverRange?: (id: string, range: PeriodKey) => void
+  onAddDrivers?: (ids: string[]) => void
   onRemoveDriver?: (id: string) => void
-  onAddDrivers?: (ids: string[], range: PeriodKey) => void
   onRemoveIntegration?: (type: 'eld' | 'tms', name: string) => void
-  onSyncFleet?: (months: number) => void
 }) {
   const [showConnect, setShowConnect] = useState(false)
   const [showManage, setShowManage] = useState(false)
@@ -125,15 +119,12 @@ export default function Toolbar({
           fleet={fleet}
           drivers={drivers}
           integrations={integrations}
-          onUpdateCabinRange={(id, range) => onUpdateCabinRange?.(id, range)}
+          onSyncCabins={(ids, from, to) => onSyncCabins?.(ids, from, to)}
           onRemoveCabin={(id) => onRemoveCabin?.(id)}
-          onAddCabins={(ids, range) => onAddCabins?.(ids, range)}
-          onUpdateDriverRange={(id, range) => onUpdateDriverRange?.(id, range)}
+          onAddDrivers={(ids) => onAddDrivers?.(ids)}
           onRemoveDriver={(id) => onRemoveDriver?.(id)}
-          onAddDrivers={(ids, range) => onAddDrivers?.(ids, range)}
           onRemoveIntegration={(type, name) => onRemoveIntegration?.(type, name)}
           onConnectIntegration={(type, name, mono) => onConnectIntegration?.(type, name, mono)}
-          onSync={(months) => onSyncFleet?.(months)}
         />
       )}
     </div>

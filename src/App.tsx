@@ -77,43 +77,45 @@ export default function App() {
   // for — a full year of data takes much longer than a single month.
   const SYNC_SECONDS: Record<number, number> = { 1: 5, 3: 10, 6: 30, 12: 90 }
 
-  const runSync = (months: number) => {
-    const t = new Date()
-    const target = new Date(t.getFullYear(), t.getMonth(), t.getDate())
-    const start = new Date(target.getFullYear(), target.getMonth() - months, target.getDate())
-    const seconds = SYNC_SECONDS[months] ?? 10
-    // 10 ticks/sec (100ms), so inc per tick = 100% / (seconds × 10).
-    const inc = 100 / (seconds * 10)
-    setSync({ progress: 0, start, target, done: false, inc })
+  const startOfDayLocal = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const monthsBetween = (from: Date, to: Date) =>
+    Math.max(1, Math.round((to.getTime() - from.getTime()) / (30 * 86400000)))
+
+  // Run the sync bar for an explicit [from, to] window (duration scales with
+  // how many months of history the window spans).
+  const runSyncRange = (from: Date, to: Date) => {
+    const months = monthsBetween(from, to)
+    const seconds = SYNC_SECONDS[months] ?? 30
+    const inc = 100 / (seconds * 10) // 10 ticks/sec
+    setSync({ progress: 0, start: from, target: to, done: false, inc })
   }
 
-  // Add cabins to the fleet at a given window (dedupe by id, newest wins).
-  const addCabins = (cabinIds: string[], range: PeriodKey) => {
+  // Sync (or re-sync) the given cabins for a date window: upsert their synced
+  // coverage and kick off the background sync. Used by the connect wizard, the
+  // manage "Add cabins" flow, and the on-demand per-cabin sync.
+  const syncCabins = (cabinIds: string[], from: Date, to: Date) => {
     if (cabinIds.length === 0) return
     setFleet((prev) => {
       const map = new Map(prev.map((c) => [c.id, c]))
-      cabinIds.forEach((id) => map.set(id, { id, range }))
+      cabinIds.forEach((id) => map.set(id, { id, syncedFrom: from, syncedTo: to }))
       return [...map.values()]
     })
+    runSyncRange(from, to)
   }
-  const updateCabinRange = (id: string, range: PeriodKey) =>
-    setFleet((prev) => prev.map((c) => (c.id === id ? { ...c, range } : c)))
   const removeCabin = (id: string) => setFleet((prev) => prev.filter((c) => c.id !== id))
 
-  // Add drivers to the fleet at a given window (dedupe by id, newest wins).
-  const addDrivers = (driverIds: string[], range: PeriodKey) => {
+  // Drivers carry no sync window — linking just adds them to the DB.
+  const addDrivers = (driverIds: string[]) => {
     if (driverIds.length === 0) return
     setDrivers((prev) => {
       const map = new Map(prev.map((d) => [d.id, d]))
       driverIds.forEach((id) => {
         const name = DRIVER_POOL.find((p) => p.id === id)?.name ?? id
-        map.set(id, { id, name, range })
+        map.set(id, { id, name })
       })
       return [...map.values()]
     })
   }
-  const updateDriverRange = (id: string, range: PeriodKey) =>
-    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, range } : d)))
   const removeDriver = (id: string) => setDrivers((prev) => prev.filter((d) => d.id !== id))
 
   // Track a connected integration (dedupe by type+name).
@@ -124,11 +126,15 @@ export default function App() {
   const removeIntegration = (type: 'eld' | 'tms', name: string) =>
     setIntegrations((prev) => prev.filter((i) => !(i.type === type && i.name === name)))
 
-  // Connect wizard: link the chosen cabins + drivers and start syncing them.
+  // Connect wizard: link the chosen cabins (over the picked window) + drivers,
+  // and start syncing the cabins.
   const linkFleet = (cabinIds: string[], driverIds: string[], range: PeriodKey) => {
-    addCabins(cabinIds, range)
-    addDrivers(driverIds, range)
-    if (cabinIds.length > 0 || driverIds.length > 0) runSync(monthsForPeriod(range))
+    addDrivers(driverIds)
+    if (cabinIds.length > 0) {
+      const to = startOfDayLocal(new Date())
+      const from = new Date(to.getFullYear(), to.getMonth() - monthsForPeriod(range), to.getDate())
+      syncCabins(cabinIds, from, to)
+    }
   }
 
   // Tick progress to 100 at the pace set by `inc`. Deps are (active, done) —
@@ -181,14 +187,11 @@ export default function App() {
               fleet={fleet}
               drivers={drivers}
               integrations={integrations}
-              onUpdateCabinRange={updateCabinRange}
+              onSyncCabins={syncCabins}
               onRemoveCabin={removeCabin}
-              onAddCabins={addCabins}
-              onUpdateDriverRange={updateDriverRange}
-              onRemoveDriver={removeDriver}
               onAddDrivers={addDrivers}
+              onRemoveDriver={removeDriver}
               onRemoveIntegration={removeIntegration}
-              onSyncFleet={runSync}
             />
             {dataTab === 'full' ? (
               <FullData

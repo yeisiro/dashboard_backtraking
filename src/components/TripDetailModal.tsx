@@ -1396,13 +1396,22 @@ export default function TripDetailModal({
                 caption="Timing"
               />
             </div>
+            <div className="ld-loadid ld-loadid-first">
+              <span className="ld-loadid-icon">
+                <Truck size={22} color="#7CC8CF" />
+              </span>
+              <div className="ld-loadid-txt">
+                <div className="ld-loadid-val">{trip.truck}</div>
+                <div className="ld-loadid-sub">Truck</div>
+              </div>
+            </div>
             <div className="ld-loadid">
               <span className="ld-loadid-icon">
                 <User size={22} color="#7CC8CF" />
               </span>
               <div className="ld-loadid-txt">
                 <div className="ld-loadid-val">{trip.driver}</div>
-                <div className="ld-loadid-sub">{trip.truck} · Driver</div>
+                <div className="ld-loadid-sub">Driver</div>
               </div>
             </div>
             <div className="ld-loadid">
