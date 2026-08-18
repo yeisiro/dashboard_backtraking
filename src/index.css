@@ -2168,6 +2168,18 @@ button {
   font-size: 12px;
   color: var(--text-muted);
 }
+/* live value preview (e.g. the built API URL) */
+.cfm-hint {
+  display: block;
+  margin-top: 7px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.cfm-hint b {
+  color: var(--blue);
+  font-weight: 600;
+}
 
 /* connected integration detail */
 .cfm-unlink {
@@ -5453,8 +5465,8 @@ button {
 .ld-strip {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 22px;
+  flex-wrap: nowrap;
+  gap: 14px;
   background: #05080B;
   border-radius: 16px;
   padding: 16px 20px;
@@ -5472,12 +5484,13 @@ button {
   font-size: 18px;
   flex: 0 0 auto;
 }
-.ld-hub-name { font-size: 20px; font-weight: 600; color: #E6E6E6; }
+.ld-hub { flex: 0 0 auto; }
+.ld-hub-name { font-size: 20px; font-weight: 600; color: #E6E6E6; white-space: nowrap; }
 .ld-hub-sub { font-size: 15px; color: #686868; margin-top: 5px; }
 .ld-route-mid {
   position: relative;
-  flex: 0 1 170px;
-  min-width: 110px;
+  flex: 0 1 56px;
+  min-width: 32px;
   display: flex;
   align-items: center;
 }
@@ -5515,14 +5528,14 @@ button {
 }
 /* Route adherence / timing — a colored icon plus its status, read directly
    off the strip with no hover or click needed. */
-.ld-adh-icons { display: flex; align-items: center; gap: 22px; }
-.ld-adh-item { display: flex; align-items: center; gap: 12px; }
+.ld-adh-icons { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.ld-adh-item { display: flex; align-items: center; gap: 10px; }
 .ld-adh-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -5534,10 +5547,11 @@ button {
 .ld-loadid {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 4px 12px 4px 4px;
   background: #162028;
   border-radius: 100px;
+  flex: 0 0 auto;
 }
 /* Only the first of the trailing card cluster pushes the group right; the rest
    follow with the strip's own gap so they stay grouped instead of spreading. */
@@ -5545,8 +5559,8 @@ button {
   margin-left: auto;
 }
 .ld-loadid-icon {
-  width: 47px;
-  height: 47px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #05080B;
   display: flex;
@@ -5554,9 +5568,10 @@ button {
   justify-content: center;
   flex: 0 0 auto;
 }
-.ld-loadid-txt { display: flex; flex-direction: column; }
-.ld-loadid-val { font-size: 16px; font-weight: 500; color: #E6E6E6; }
-.ld-loadid-sub { font-size: 13px; color: #686868; }
+.ld-loadid-txt { display: flex; flex-direction: column; white-space: nowrap; }
+.ld-loadid-val { font-size: 15px; font-weight: 500; color: #E6E6E6; }
+.ld-loadid-sub { font-size: 12px; color: #686868; }
+.ld-status-pill { flex: 0 0 auto; white-space: nowrap; }
 
 /* Top area layout — the Earnings card spans both left columns as a full-width
    row above Cost Summary/Fuel/Miles, which pushes the donut (Cost Summary)

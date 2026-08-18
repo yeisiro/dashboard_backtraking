@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowLeft, ChevronRight, ChevronDown, Search, Check } from 'lucide-react'
-import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, type PeriodKey } from '../data'
+import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, ELD_PROVIDERS, TMS_PROVIDERS, type PeriodKey, type Provider } from '../data'
 
 // End-to-end onboarding wizard: connect the ELD, then the TMS, link the cabins
 // we discover across both, pick how much history to pull, and watch it sync.
@@ -8,51 +8,10 @@ import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, type PeriodKey } from '../data'
 // step fills a progress bar over ~5s and finishes with a completion toast.
 type Step = 'eld' | 'eld-cred' | 'tms' | 'tms-cred' | 'cabins' | 'drivers' | 'period' | 'syncing'
 
-interface Tms {
-  name: string
-  mono: string
-}
-const tmsList: Tms[] = [
-  { name: 'Datatruck', mono: 'Da' },
-  { name: 'Alvys', mono: 'Al' },
-  { name: 'McLeod LoadMaster', mono: 'Mc' },
-  { name: 'Trimble TMW Suite', mono: 'Tr' },
-  { name: 'MercuryGate', mono: 'MG' },
-  { name: 'Project44', mono: 'P4' },
-]
-
-interface EldField {
-  key: string
-  label: string
-  placeholder: string
-  secret?: boolean
-}
-interface Eld {
-  name: string
-  mono: string
-  fields: EldField[]
-}
-const eldList: Eld[] = [
-  {
-    name: 'Samsara',
-    mono: 'Sa',
-    fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }],
-  },
-  {
-    name: 'Geotab',
-    mono: 'Ge',
-    fields: [
-      { key: 'user', label: 'User', placeholder: 'Enter the User', secret: true },
-      { key: 'database', label: 'Database', placeholder: 'Enter the Database' },
-      { key: 'password', label: 'Password', placeholder: 'Enter the Password', secret: true },
-    ],
-  },
-  {
-    name: 'Motive',
-    mono: 'Mo',
-    fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }],
-  },
-]
+// Provider metadata + credential fields live in data.ts so the connect wizard
+// and the manage → Integrations tab ask for exactly the same inputs.
+const eldList = ELD_PROVIDERS
+const tmsList = TMS_PROVIDERS
 
 // Cabins "discovered" across the connected TMS + ELD, and the sync windows on
 // offer, both shared with the manage-fleet view (see data.ts).
@@ -95,10 +54,10 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
   const [step, setStep] = useState<Step>('eld')
 
   // ELD + TMS selection/credentials.
-  const [eld, setEld] = useState<Eld | null>(null)
+  const [eld, setEld] = useState<Provider | null>(null)
   const [eldValues, setEldValues] = useState<Record<string, string>>({})
-  const [tms, setTms] = useState<Tms | null>(null)
-  const [apiKey, setApiKey] = useState('')
+  const [tms, setTms] = useState<Provider | null>(null)
+  const [tmsValues, setTmsValues] = useState<Record<string, string>>({})
   const [tmsQuery, setTmsQuery] = useState('')
 
   // Cabins linking.
@@ -129,6 +88,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
   const progress = sync?.progress ?? 0
 
   const eldComplete = !!eld && eld.fields.every((f) => (eldValues[f.key] ?? '').trim())
+  const tmsComplete = !!tms && tms.fields.every((f) => (tmsValues[f.key] ?? '').trim())
   const tmsFiltered = tmsList.filter((t) => t.name.toLowerCase().includes(tmsQuery.toLowerCase()))
   const cabinsFiltered = useMemo(
     () => CABINS.filter((c) => c.toLowerCase().includes(cabinQuery.toLowerCase())),
@@ -254,7 +214,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                     onChange={(ev) => setEldValues((v) => ({ ...v, [f.key]: ev.target.value }))}
                   />
                 </div>
-                <span className="cfm-oblig">Obligatory</span>
+                <span className="cfm-oblig">Required</span>
               </div>
             ))}
             <button
@@ -289,7 +249,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                   className="cfm-tms-card"
                   onClick={() => {
                     setTms(t)
-                    setApiKey('')
+                    setTmsValues({})
                     setStep('tms-cred')
                   }}
                 >
@@ -309,21 +269,30 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
               <span className="cfm-tms-logo sm">{tms.mono}</span>
               <span>Connect {tms.name}</span>
             </div>
-            <p className="cfm-sub">Enter your {tms.name} API key to sync trucks, lanes, and loads.</p>
-            <div className="field">
-              <label>API key</label>
-              <div className="field-input">
-                <input
-                  placeholder="Enter the API key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
+            <p className="cfm-sub">Enter your {tms.name} credentials to sync trucks, lanes, and loads.</p>
+            {tms.fields.map((f) => (
+              <div className="field" key={f.key}>
+                <label>{f.label}</label>
+                <div className="field-input">
+                  <input
+                    type={f.secret ? 'password' : 'text'}
+                    placeholder={f.placeholder}
+                    value={tmsValues[f.key] ?? ''}
+                    onChange={(e) => setTmsValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  />
+                </div>
+                {f.hintTemplate ? (
+                  <span className="cfm-hint">
+                    Your API URL: <b>{f.hintTemplate.replace('{v}', (tmsValues[f.key] || '[company]').trim() || '[company]')}</b>
+                  </span>
+                ) : (
+                  <span className="cfm-oblig">Required</span>
+                )}
               </div>
-              <span className="cfm-oblig">Obligatory</span>
-            </div>
+            ))}
             <button
               className="cfm-primary"
-              disabled={!apiKey.trim()}
+              disabled={!tmsComplete}
               onClick={() => {
                 onConnectIntegration?.('tms', tms.name, tms.mono)
                 setStep('cabins')

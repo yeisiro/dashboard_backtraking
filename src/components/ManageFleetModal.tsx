@@ -320,7 +320,13 @@ export default function ManageFleetModal({
                       <div className="field-input">
                         <input type={f.secret ? 'password' : 'text'} placeholder={f.placeholder} value={intValues[f.key] ?? ''} onChange={(e) => setIntValues((v) => ({ ...v, [f.key]: e.target.value }))} />
                       </div>
-                      <span className="cfm-oblig">Obligatory</span>
+                      {f.hintTemplate ? (
+                        <span className="cfm-hint">
+                          Your API URL: <b>{f.hintTemplate.replace('{v}', (intValues[f.key] || '[company]').trim() || '[company]')}</b>
+                        </span>
+                      ) : (
+                        <span className="cfm-oblig">Required</span>
+                      )}
                     </div>
                   ))}
                   <button

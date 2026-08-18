@@ -681,6 +681,9 @@ export interface IntegrationField {
   label: string
   placeholder: string
   secret?: boolean
+  // Live preview of what the field's value builds into, e.g. the full API URL.
+  // `{v}` is replaced with the current input (or a bracketed hint when empty).
+  hintTemplate?: string
 }
 export interface Provider {
   name: string
@@ -701,7 +704,23 @@ export const ELD_PROVIDERS: Provider[] = [
   { name: 'Motive', mono: 'Mo', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
 ]
 export const TMS_PROVIDERS: Provider[] = [
-  { name: 'Datatruck', mono: 'Da', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  {
+    name: 'Datatruck',
+    mono: 'Da',
+    // Datatruck: the operator gives us the API token and their assigned company
+    // subdomain — we build the full endpoint from the subdomain internally. The
+    // hint shows exactly how their API URL ends up, so it's clear the subdomain
+    // is the company Datatruck assigned them, not an arbitrary name.
+    fields: [
+      { key: 'token', label: 'API token', placeholder: 'Enter the API token', secret: true },
+      {
+        key: 'subdomain',
+        label: 'Company subdomain',
+        placeholder: 'your-company',
+        hintTemplate: 'https://{v}.datatruck.io/api/v1/openapi',
+      },
+    ],
+  },
   { name: 'Alvys', mono: 'Al', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
   { name: 'McLeod LoadMaster', mono: 'Mc', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
   { name: 'Trimble TMW Suite', mono: 'Tr', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
