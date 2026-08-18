@@ -2067,6 +2067,57 @@ button {
   color: var(--text-dim);
   white-space: nowrap;
 }
+.mf-syncing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-weight: 600;
+}
+.mf-crow.processing {
+  background: rgba(46, 230, 166, 0.05);
+}
+/* In-modal sync progress bar */
+.mf-progress {
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid rgba(46, 230, 166, 0.25);
+}
+.mf-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.mf-progress-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.mf-progress-lbl .refresh-spin {
+  color: var(--green);
+}
+.mf-progress-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green);
+}
+.mf-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.mf-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--green-dim), var(--green));
+  transition: width 0.12s linear;
+}
 .cfm-add-btn {
   display: inline-flex;
   align-items: center;

@@ -116,6 +116,7 @@ export default function Toolbar({
       {showManage && (
         <ManageFleetModal
           onClose={() => setShowManage(false)}
+          sync={sync}
           fleet={fleet}
           drivers={drivers}
           integrations={integrations}

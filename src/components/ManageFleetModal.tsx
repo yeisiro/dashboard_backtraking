@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowLeft, Search, Check, Trash2, Plus, Cable, Truck, User, RefreshCw } from 'lucide-react'
+import { type SyncState } from './ConnectFleetModal'
 import {
   CABIN_POOL,
   DRIVER_POOL,
@@ -76,6 +77,7 @@ type Sub = null | 'add-cabin' | 'add-driver' | 'add-integration'
 
 interface Props {
   onClose: () => void
+  sync?: SyncState | null
   fleet: FleetCabin[]
   drivers: FleetDriver[]
   integrations: Integration[]
@@ -89,6 +91,7 @@ interface Props {
 
 export default function ManageFleetModal({
   onClose,
+  sync,
   fleet,
   drivers,
   integrations,
@@ -101,6 +104,16 @@ export default function ManageFleetModal({
 }: Props) {
   const [tab, setTab] = useState<Tab>('integrations')
   const [sub, setSub] = useState<Sub>(null)
+
+  // Cabins currently being processed by the in-modal sync (so we can show a
+  // progress readout on their rows without closing the modal). Cleared once the
+  // background sync finishes and retires.
+  const [syncingIds, setSyncingIds] = useState<string[]>([])
+  const syncActive = !!sync && !sync.done
+  const syncPct = Math.round(sync?.progress ?? 0)
+  useEffect(() => {
+    if (sync === null) setSyncingIds([])
+  }, [sync])
 
   const defFrom = toISO(subMonths(startOfToday(), 3))
   const defTo = toISO(startOfToday())
@@ -117,6 +130,7 @@ export default function ManageFleetModal({
     setSyncSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const doSyncSelected = () => {
     const { from, to } = resolveRange(rangeMode, customFrom, customTo)
+    setSyncingIds(syncSel)
     onSyncCabins(syncSel, from, to)
     setSyncSel([])
   }
@@ -219,6 +233,7 @@ export default function ManageFleetModal({
                   disabled={addCabinSel.length === 0}
                   onClick={() => {
                     const { from, to } = resolveRange(addRangeMode, addFrom, addTo)
+                    setSyncingIds(addCabinSel)
                     onSyncCabins(addCabinSel, from, to)
                     setAddCabinSel([])
                     setSub(null)
@@ -425,19 +440,42 @@ export default function ManageFleetModal({
                 </button>
               </div>
 
+              {/* In-modal progress while the picked cabins process */}
+              {syncActive && syncingIds.length > 0 && (
+                <div className="mf-progress">
+                  <div className="mf-progress-row">
+                    <span className="mf-progress-lbl">
+                      <RefreshCw size={13} className="refresh-spin" /> Syncing {syncingIds.length}{' '}
+                      {syncingIds.length === 1 ? 'cabin' : 'cabins'}…
+                    </span>
+                    <span className="mf-progress-pct">{syncPct}%</span>
+                  </div>
+                  <div className="mf-progress-track">
+                    <div className="mf-progress-fill" style={{ width: `${syncPct}%` }} />
+                  </div>
+                </div>
+              )}
+
               <div className="tf-scroll mf-list">
                 {cabinsShown.length === 0 ? (
                   <p className="mf-empty">No cabins linked yet.</p>
                 ) : (
                   cabinsShown.map((c) => {
                     const sel = syncSel.includes(c.id)
+                    const processing = syncActive && syncingIds.includes(c.id)
                     return (
-                      <div className="mf-crow" key={c.id}>
-                        <button className="mf-check" onClick={() => toggleSync(c.id)} aria-label={`Select ${c.id}`}>
+                      <div className={`mf-crow ${processing ? 'processing' : ''}`} key={c.id}>
+                        <button className="mf-check" onClick={() => toggleSync(c.id)} aria-label={`Select ${c.id}`} disabled={processing}>
                           <span className={`lc-box ${sel ? 'on' : ''}`}>{sel && <Check size={13} strokeWidth={3} />}</span>
                         </button>
                         <span className="mf-id">{c.id}</span>
-                        <span className="mf-synced">Synced {fmtDate(c.syncedFrom)} – {fmtDate(c.syncedTo)}</span>
+                        {processing ? (
+                          <span className="mf-synced mf-syncing">
+                            <RefreshCw size={12} className="refresh-spin" /> Syncing… {syncPct}%
+                          </span>
+                        ) : (
+                          <span className="mf-synced">Synced {fmtDate(c.syncedFrom)} – {fmtDate(c.syncedTo)}</span>
+                        )}
                         <button className="mf-remove" onClick={() => onRemoveCabin(c.id)} aria-label={`Remove ${c.id}`}>
                           <Trash2 size={16} />
                         </button>
