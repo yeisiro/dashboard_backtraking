@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowUpRight, AlertTriangle, Truck, TrendingDown, Info, MapPin, ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUpRight, AlertTriangle, Truck, TrendingDown, Info, MapPin, ArrowUp, ArrowDown, User } from 'lucide-react'
 import { trips, inactiveTrucks, type Tone } from '../data'
 import EmptyState from './EmptyState'
 
@@ -129,6 +129,9 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
                       <span className="trip-load">{t.loadRef}</span>
                       <span className="trip-route-sep">·</span>
                       {t.route}
+                    </div>
+                    <div className="trip-driver">
+                      <User size={11} /> {t.driver}
                     </div>
                   </div>
                   <div className="trip-leak">

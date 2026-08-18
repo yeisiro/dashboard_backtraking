@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   Clock,
   RefreshCw,
+  User,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
@@ -1394,6 +1395,15 @@ export default function TripDetailModal({
                 }
                 caption="Timing"
               />
+            </div>
+            <div className="ld-loadid">
+              <span className="ld-loadid-icon">
+                <User size={22} color="#7CC8CF" />
+              </span>
+              <div className="ld-loadid-txt">
+                <div className="ld-loadid-val">{trip.driver}</div>
+                <div className="ld-loadid-sub">{trip.truck} · Driver</div>
+              </div>
             </div>
             <div className="ld-loadid">
               <span className="ld-loadid-icon">

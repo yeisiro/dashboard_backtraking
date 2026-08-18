@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowLeft, ChevronRight, ChevronDown, Search, Check } from 'lucide-react'
-import { CABIN_POOL, SYNC_PERIODS, type PeriodKey } from '../data'
+import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, type PeriodKey } from '../data'
 
 // End-to-end onboarding wizard: connect the ELD, then the TMS, link the cabins
 // we discover across both, pick how much history to pull, and watch it sync.
 // Runs in both V1 and V2 (Toolbar mounts it). It's a preview flow — the sync
 // step fills a progress bar over ~5s and finishes with a completion toast.
-type Step = 'eld' | 'eld-cred' | 'tms' | 'tms-cred' | 'cabins' | 'period' | 'syncing'
+type Step = 'eld' | 'eld-cred' | 'tms' | 'tms-cred' | 'cabins' | 'drivers' | 'period' | 'syncing'
 
 interface Tms {
   name: string
@@ -71,24 +71,27 @@ export interface SyncState {
 
 const money2 = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-const STEP_LABELS = ['ELD', 'TMS', 'Cabins', 'Data range']
+const STEP_LABELS = ['ELD', 'TMS', 'Cabins', 'Drivers', 'Data range']
 function stepIndexOf(step: Step): number {
   if (step === 'eld' || step === 'eld-cred') return 0
   if (step === 'tms' || step === 'tms-cred') return 1
   if (step === 'cabins') return 2
-  return 3 // period / syncing
+  if (step === 'drivers') return 3
+  return 4 // period / syncing
 }
 
 interface Props {
   onClose: () => void
-  // Link the chosen cabins at the chosen window and kick off the background
-  // sync (App owns both). The modal then shows a live view the user can leave.
-  onStartSync?: (cabinIds: string[], range: PeriodKey) => void
+  // Link the chosen cabins + drivers at the chosen window and kick off the
+  // background sync (App owns both). The modal then shows a live view to leave.
+  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey) => void
+  // Record a connected ELD/TMS so Manage → Integrations can list it.
+  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
   // Live sync state fed back from App while the modal stays open.
   sync?: SyncState | null
 }
 
-export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props) {
+export default function ConnectFleetModal({ onClose, onStartSync, onConnectIntegration, sync }: Props) {
   const [step, setStep] = useState<Step>('eld')
 
   // ELD + TMS selection/credentials.
@@ -101,6 +104,24 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
   // Cabins linking.
   const [cabinQuery, setCabinQuery] = useState('')
   const [selectedCabins, setSelectedCabins] = useState<string[]>([])
+
+  // Drivers linking.
+  const [driverQuery, setDriverQuery] = useState('')
+  const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
+  const driversFiltered = useMemo(
+    () => DRIVER_POOL.filter((d) => d.name.toLowerCase().includes(driverQuery.toLowerCase())),
+    [driverQuery],
+  )
+  const allDriversShownSelected =
+    driversFiltered.length > 0 && driversFiltered.every((d) => selectedDrivers.includes(d.id))
+  const toggleDriver = (id: string) =>
+    setSelectedDrivers((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  const toggleAllDrivers = () =>
+    setSelectedDrivers((p) =>
+      allDriversShownSelected
+        ? p.filter((id) => !driversFiltered.some((d) => d.id === id))
+        : [...new Set([...p, ...driversFiltered.map((d) => d.id)])],
+    )
 
   // Data range (sync progress itself lives in App, read via the `sync` prop).
   const [range, setRange] = useState<PeriodKey>('3m')
@@ -154,7 +175,8 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
     tms: 'eld-cred',
     'tms-cred': 'tms',
     cabins: 'tms-cred',
-    period: 'cabins',
+    drivers: 'cabins',
+    period: 'drivers',
   }
 
   return (
@@ -235,7 +257,14 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
                 <span className="cfm-oblig">Obligatory</span>
               </div>
             ))}
-            <button className="cfm-primary" disabled={!eldComplete} onClick={() => setStep('tms')}>
+            <button
+              className="cfm-primary"
+              disabled={!eldComplete}
+              onClick={() => {
+                onConnectIntegration?.('eld', eld.name, eld.mono)
+                setStep('tms')
+              }}
+            >
               Integrate ELD
             </button>
           </div>
@@ -292,7 +321,14 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
               </div>
               <span className="cfm-oblig">Obligatory</span>
             </div>
-            <button className="cfm-primary" disabled={!apiKey.trim()} onClick={() => setStep('cabins')}>
+            <button
+              className="cfm-primary"
+              disabled={!apiKey.trim()}
+              onClick={() => {
+                onConnectIntegration?.('tms', tms.name, tms.mono)
+                setStep('cabins')
+              }}
+            >
               Connect TMS
             </button>
           </div>
@@ -341,7 +377,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
               <button
                 className="btn-pill"
                 disabled={selectedCabins.length === 0}
-                onClick={() => setStep('period')}
+                onClick={() => setStep('drivers')}
               >
                 Link units
               </button>
@@ -349,7 +385,58 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
           </>
         )}
 
-        {/* ---------- Step 4: Data range ---------- */}
+        {/* ---------- Step 4: Link drivers ---------- */}
+        {step === 'drivers' && (
+          <>
+            <div className="modal-body">
+              <p className="cfm-sub">
+                Select the drivers we found across your {eld?.name ?? 'ELD'} and {tms?.name ?? 'TMS'} to add
+                to efRouting.
+              </p>
+              <div className="tf-search">
+                <Search size={15} color="var(--text-muted)" />
+                <input
+                  placeholder="Search driver..."
+                  value={driverQuery}
+                  onChange={(e) => setDriverQuery(e.target.value)}
+                />
+              </div>
+              <div className="lc-bar">
+                <span className="lc-count">
+                  {selectedDrivers.length} of {DRIVER_POOL.length} selected
+                </span>
+                <button className="lc-selectall" onClick={toggleAllDrivers}>
+                  {allDriversShownSelected ? 'Deselect all' : 'Select all'}
+                </button>
+              </div>
+              <div className="tf-scroll lc-list">
+                {driversFiltered.map((d) => {
+                  const sel = selectedDrivers.includes(d.id)
+                  return (
+                    <button key={d.id} className={`lc-row ${sel ? 'sel' : ''}`} onClick={() => toggleDriver(d.id)}>
+                      <span className="lc-box">{sel && <Check size={13} strokeWidth={3} />}</span>
+                      <span className="lc-id">{d.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-text" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="btn-pill"
+                disabled={selectedDrivers.length === 0}
+                onClick={() => setStep('period')}
+              >
+                Link drivers
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ---------- Step 5: Data range ---------- */}
         {step === 'period' && (
           <>
             <div className="modal-body cfm-period">
@@ -394,7 +481,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, sync }: Props)
               <button
                 className="btn-pill"
                 onClick={() => {
-                  onStartSync?.(selectedCabins, range)
+                  onStartSync?.(selectedCabins, selectedDrivers, range)
                   setStep('syncing')
                 }}
               >

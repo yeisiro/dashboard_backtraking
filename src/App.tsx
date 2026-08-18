@@ -12,7 +12,14 @@ import FullData, { type SubTab } from './components/FullData'
 import SyncBar from './components/SyncBar'
 import Toast from './components/Toast'
 import { type SyncState } from './components/ConnectFleetModal'
-import { type FleetCabin, type PeriodKey, monthsForPeriod } from './data'
+import {
+  type FleetCabin,
+  type FleetDriver,
+  type Integration,
+  type PeriodKey,
+  monthsForPeriod,
+  DRIVER_POOL,
+} from './data'
 import { PeriodContext, initialCompareRange } from './PeriodContext'
 
 export default function App() {
@@ -33,6 +40,7 @@ export default function App() {
     return cls ? cls.split(',').filter(Boolean) : []
   })
   const [truckFilter, setTruckFilter] = useState<string[]>([])
+  const [driverFilter, setDriverFilter] = useState<string[]>([])
   const [deadheadMode, setDeadheadMode] = useState<DeadheadMode>('in-range')
   const [fullDataSubTab, setFullDataSubTab] = useState<SubTab>('Trips')
   // Trips and Fleet Analytics always need each trip's untouched full
@@ -56,9 +64,12 @@ export default function App() {
   }
 
   // ── Fleet + background sync ────────────────────────────────────────────
-  // The linked cabins (and each one's sync window) live here so the flip from
-  // "Connect Fleet" → "Manage Fleet" and the manage view survive across V1/V2.
+  // The linked cabins, drivers and connected integrations (with each cabin/
+  // driver's sync window) live here so the flip from "Connect Fleet" → "Manage
+  // Fleet" and the manage view survive across V1/V2.
   const [fleet, setFleet] = useState<FleetCabin[]>([])
+  const [drivers, setDrivers] = useState<FleetDriver[]>([])
+  const [integrations, setIntegrations] = useState<Integration[]>([])
   const [sync, setSync] = useState<SyncState | null>(null)
   const [syncToast, setSyncToast] = useState(false)
 
@@ -85,14 +96,40 @@ export default function App() {
       return [...map.values()]
     })
   }
-  // Connect wizard: link the chosen cabins and immediately start syncing them.
-  const linkCabins = (cabinIds: string[], range: PeriodKey) => {
-    addCabins(cabinIds, range)
-    runSync(monthsForPeriod(range))
-  }
   const updateCabinRange = (id: string, range: PeriodKey) =>
     setFleet((prev) => prev.map((c) => (c.id === id ? { ...c, range } : c)))
   const removeCabin = (id: string) => setFleet((prev) => prev.filter((c) => c.id !== id))
+
+  // Add drivers to the fleet at a given window (dedupe by id, newest wins).
+  const addDrivers = (driverIds: string[], range: PeriodKey) => {
+    if (driverIds.length === 0) return
+    setDrivers((prev) => {
+      const map = new Map(prev.map((d) => [d.id, d]))
+      driverIds.forEach((id) => {
+        const name = DRIVER_POOL.find((p) => p.id === id)?.name ?? id
+        map.set(id, { id, name, range })
+      })
+      return [...map.values()]
+    })
+  }
+  const updateDriverRange = (id: string, range: PeriodKey) =>
+    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, range } : d)))
+  const removeDriver = (id: string) => setDrivers((prev) => prev.filter((d) => d.id !== id))
+
+  // Track a connected integration (dedupe by type+name).
+  const connectIntegration = (type: 'eld' | 'tms', name: string, mono: string) =>
+    setIntegrations((prev) =>
+      prev.some((i) => i.type === type && i.name === name) ? prev : [...prev, { type, name, mono }],
+    )
+  const removeIntegration = (type: 'eld' | 'tms', name: string) =>
+    setIntegrations((prev) => prev.filter((i) => !(i.type === type && i.name === name)))
+
+  // Connect wizard: link the chosen cabins + drivers and start syncing them.
+  const linkFleet = (cabinIds: string[], driverIds: string[], range: PeriodKey) => {
+    addCabins(cabinIds, range)
+    addDrivers(driverIds, range)
+    if (cabinIds.length > 0 || driverIds.length > 0) runSync(monthsForPeriod(range))
+  }
 
   // Tick progress to 100 at the pace set by `inc`. Deps are (active, done) —
   // both stable across the per-tick progress updates, so the interval isn't
@@ -132,16 +169,25 @@ export default function App() {
               onClassFilterChange={setClassFilter}
               truckFilter={truckFilter}
               onTruckFilterChange={setTruckFilter}
+              driverFilter={driverFilter}
+              onDriverFilterChange={setDriverFilter}
               view={view}
               deadheadMode={deadheadMode}
               onDeadheadModeChange={setDeadheadMode}
               deadheadLocked={deadheadLocked}
-              onStartSync={linkCabins}
+              onStartSync={linkFleet}
+              onConnectIntegration={connectIntegration}
               sync={sync}
               fleet={fleet}
+              drivers={drivers}
+              integrations={integrations}
               onUpdateCabinRange={updateCabinRange}
               onRemoveCabin={removeCabin}
               onAddCabins={addCabins}
+              onUpdateDriverRange={updateDriverRange}
+              onRemoveDriver={removeDriver}
+              onAddDrivers={addDrivers}
+              onRemoveIntegration={removeIntegration}
               onSyncFleet={runSync}
             />
             {dataTab === 'full' ? (
@@ -150,6 +196,7 @@ export default function App() {
                 classFilter={classFilter}
                 truckFilter={truckFilter}
                 onTruckFilterChange={setTruckFilter}
+                driverFilter={driverFilter}
                 view={view}
                 onSubTabChange={setFullDataSubTab}
               />

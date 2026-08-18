@@ -552,6 +552,7 @@ export const planFixes: Recommendation[] = [
 export interface Trip {
   id: string
   cls: 'A' | 'B' | 'C' | 'D'
+  driver: string // driver running this load
   loadRef: string // load id of the trip currently being executed
   alert: string
   alertTone: Tone
@@ -562,6 +563,19 @@ export interface Trip {
 }
 
 const FLEET_CLASSES: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+
+// Driver roster — the people behind the loads. Shared everywhere a load shows a
+// truck, and by the drivers filter + connect/manage flows. `driverForIndex`
+// gives every trip a stable driver.
+export const DRIVER_POOL: Array<{ id: string; name: string }> = [
+  'Marcus Alvarez', 'Jaylen Okafor', 'Diego Herrera', 'Tanner Wolfe', 'Priya Nair',
+  'Sofia Castillo', 'Andre Boone', 'Wei Zhang', 'Cody Beckett', 'Luis Fuentes',
+  'Grace Mensah', 'Owen Brady', 'Rashida Ali', 'Marco Ferraro', 'Dylan Pope',
+  'Hana Suzuki', 'Terrell Grant', 'Ivan Petrov', 'Noah Kessler', 'Camila Rojas',
+  'Bryce Sullivan', 'Omar Haddad', 'Nina Volkov', 'Caleb Ndiaye',
+].map((name, i) => ({ id: 'DRV-' + (1040 + i * 7), name }))
+
+export const driverForIndex = (i: number) => DRIVER_POOL[i % DRIVER_POOL.length].name
 
 const ACTIVE_ROUTES = [
   'ATL → DAL', 'JAX → NSH', 'MIA → HOU', 'CHI → ATL', 'CHI → MEM',
@@ -588,6 +602,7 @@ export const trips: Trip[] = Array.from({ length: 32 }, (_, i) => {
   return {
     id: '#' + (4000 + i * 13),
     cls: FLEET_CLASSES[i % 4],
+    driver: driverForIndex(i),
     loadRef: String(300000 + i * 40993).slice(-7).padStart(7, '0'),
     alert: alert.a,
     alertTone: alert.t,
@@ -650,6 +665,56 @@ export interface FleetCabin {
   range: PeriodKey
 }
 
+// A driver the operator has linked, with the history window we sync for them.
+export interface FleetDriver {
+  id: string
+  name: string
+  range: PeriodKey
+}
+
+// Integration providers, shared by the connect wizard and the manage
+// Integrations tab. `fields` are the credentials each one asks for.
+export interface IntegrationField {
+  key: string
+  label: string
+  placeholder: string
+  secret?: boolean
+}
+export interface Provider {
+  name: string
+  mono: string
+  fields: IntegrationField[]
+}
+export const ELD_PROVIDERS: Provider[] = [
+  { name: 'Samsara', mono: 'Sa', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  {
+    name: 'Geotab',
+    mono: 'Ge',
+    fields: [
+      { key: 'user', label: 'User', placeholder: 'Enter the User', secret: true },
+      { key: 'database', label: 'Database', placeholder: 'Enter the Database' },
+      { key: 'password', label: 'Password', placeholder: 'Enter the Password', secret: true },
+    ],
+  },
+  { name: 'Motive', mono: 'Mo', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+]
+export const TMS_PROVIDERS: Provider[] = [
+  { name: 'Datatruck', mono: 'Da', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  { name: 'Alvys', mono: 'Al', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  { name: 'McLeod LoadMaster', mono: 'Mc', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  { name: 'Trimble TMW Suite', mono: 'Tr', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  { name: 'MercuryGate', mono: 'MG', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+  { name: 'Project44', mono: 'P4', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
+]
+
+// A connected integration, tracked in App so the Manage → Integrations tab can
+// list and manage them after the wizard finishes.
+export interface Integration {
+  type: 'eld' | 'tms'
+  name: string
+  mono: string
+}
+
 // Full Data → Trips table. One row per completed trip. Values are numeric so the
 // table can sort exactly and format at render. Several fields are derived from a
 // smaller base (see TRIP_BASE + buildTrip) to keep the data honest and compact.
@@ -658,6 +723,7 @@ export interface TripRow {
   // the best/worst classification (see computeScores).
   score: number
   truck: string
+  driver: string // driver who ran the load
   cls: 'A' | 'B' | 'C' | 'D'
   startDate: string // pickup
   endDate: string // delivery
@@ -733,6 +799,7 @@ function buildTrip(b: TripBase, index: number): TripRow {
   return {
     ...b,
     score: 0, // filled in by computeScores once the full set is known
+    driver: driverForIndex(index),
     loadRef: 'L' + (40012001 + index),
     status: b.status ?? 'delivered',
     profit: b.income - b.cost,

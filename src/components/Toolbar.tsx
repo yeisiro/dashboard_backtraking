@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Plus, Settings2 } from 'lucide-react'
 import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
+import DriversFilter from './DriversFilter'
 import DateFilter from './DateFilter'
 import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal, { type SyncState } from './ConnectFleetModal'
 import ManageFleetModal from './ManageFleetModal'
 import RefreshButton from './RefreshButton'
-import { type FleetCabin, type PeriodKey } from '../data'
+import { type FleetCabin, type FleetDriver, type Integration, type PeriodKey } from '../data'
 
 export type DataTab = 'overview' | 'full'
 
@@ -18,16 +19,25 @@ export default function Toolbar({
   onClassFilterChange,
   truckFilter = [],
   onTruckFilterChange,
+  driverFilter = [],
+  onDriverFilterChange,
   view = 'dashboard',
   deadheadMode = 'in-range',
   onDeadheadModeChange,
   deadheadLocked = false,
   onStartSync,
+  onConnectIntegration,
   sync,
   fleet = [],
+  drivers = [],
+  integrations = [],
   onUpdateCabinRange,
   onRemoveCabin,
   onAddCabins,
+  onUpdateDriverRange,
+  onRemoveDriver,
+  onAddDrivers,
+  onRemoveIntegration,
   onSyncFleet,
 }: {
   tab?: DataTab
@@ -36,21 +46,30 @@ export default function Toolbar({
   onClassFilterChange?: (next: string[]) => void
   truckFilter?: string[]
   onTruckFilterChange?: (next: string[]) => void
+  driverFilter?: string[]
+  onDriverFilterChange?: (next: string[]) => void
   view?: 'summary' | 'dashboard'
   deadheadMode?: DeadheadMode
   onDeadheadModeChange?: (next: DeadheadMode) => void
   deadheadLocked?: boolean
-  onStartSync?: (cabinIds: string[], range: PeriodKey) => void
+  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey) => void
+  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
   sync?: SyncState | null
   fleet?: FleetCabin[]
+  drivers?: FleetDriver[]
+  integrations?: Integration[]
   onUpdateCabinRange?: (id: string, range: PeriodKey) => void
   onRemoveCabin?: (id: string) => void
   onAddCabins?: (ids: string[], range: PeriodKey) => void
+  onUpdateDriverRange?: (id: string, range: PeriodKey) => void
+  onRemoveDriver?: (id: string) => void
+  onAddDrivers?: (ids: string[], range: PeriodKey) => void
+  onRemoveIntegration?: (type: 'eld' | 'tms', name: string) => void
   onSyncFleet?: (months: number) => void
 }) {
   const [showConnect, setShowConnect] = useState(false)
   const [showManage, setShowManage] = useState(false)
-  const connected = fleet.length > 0
+  const connected = fleet.length > 0 || drivers.length > 0 || integrations.length > 0
 
   return (
     <div className="toolbar">
@@ -72,6 +91,9 @@ export default function Toolbar({
         <DeadheadFilter mode={deadheadMode} onChange={onDeadheadModeChange} locked={deadheadLocked} />
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
         <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
+        {view === 'dashboard' && (
+          <DriversFilter selected={driverFilter} onChange={onDriverFilterChange} />
+        )}
         <DateFilter />
         <RefreshButton label="Refresh data" />
         {!(view === 'summary' && tab === 'overview') && tab !== 'full' && (
@@ -93,6 +115,7 @@ export default function Toolbar({
         <ConnectFleetModal
           onClose={() => setShowConnect(false)}
           onStartSync={onStartSync}
+          onConnectIntegration={onConnectIntegration}
           sync={sync}
         />
       )}
@@ -100,9 +123,16 @@ export default function Toolbar({
         <ManageFleetModal
           onClose={() => setShowManage(false)}
           fleet={fleet}
-          onUpdateRange={(id, range) => onUpdateCabinRange?.(id, range)}
-          onRemove={(id) => onRemoveCabin?.(id)}
+          drivers={drivers}
+          integrations={integrations}
+          onUpdateCabinRange={(id, range) => onUpdateCabinRange?.(id, range)}
+          onRemoveCabin={(id) => onRemoveCabin?.(id)}
           onAddCabins={(ids, range) => onAddCabins?.(ids, range)}
+          onUpdateDriverRange={(id, range) => onUpdateDriverRange?.(id, range)}
+          onRemoveDriver={(id) => onRemoveDriver?.(id)}
+          onAddDrivers={(ids, range) => onAddDrivers?.(ids, range)}
+          onRemoveIntegration={(type, name) => onRemoveIntegration?.(type, name)}
+          onConnectIntegration={(type, name, mono) => onConnectIntegration?.(type, name, mono)}
           onSync={(months) => onSyncFleet?.(months)}
         />
       )}

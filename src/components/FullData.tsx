@@ -124,6 +124,7 @@ export default function FullData({
   classFilter = [],
   truckFilter = [],
   onTruckFilterChange,
+  driverFilter = [],
   view = 'dashboard',
   onSubTabChange,
 }: {
@@ -131,6 +132,7 @@ export default function FullData({
   classFilter?: string[]
   truckFilter?: string[]
   onTruckFilterChange?: (next: string[]) => void
+  driverFilter?: string[]
   view?: 'summary' | 'dashboard'
   onSubTabChange?: (tab: SubTab) => void
 }) {
@@ -175,6 +177,7 @@ export default function FullData({
           classFilter={classFilter}
           view={view}
           truckFilter={truckFilter}
+          driverFilter={driverFilter}
           placeFilter={placeFilter}
           onClearPlaceFilter={() => setPlaceFilter(null)}
         />
@@ -913,6 +916,7 @@ function TripsTable({
   classFilter = [],
   view = 'dashboard',
   truckFilter = [],
+  driverFilter = [],
   placeFilter = null,
   onClearPlaceFilter,
 }: {
@@ -920,6 +924,7 @@ function TripsTable({
   classFilter?: string[]
   view?: 'summary' | 'dashboard'
   truckFilter?: string[]
+  driverFilter?: string[]
   placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' | 'all' } | null
   onClearPlaceFilter?: () => void
 }) {
@@ -995,18 +1000,22 @@ function TripsTable({
   // filter (see FullData's onSelectTrucks) rather than a side-channel here.
   const byTruck = truckFilter.length > 0 ? byClass.filter((r) => truckFilter.includes(r.truck)) : byClass
 
+  // Drivers filter (V2 toolbar) — narrow to the selected drivers.
+  const byDriver =
+    driverFilter.length > 0 ? byTruck.filter((r) => driverFilter.includes(r.driver)) : byTruck
+
   // Arriving from a state's "Leaving X" / "Arriving to X" click, or the
   // Trips Here card's "view all" arrow, on the Fuel and Savings map — filters
   // to trips whose lane actually touches that state in the given direction
   // ('all' = either end, matching the deduped count "Trips Here" shows).
   const byPlace = placeFilter
-    ? byTruck.filter((r) => {
+    ? byDriver.filter((r) => {
         const parsed = parseLane(r.lane)
         if (placeFilter.direction === 'outbound') return parsed.origin === placeFilter.code
         if (placeFilter.direction === 'inbound') return parsed.dest === placeFilter.code
         return parsed.all.includes(placeFilter.code)
       })
-    : byTruck
+    : byDriver
 
   // Free-text search is by city (lane) or load reference — truck filtering
   // is the header filter's job, not this box's.
@@ -1048,10 +1057,13 @@ function TripsTable({
       case 'truck':
         return (
           <td key={key} className="fd-left">
-            <span className="fd-truck">{r.truck}</span>
-            <span className="fd-class" style={{ background: CLASS_COLOR[r.cls] }}>
-              {r.cls}
-            </span>
+            <div className="fd-truck-row">
+              <span className="fd-truck">{r.truck}</span>
+              <span className="fd-class" style={{ background: CLASS_COLOR[r.cls] }}>
+                {r.cls}
+              </span>
+            </div>
+            <div className="fd-driver fd-dim">{r.driver}</div>
           </td>
         )
       case 'startDate':
