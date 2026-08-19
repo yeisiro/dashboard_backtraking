@@ -2629,6 +2629,11 @@ button {
   font-weight: 700;
   letter-spacing: -0.5px;
 }
+.kpi-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .kpi-cmp {
   display: inline-flex;
   align-items: baseline;
@@ -4291,6 +4296,23 @@ button {
   letter-spacing: -0.5px;
 }
 .leak-amount .wow { font-size: 12px; }
+.leak-perunit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.leak-perunit-lbl {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
 .bars { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
 /* Recoverable category — money you could've saved with a better plan */
 .bar-row.avoidable { position: relative; }
@@ -4428,6 +4450,46 @@ button {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Fixed to ~5 rows so raising the count scrolls the list instead of growing
+     the card / reflowing the whole section. */
+  max-height: 168px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.mini-rows::-webkit-scrollbar { width: 9px; }
+.mini-rows::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+  border: 2px solid var(--surface);
+}
+.mini-rows::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+/* Trucks-to-show selector */
+.pr-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.pr-count-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px 0 6px;
+}
+.pr-count-btn {
+  min-width: 26px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.pr-count-btn:hover { color: var(--text); }
+.pr-count-btn.active {
+  background: var(--surface-3);
+  color: var(--text);
 }
 .pill-row {
   display: flex;
@@ -4729,6 +4791,127 @@ button {
 }
 .bench-val.neg { color: var(--red); }
 .bench-val.lead { color: var(--yellow); }
+.bench-lead-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--yellow);
+}
+.bench-takeaway {
+  margin-top: 18px;
+  padding: 13px 15px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.bench-takeaway b { color: var(--text); font-weight: 700; }
+
+/* ---- Wide (V2) benchmark: worst/best value + gap-cost columns ---- */
+.bench-modal-wide { width: 1040px; }
+.bench-table-2 th,
+.bench-table-2 td { padding: 11px 14px; text-align: right; }
+.bench-table-2 .bench-attr-col,
+.bench-table-2 td.bench-attr { text-align: left; padding-left: 0; }
+/* group headers spanning value + gap-cost */
+.bench-grp-head th { border-bottom: none; vertical-align: top; }
+.bench-grp {
+  text-align: left;
+  border-left: 1px solid var(--border);
+}
+.bench-grp-worst { color: var(--red); }
+.bench-grp-best { color: var(--green); }
+.bench-sub-head th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+  padding-top: 4px;
+  padding-bottom: 8px;
+}
+.bench-lead-col { vertical-align: top; }
+/* visible truck chips */
+.bench-trucks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.bench-truck-chip {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(77, 157, 255, 0.16);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+/* grouped marker when there are many trucks */
+.bench-trucks-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 4px 11px;
+  border-radius: 7px;
+  background: rgba(77, 157, 255, 0.16);
+  border: 1px solid rgba(77, 157, 255, 0.4);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+.bench-trucks-group:hover { background: rgba(77, 157, 255, 0.26); }
+.bench-trucks-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  width: max-content;
+  max-width: 320px;
+  padding: 10px;
+  background: #05070b;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.12s, transform 0.12s;
+}
+.bench-trucks-group:hover .bench-trucks-pop {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* gap-cost cells */
+.bench-cost-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--red);
+  border-left: 1px solid var(--border);
+}
+.bench-cost-cell .warn { color: var(--orange); }
+.bench-cost-cell .pos { color: var(--green); font-weight: 600; font-size: 12px; }
+.bench-table-2 .bench-grp,
+.bench-table-2 td:nth-child(2),
+.bench-table-2 td:nth-child(4) { border-left: 1px solid var(--border); }
+.bench-foot td {
+  border-top: 1px solid var(--border-strong);
+  border-bottom: none;
+  padding-top: 14px;
+  font-size: 15px;
+}
+.bench-foot .bench-attr { font-weight: 700; }
+.bench-cost-lbl {
+  margin-left: 4px;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
 .bench-gap {
   font-weight: 700;
   font-variant-numeric: tabular-nums;

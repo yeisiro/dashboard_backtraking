@@ -35,6 +35,12 @@ export interface KpiMetric {
   foot: string
   footDelta: string
   goal?: Goal
+  // Clear, operator-facing explanation of what the metric is (V2 tooltip).
+  tip?: string
+  // Metrics where 0 is the ideal and any distance from it is a penalty
+  // (e.g. cents/gal over the optimal price). Drives the "distance from optimal"
+  // scale on the KPI card. `value`/`max` are numeric magnitudes of the overpay.
+  penalty?: { value: number; max: number; unit: string }
 }
 
 export interface DetailMetric {
@@ -84,6 +90,7 @@ export const kpiCards: KpiCard[] = [
         foot: 'Net profit as a share of revenue',
         footDelta: '+0.4',
         goal: 'high',
+        tip: 'Of every $1 you bill, this is what is left as profit after fuel, driver pay, and all other operating costs. Higher is better.',
       },
     ],
     details: [
@@ -104,6 +111,7 @@ export const kpiCards: KpiCard[] = [
         foot: 'Share of expected revenue lost to inefficiency',
         footDelta: '-0.2',
         goal: 'low',
+        tip: 'The revenue you should have earned but lost to inefficiency — empty miles, idling, detours and fuel overpay — as a share of expected revenue. Lower is better.',
       },
     ],
     details: [
@@ -125,6 +133,7 @@ export const kpiCards: KpiCard[] = [
         foot: 'Share of trips run as planned',
         footDelta: '+1.2',
         goal: 'high',
+        tip: 'Share of trips that ran the way they were dispatched — same route, stops and schedule. Higher means fewer unplanned detours, reloads and delays.',
       },
     ],
     details: [
@@ -146,6 +155,8 @@ export const kpiCards: KpiCard[] = [
         foot: 'Extra cost per gallon vs the best achievable price',
         footDelta: '+0.04',
         goal: 'low',
+        tip: 'How much more than the best achievable price you paid per gallon. $0.00 is optimal — every cent above it is money left on the table across every gallon burned.',
+        penalty: { value: 0.18, max: 0.6, unit: '$/gal' },
       },
     ],
     details: [
@@ -284,13 +295,33 @@ export interface RankRow {
   you?: boolean
 }
 
-// Worst offenders: which trucks are dragging the fleet and why.
+// Worst offenders: which trucks are dragging the fleet and why. First 5 are
+// fixed; the rest are generated so the count selector (5/10/15) has depth.
+const WORST_CAUSES: Cause[] = ['empty', 'fuel', 'idle', 'deviation']
+const worstMetric = (cause: Cause, i: number): number => {
+  if (cause === 'idle') return Math.max(30, 180 - i * 9)
+  if (cause === 'deviation') return 12 + i
+  if (cause === 'empty') return Math.max(9, 30 - i)
+  return Math.max(4, 17 - Math.floor(i / 2))
+}
 export const bottom5: RankRow[] = [
   { rank: '01', name: '#7834', cause: 'empty', metric: 31, weekly: -310, tone: 'red' },
   { rank: '02', name: '#3390', cause: 'fuel', metric: 18, weekly: -280, tone: 'red' },
   { rank: '03', name: '#2210', cause: 'idle', metric: 196, weekly: -260, tone: 'red' },
   { rank: '04', name: '#5567', cause: 'deviation', metric: 15, weekly: -190, tone: 'red' },
   { rank: '05', name: '#4521', cause: 'deviation', metric: 22, weekly: -175, tone: 'red' },
+  ...Array.from({ length: 10 }, (_, k) => {
+    const i = k + 5
+    const cause = WORST_CAUSES[i % 4]
+    return {
+      rank: String(i + 1).padStart(2, '0'),
+      name: '#' + (6100 + k * 143),
+      cause,
+      metric: worstMetric(cause, i),
+      weekly: -(165 - k * 12),
+      tone: 'red' as Tone,
+    }
+  }),
 ]
 export const top5: RankRow[] = [
   { rank: '01', name: '#5012', cause: 'deviation', metric: 2, weekly: 465, tone: 'green' },
@@ -298,6 +329,18 @@ export const top5: RankRow[] = [
   { rank: '03', name: '#6120', cause: 'fuel', metric: 3, weekly: 355, tone: 'green' },
   { rank: '04', name: '#3301', cause: 'idle', metric: 28, weekly: 320, tone: 'green' },
   { rank: '05', name: '#2884', cause: 'fuel', metric: 2, weekly: 300, tone: 'green' },
+  ...Array.from({ length: 10 }, (_, k) => {
+    const i = k + 5
+    const cause = WORST_CAUSES[(i + 2) % 4]
+    return {
+      rank: String(i + 1).padStart(2, '0'),
+      name: '#' + (5100 + k * 131),
+      cause,
+      metric: cause === 'idle' ? 22 + k : cause === 'deviation' ? 2 + k : cause === 'empty' ? 6 + k : 2 + k,
+      weekly: 290 - k * 14,
+      tone: 'green' as Tone,
+    }
+  }),
 ]
 // Small-fleet simulation (1–5 trucks): with so few trucks, Bottom and Top end
 // up being the same trucks in reverse order — useful to preview the layout.
@@ -332,6 +375,12 @@ export const leaders: RankRow[] = [
   { rank: '03', name: 'Truck Z', weekly: 450, tone: 'green' },
   { rank: '04', name: 'Truck W', weekly: 440, tone: 'green' },
   { rank: '05', name: 'Truck Y', weekly: 430, tone: 'green' },
+  ...Array.from({ length: 10 }, (_, k) => ({
+    rank: String(k + 6).padStart(2, '0'),
+    name: 'Truck ' + String.fromCharCode(65 + k), // Truck A, B, ...
+    weekly: 425 - k * 11,
+    tone: 'green' as Tone,
+  })),
 ]
 
 // Market benchmark table — how your trips compare to the market. For each
@@ -346,15 +395,20 @@ export interface BenchmarkAttr {
   leaders: string // market leaders
   gap: string // best trips → market leaders
   tip: string // what the metric means, shown on hover
+  // $ this attribute costs per period by NOT being at market-leader level, for
+  // the worst and best trip groups. 0 when the group already meets/beats the
+  // leader on this attribute (no gap to close).
+  worstCost: number
+  bestCost: number
 }
 
 export const benchmarkAttrs: BenchmarkAttr[] = [
-  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads.' },
-  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', tip: 'Share of paid miles that produced no revenue. Lower is better.' },
-  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
-  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
-  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
-  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
+  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', worstCost: 4300, bestCost: 900, tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads.' },
+  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', worstCost: 3800, bestCost: 600, tip: 'Share of paid miles that produced no revenue. Lower is better.' },
+  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', worstCost: 5200, bestCost: 1400, tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
+  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', worstCost: 6100, bestCost: 2100, tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
+  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', worstCost: 2400, bestCost: 700, tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
+  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', worstCost: 2900, bestCost: 0, tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
 ]
 
 // Performance drivers — the "why" behind the numbers. Each zone and broker is a

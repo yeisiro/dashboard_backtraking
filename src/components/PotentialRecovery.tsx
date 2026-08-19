@@ -76,24 +76,37 @@ const FLEET_DATA: Record<FleetMode, { bottom: RankRow[]; top: RankRow[]; leaders
   empty: { bottom: [], top: [], leaders: [] },
 }
 
+const COUNT_OPTIONS = [5, 10, 15]
+
 export default function PotentialRecovery({
   fleetMode = 'full',
+  view = 'dashboard',
   hideLeaders = false,
   hideCompare = false,
   onViewTrips,
 }: {
   fleetMode?: FleetMode
+  view?: 'summary' | 'dashboard'
   hideLeaders?: boolean
   hideCompare?: boolean
   onViewTrips?: (band: 'best' | 'worst') => void
 }) {
   const [showMarket, setShowMarket] = useState(false)
+  const [count, setCount] = useState(5)
   const { rangeDays, rangeEnd } = usePeriod()
   const data = FLEET_DATA[fleetMode]
   const noData = fleetMode === 'empty'
   const bottomTitle = "Bottom - What's dragging you down"
   const topTitle = "Top - What's going well"
   const rangeLabel = currentPeriodLabel(rangeEnd, rangeDays)
+
+  // How many trucks the operator can choose to see, capped by how many the
+  // fleet actually has. Only offered in V2.
+  const maxRows = Math.max(data.bottom.length, data.top.length, data.leaders.length)
+  const countOptions = COUNT_OPTIONS.filter((n) => n <= maxRows)
+  if (countOptions.length === 0 && maxRows > 0) countOptions.push(maxRows)
+  const showCount = view === 'dashboard' && !noData && countOptions.length > 1
+  const effCount = view === 'dashboard' ? Math.min(count, maxRows) : 5
 
   return (
     <section className="card recovery-card">
@@ -107,11 +120,27 @@ export default function PotentialRecovery({
             <Info size={14} color="var(--text-muted)" />
           </span>
         </div>
-        {!noData && !hideCompare && (
+        {!noData && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button className="btn-teal" onClick={() => setShowMarket(true)}>
-              <BarChart3 size={13} /> Compare to market
-            </button>
+            {showCount && (
+              <div className="pr-count" role="group" aria-label="Trucks to show">
+                <span className="pr-count-lbl">Show</span>
+                {countOptions.map((n) => (
+                  <button
+                    key={n}
+                    className={`pr-count-btn ${effCount === n ? 'active' : ''}`}
+                    onClick={() => setCount(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!hideCompare && (
+              <button className="btn-teal" onClick={() => setShowMarket(true)}>
+                <BarChart3 size={13} /> Compare to market
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -121,14 +150,14 @@ export default function PotentialRecovery({
           <RankCard
             title={bottomTitle}
             icon={<ArrowDown size={13} color="var(--red)" />}
-            rows={data.bottom}
+            rows={data.bottom.slice(0, effCount)}
             days={rangeDays}
             rangeLabel={rangeLabel}
           />
           <RankCard
             title={topTitle}
             icon={<ArrowUp size={13} color="var(--green)" />}
-            rows={data.top}
+            rows={data.top.slice(0, effCount)}
             days={rangeDays}
             rangeLabel={rangeLabel}
           />
@@ -136,7 +165,7 @@ export default function PotentialRecovery({
             <RankCard
               title="Market Leaders"
               icon={<Trophy size={13} color="var(--yellow)" />}
-              rows={data.leaders}
+              rows={data.leaders.slice(0, effCount)}
               days={rangeDays}
               rangeLabel={rangeLabel}
             />
@@ -145,7 +174,13 @@ export default function PotentialRecovery({
       </div>
 
       {showMarket && (
-        <MarketBenchmarkModal onClose={() => setShowMarket(false)} onViewTrips={onViewTrips} />
+        <MarketBenchmarkModal
+          onClose={() => setShowMarket(false)}
+          onViewTrips={onViewTrips}
+          v2={view === 'dashboard'}
+          worstTrucks={data.bottom.slice(0, effCount).map((r) => r.name)}
+          bestTrucks={data.top.slice(0, effCount).map((r) => r.name)}
+        />
       )}
     </section>
   )

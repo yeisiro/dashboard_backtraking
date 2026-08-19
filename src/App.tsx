@@ -205,11 +205,12 @@ export default function App() {
               />
             ) : (
               <>
-                <KpiCards noData={noData} hideMarketPosition={view === 'summary'} />
+                <KpiCards noData={noData} view={view} hideMarketPosition={view === 'summary'} />
                 <div className={`grid-2 ${view === 'summary' ? 'grid-2-even' : ''}`}>
-                  <MoneyLeakage noData={noData} hidePoorPlanning={view === 'summary'} />
+                  <MoneyLeakage noData={noData} view={view} hidePoorPlanning={view === 'summary'} />
                   <PotentialRecovery
                     fleetMode={fleetMode}
+                    view={view}
                     hideLeaders={view === 'summary'}
                     onViewTrips={(band) => {
                       setTripsBand(band)
