@@ -33,33 +33,12 @@ function periodValue(weekly: number, days: number): string {
   return `${sign}$${Math.abs(total).toLocaleString('en-US')}`
 }
 
-// idle/deviation metrics are weekly-baseline totals, so they must scale with
-// the selected date range just like the cost does — 28 min/day of idle isn't
-// "28" over a week and "28" over a month, it's 196 min vs. 840 min.
-function scaledTotal(weeklyBase: number, days: number): number {
-  return Math.round((weeklyBase / 7) * days)
-}
-
-function idleLabel(weeklyMinutes: number, days: number): string {
-  const total = scaledTotal(weeklyMinutes, days)
-  if (total < 60) return `${total} min`
-  const h = Math.floor(total / 60)
-  const m = total % 60
-  return m === 0 ? `${h}h` : `${h}h ${m}m`
-}
-
-function milesLabel(weeklyMiles: number, days: number): string {
-  return `${scaledTotal(weeklyMiles, days)} mi`
-}
-
-// empty (% deadhead) and fuel (¢/gal premium) are ratios, not totals — they
-// don't change with the selected date range, so they pass through as-is.
-function causeMetricLabel(cause: Cause, metric: number, days: number): string {
+// Every metric is a ratio now (except fuel, a ¢/gal premium), so magnitude
+// reads at a glance and nothing scales with the selected date range.
+function causeMetricLabel(cause: Cause, metric: number): string {
   switch (cause) {
     case 'idle':
-      return idleLabel(metric, days)
     case 'deviation':
-      return milesLabel(metric, days)
     case 'empty':
       return `${metric}%`
     case 'fuel':
@@ -221,7 +200,7 @@ function RankCard({
               )}
               {r.cause && r.metric !== undefined && (
                 <span className="issue">
-                  {causeText(r.cause, causeMetricLabel(r.cause, r.metric, days))}
+                  {causeText(r.cause, causeMetricLabel(r.cause, r.metric))}
                 </span>
               )}
               <span

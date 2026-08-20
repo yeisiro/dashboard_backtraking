@@ -34,7 +34,6 @@ export default function Toolbar({
   onSyncCabins,
   onRemoveCabin,
   onAddDrivers,
-  onRemoveDriver,
   onRemoveIntegration,
 }: {
   tab?: DataTab
@@ -49,7 +48,7 @@ export default function Toolbar({
   deadheadMode?: DeadheadMode
   onDeadheadModeChange?: (next: DeadheadMode) => void
   deadheadLocked?: boolean
-  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey) => void
+  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey, extraDrivers?: FleetDriver[]) => void
   onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
   sync?: SyncState | null
   fleet?: FleetCabin[]
@@ -58,7 +57,6 @@ export default function Toolbar({
   onSyncCabins?: (ids: string[], from: Date, to: Date) => void
   onRemoveCabin?: (id: string) => void
   onAddDrivers?: (ids: string[]) => void
-  onRemoveDriver?: (id: string) => void
   onRemoveIntegration?: (type: 'eld' | 'tms', name: string) => void
 }) {
   const [showConnect, setShowConnect] = useState(false)
@@ -123,7 +121,6 @@ export default function Toolbar({
           onSyncCabins={(ids, from, to) => onSyncCabins?.(ids, from, to)}
           onRemoveCabin={(id) => onRemoveCabin?.(id)}
           onAddDrivers={(ids) => onAddDrivers?.(ids)}
-          onRemoveDriver={(id) => onRemoveDriver?.(id)}
           onRemoveIntegration={(type, name) => onRemoveIntegration?.(type, name)}
           onConnectIntegration={(type, name, mono) => onConnectIntegration?.(type, name, mono)}
         />

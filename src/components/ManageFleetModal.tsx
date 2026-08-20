@@ -84,7 +84,6 @@ interface Props {
   onSyncCabins: (ids: string[], from: Date, to: Date) => void
   onRemoveCabin: (id: string) => void
   onAddDrivers: (ids: string[]) => void
-  onRemoveDriver: (id: string) => void
   onRemoveIntegration: (type: 'eld' | 'tms', name: string) => void
   onConnectIntegration: (type: 'eld' | 'tms', name: string, mono: string) => void
 }
@@ -98,7 +97,6 @@ export default function ManageFleetModal({
   onSyncCabins,
   onRemoveCabin,
   onAddDrivers,
-  onRemoveDriver,
   onRemoveIntegration,
   onConnectIntegration,
 }: Props) {
@@ -501,9 +499,6 @@ export default function ManageFleetModal({
                   driversShown.map((d) => (
                     <div className="mf-row" key={d.id}>
                       <span className="mf-id mf-id-driver">{d.name}</span>
-                      <button className="mf-remove" onClick={() => onRemoveDriver(d.id)} aria-label={`Remove ${d.name}`}>
-                        <Trash2 size={16} />
-                      </button>
                     </div>
                   ))
                 )}

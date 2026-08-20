@@ -104,19 +104,21 @@ export default function App() {
   }
   const removeCabin = (id: string) => setFleet((prev) => prev.filter((c) => c.id !== id))
 
-  // Drivers carry no sync window — linking just adds them to the DB.
-  const addDrivers = (driverIds: string[]) => {
-    if (driverIds.length === 0) return
+  // Drivers carry no sync window — linking just adds them to the DB. `extra`
+  // carries manually added drivers (typed in the Connect wizard) whose names
+  // aren't in the discovered pool.
+  const addDrivers = (driverIds: string[], extra: FleetDriver[] = []) => {
+    if (driverIds.length === 0 && extra.length === 0) return
     setDrivers((prev) => {
       const map = new Map(prev.map((d) => [d.id, d]))
       driverIds.forEach((id) => {
         const name = DRIVER_POOL.find((p) => p.id === id)?.name ?? id
         map.set(id, { id, name })
       })
+      extra.forEach((d) => map.set(d.id, d))
       return [...map.values()]
     })
   }
-  const removeDriver = (id: string) => setDrivers((prev) => prev.filter((d) => d.id !== id))
 
   // Track a connected integration (dedupe by type+name).
   const connectIntegration = (type: 'eld' | 'tms', name: string, mono: string) =>
@@ -128,8 +130,8 @@ export default function App() {
 
   // Connect wizard: link the chosen cabins (over the picked window) + drivers,
   // and start syncing the cabins.
-  const linkFleet = (cabinIds: string[], driverIds: string[], range: PeriodKey) => {
-    addDrivers(driverIds)
+  const linkFleet = (cabinIds: string[], driverIds: string[], range: PeriodKey, extraDrivers: FleetDriver[] = []) => {
+    addDrivers(driverIds, extraDrivers)
     if (cabinIds.length > 0) {
       const to = startOfDayLocal(new Date())
       const from = new Date(to.getFullYear(), to.getMonth() - monthsForPeriod(range), to.getDate())
@@ -190,7 +192,6 @@ export default function App() {
               onSyncCabins={syncCabins}
               onRemoveCabin={removeCabin}
               onAddDrivers={addDrivers}
-              onRemoveDriver={removeDriver}
               onRemoveIntegration={removeIntegration}
             />
             {dataTab === 'full' ? (
@@ -205,7 +206,7 @@ export default function App() {
               />
             ) : (
               <>
-                <KpiCards noData={noData} view={view} hideMarketPosition={view === 'summary'} />
+                <KpiCards noData={noData} hideMarketPosition={view === 'summary'} />
                 <div className={`grid-2 ${view === 'summary' ? 'grid-2-even' : ''}`}>
                   <MoneyLeakage noData={noData} view={view} hidePoorPlanning={view === 'summary'} />
                   <PotentialRecovery

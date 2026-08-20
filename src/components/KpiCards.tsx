@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react'
+import { ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import {
   kpiCards,
   deltaTone,
@@ -15,15 +15,12 @@ import EmptyState from './EmptyState'
 export default function KpiCards({
   noData = false,
   hideMarketPosition = false,
-  view = 'dashboard',
 }: {
   noData?: boolean
   hideMarketPosition?: boolean
-  view?: 'summary' | 'dashboard'
 }) {
   const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
-  const isV2 = view === 'dashboard'
   const cards = hideMarketPosition
     ? kpiCards.filter((c) => c.label !== 'Market Position')
     : kpiCards
@@ -33,17 +30,7 @@ export default function KpiCards({
       {cards.map((card) => (
         <div className="card kpi" key={card.label}>
           <div className="kpi-head">
-            <span className="eyebrow kpi-eyebrow">
-              {card.label}
-              {isV2 && card.metrics[0].tip && (
-                <span className="info-tip" tabIndex={0}>
-                  <Info size={13} color="var(--text-muted)" />
-                  <span className="info-tip-bubble" role="tooltip">
-                    {card.metrics[0].tip}
-                  </span>
-                </span>
-              )}
-            </span>
+            <span className="eyebrow">{card.label}</span>
             {!noData && (
               <button
                 className="kpi-arrow"

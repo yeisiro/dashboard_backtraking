@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, ArrowLeft, ChevronRight, ChevronDown, Search, Check } from 'lucide-react'
-import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, ELD_PROVIDERS, TMS_PROVIDERS, type PeriodKey, type Provider } from '../data'
+import { X, ArrowLeft, ChevronRight, ChevronDown, Search, Check, Plus, UserPlus } from 'lucide-react'
+import { CABIN_POOL, DRIVER_POOL, SYNC_PERIODS, ELD_PROVIDERS, TMS_PROVIDERS, type PeriodKey, type Provider, type FleetDriver } from '../data'
 
 // End-to-end onboarding wizard: connect the ELD, then the TMS, link the cabins
 // we discover across both, pick how much history to pull, and watch it sync.
@@ -43,7 +43,7 @@ interface Props {
   onClose: () => void
   // Link the chosen cabins + drivers at the chosen window and kick off the
   // background sync (App owns both). The modal then shows a live view to leave.
-  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey) => void
+  onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey, extraDrivers?: FleetDriver[]) => void
   // Record a connected ELD/TMS so Manage → Integrations can list it.
   onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
   // Live sync state fed back from App while the modal stays open.
@@ -64,23 +64,33 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
   const [cabinQuery, setCabinQuery] = useState('')
   const [selectedCabins, setSelectedCabins] = useState<string[]>([])
 
-  // Drivers linking.
+  // Drivers. Every driver discovered across the ELD + TMS is integrated — the
+  // list is read-only. The operator can add anyone the systems missed by name;
+  // those manual entries are the only removable rows.
   const [driverQuery, setDriverQuery] = useState('')
-  const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
-  const driversFiltered = useMemo(
-    () => DRIVER_POOL.filter((d) => d.name.toLowerCase().includes(driverQuery.toLowerCase())),
-    [driverQuery],
+  const [manualDrivers, setManualDrivers] = useState<FleetDriver[]>([])
+  const [addingDriver, setAddingDriver] = useState(false)
+  const [newDriverName, setNewDriverName] = useState('')
+  const allDrivers: (FleetDriver & { manual: boolean })[] = useMemo(
+    () => [
+      ...DRIVER_POOL.map((d) => ({ ...d, manual: false })),
+      ...manualDrivers.map((d) => ({ ...d, manual: true })),
+    ],
+    [manualDrivers],
   )
-  const allDriversShownSelected =
-    driversFiltered.length > 0 && driversFiltered.every((d) => selectedDrivers.includes(d.id))
-  const toggleDriver = (id: string) =>
-    setSelectedDrivers((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-  const toggleAllDrivers = () =>
-    setSelectedDrivers((p) =>
-      allDriversShownSelected
-        ? p.filter((id) => !driversFiltered.some((d) => d.id === id))
-        : [...new Set([...p, ...driversFiltered.map((d) => d.id)])],
-    )
+  const driversFiltered = useMemo(
+    () => allDrivers.filter((d) => d.name.toLowerCase().includes(driverQuery.toLowerCase())),
+    [allDrivers, driverQuery],
+  )
+  const addManualDriver = () => {
+    const name = newDriverName.trim()
+    if (!name) return
+    setManualDrivers((p) => [...p, { id: `DRV-NEW-${p.length + 1}`, name }])
+    setNewDriverName('')
+    setAddingDriver(false)
+  }
+  const removeManualDriver = (id: string) =>
+    setManualDrivers((p) => p.filter((d) => d.id !== id))
 
   // Data range (sync progress itself lives in App, read via the `sync` prop).
   const [range, setRange] = useState<PeriodKey>('3m')
@@ -354,13 +364,13 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
           </>
         )}
 
-        {/* ---------- Step 4: Link drivers ---------- */}
+        {/* ---------- Step 4: Drivers (read-only; all get integrated) ---------- */}
         {step === 'drivers' && (
           <>
             <div className="modal-body">
               <p className="cfm-sub">
-                Select the drivers we found across your {eld?.name ?? 'ELD'} and {tms?.name ?? 'TMS'} to add
-                to efRouting.
+                These {allDrivers.length} drivers were found across your {eld?.name ?? 'ELD'} and{' '}
+                {tms?.name ?? 'TMS'}. They'll all be added to efRouting — add anyone we missed below.
               </p>
               <div className="tf-search">
                 <Search size={15} color="var(--text-muted)" />
@@ -371,35 +381,50 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                 />
               </div>
               <div className="lc-bar">
-                <span className="lc-count">
-                  {selectedDrivers.length} of {DRIVER_POOL.length} selected
-                </span>
-                <button className="lc-selectall" onClick={toggleAllDrivers}>
-                  {allDriversShownSelected ? 'Deselect all' : 'Select all'}
+                <span className="lc-count">{allDrivers.length} drivers will be integrated</span>
+                <button className="lc-selectall" onClick={() => setAddingDriver((a) => !a)}>
+                  <Plus size={13} /> Add driver
                 </button>
               </div>
+              {addingDriver && (
+                <div className="cfm-addrow">
+                  <input
+                    autoFocus
+                    placeholder="Driver full name"
+                    value={newDriverName}
+                    onChange={(e) => setNewDriverName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addManualDriver()}
+                  />
+                  <button className="cfm-addrow-btn" disabled={!newDriverName.trim()} onClick={addManualDriver}>
+                    Add
+                  </button>
+                </div>
+              )}
               <div className="tf-scroll lc-list">
-                {driversFiltered.map((d) => {
-                  const sel = selectedDrivers.includes(d.id)
-                  return (
-                    <button key={d.id} className={`lc-row ${sel ? 'sel' : ''}`} onClick={() => toggleDriver(d.id)}>
-                      <span className="lc-box">{sel && <Check size={13} strokeWidth={3} />}</span>
-                      <span className="lc-id">{d.name}</span>
-                    </button>
-                  )
-                })}
+                {driversFiltered.map((d) => (
+                  <div key={d.id} className="lc-row static">
+                    <UserPlus size={14} className="lc-drv-icon" />
+                    <span className="lc-id">{d.name}</span>
+                    {d.manual && <span className="cfm-new-chip">Added</span>}
+                    {d.manual && (
+                      <button
+                        className="lc-undo"
+                        onClick={() => removeManualDriver(d.id)}
+                        aria-label={`Remove ${d.name}`}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
             <div className="modal-foot">
               <button className="btn-text" onClick={onClose}>
                 Cancel
               </button>
-              <button
-                className="btn-pill"
-                disabled={selectedDrivers.length === 0}
-                onClick={() => setStep('period')}
-              >
-                Link drivers
+              <button className="btn-pill" onClick={() => setStep('period')}>
+                Continue
               </button>
             </div>
           </>
@@ -450,7 +475,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
               <button
                 className="btn-pill"
                 onClick={() => {
-                  onStartSync?.(selectedCabins, selectedDrivers, range)
+                  onStartSync?.(selectedCabins, DRIVER_POOL.map((d) => d.id), range, manualDrivers)
                   setStep('syncing')
                 }}
               >

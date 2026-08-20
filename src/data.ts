@@ -267,9 +267,9 @@ export const CAUSE_LABEL: Record<Cause, string> = {
 export function causeText(cause: Cause, metricLabel: string): string {
   switch (cause) {
     case 'idle':
-      return `Idle ${metricLabel}`
+      return `Idle ${metricLabel} of hours`
     case 'deviation':
-      return `${metricLabel} off-route`
+      return `Off-route ${metricLabel} of miles`
     case 'empty':
       return `Deadhead ${metricLabel} of miles`
     case 'fuel':
@@ -284,11 +284,12 @@ export interface RankRow {
   rank: string
   name: string
   cause?: Cause // one of the 4 standard categories this row is attributed to
-  // The cause-specific quantity, same weekly-baseline convention as `weekly`:
-  // - idle: minutes/week of idle time (total, scales with the date range)
-  // - deviation: miles/week off-route (total, scales with the date range)
-  // - empty: % of miles run empty (a ratio — constant across date ranges)
-  // - fuel: ¢/gal vs. corridor price (a ratio — constant across date ranges)
+  // The cause-specific quantity — all ratios now, so magnitude is comparable at
+  // a glance and none of them scale with the date range:
+  // - idle: % of engine hours spent idling
+  // - deviation: % of miles driven off-route (excess vs the optimal plan)
+  // - empty: % of miles run empty (deadhead)
+  // - fuel: ¢/gal vs. corridor price (rendered as $/gal)
   metric?: number
   weekly: number // signed $/week baseline; scaled to the selected date window at render
   tone: Tone
@@ -298,18 +299,19 @@ export interface RankRow {
 // Worst offenders: which trucks are dragging the fleet and why. First 5 are
 // fixed; the rest are generated so the count selector (5/10/15) has depth.
 const WORST_CAUSES: Cause[] = ['empty', 'fuel', 'idle', 'deviation']
+// All percentages now (except fuel, kept in ¢/gal). Worst trucks run high.
 const worstMetric = (cause: Cause, i: number): number => {
-  if (cause === 'idle') return Math.max(30, 180 - i * 9)
-  if (cause === 'deviation') return 12 + i
-  if (cause === 'empty') return Math.max(9, 30 - i)
-  return Math.max(4, 17 - Math.floor(i / 2))
+  if (cause === 'idle') return Math.max(14, 26 - i) // % of hours idling
+  if (cause === 'deviation') return 8 + (i % 7) // % of miles off-route
+  if (cause === 'empty') return Math.max(9, 30 - i) // % deadhead
+  return Math.max(4, 17 - Math.floor(i / 2)) // ¢/gal over optimal
 }
 export const bottom5: RankRow[] = [
   { rank: '01', name: '#7834', cause: 'empty', metric: 31, weekly: -310, tone: 'red' },
   { rank: '02', name: '#3390', cause: 'fuel', metric: 18, weekly: -280, tone: 'red' },
-  { rank: '03', name: '#2210', cause: 'idle', metric: 196, weekly: -260, tone: 'red' },
-  { rank: '04', name: '#5567', cause: 'deviation', metric: 15, weekly: -190, tone: 'red' },
-  { rank: '05', name: '#4521', cause: 'deviation', metric: 22, weekly: -175, tone: 'red' },
+  { rank: '03', name: '#2210', cause: 'idle', metric: 24, weekly: -260, tone: 'red' },
+  { rank: '04', name: '#5567', cause: 'deviation', metric: 12, weekly: -190, tone: 'red' },
+  { rank: '05', name: '#4521', cause: 'deviation', metric: 15, weekly: -175, tone: 'red' },
   ...Array.from({ length: 10 }, (_, k) => {
     const i = k + 5
     const cause = WORST_CAUSES[i % 4]
@@ -327,8 +329,9 @@ export const top5: RankRow[] = [
   { rank: '01', name: '#5012', cause: 'deviation', metric: 2, weekly: 465, tone: 'green' },
   { rank: '02', name: '#4408', cause: 'empty', metric: 9, weekly: 390, tone: 'green' },
   { rank: '03', name: '#6120', cause: 'fuel', metric: 3, weekly: 355, tone: 'green' },
-  { rank: '04', name: '#3301', cause: 'idle', metric: 28, weekly: 320, tone: 'green' },
+  { rank: '04', name: '#3301', cause: 'idle', metric: 6, weekly: 320, tone: 'green' },
   { rank: '05', name: '#2884', cause: 'fuel', metric: 2, weekly: 300, tone: 'green' },
+  // Best trucks run low on every ratio.
   ...Array.from({ length: 10 }, (_, k) => {
     const i = k + 5
     const cause = WORST_CAUSES[(i + 2) % 4]
@@ -336,7 +339,7 @@ export const top5: RankRow[] = [
       rank: String(i + 1).padStart(2, '0'),
       name: '#' + (5100 + k * 131),
       cause,
-      metric: cause === 'idle' ? 22 + k : cause === 'deviation' ? 2 + k : cause === 'empty' ? 6 + k : 2 + k,
+      metric: cause === 'idle' ? 4 + (k % 5) : cause === 'deviation' ? 1 + (k % 3) : cause === 'empty' ? 6 + k : 2 + k,
       weekly: 290 - k * 14,
       tone: 'green' as Tone,
     }
