@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Info, ArrowUpRight, TrendingUp, TrendingDown, Minus, ArrowRight } from 'lucide-react'
-import { leakBars, leakTotal, leakDelta, leakAmount, planFixes, deltaTone, deltaTrend, tripRows } from '../data'
+import { leakBars, leakTotal, leakDelta, leakAmount, planFixes, deltaTone, deltaTrend, tripRows, FLEET_DRIVERS } from '../data'
 import { usePeriod } from '../PeriodContext'
 import MoneyLeakageCompare from './MoneyLeakageCompare'
 import RecommendationsModal from './RecommendationsModal'
@@ -27,10 +27,12 @@ export default function MoneyLeakage({
   noData = false,
   hidePoorPlanning = false,
   view = 'dashboard',
+  dimension = 'trucks',
 }: {
   noData?: boolean
   hidePoorPlanning?: boolean
   view?: 'summary' | 'dashboard'
+  dimension?: 'trucks' | 'drivers'
 }) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [recsOpen, setRecsOpen] = useState(false)
@@ -41,7 +43,11 @@ export default function MoneyLeakage({
   const bars = hidePoorPlanning
     ? leakBars.filter((b) => b.name !== AVOIDABLE_NAME)
     : leakBars
-  const perUnit = money(leakAmount(leakTotal) / FLEET_TRUCKS)
+  // In driver mode the leakage is split across drivers, not trucks.
+  const byDriver = dimension === 'drivers'
+  const unitCount = byDriver ? FLEET_DRIVERS : FLEET_TRUCKS
+  const perUnit = money(leakAmount(leakTotal) / unitCount)
+  const perUnitLabel = byDriver ? 'per driver' : 'per unit'
   const barName = (name: string) => (isV2 && V2_BAR_NAME[name]) || name
 
   return (
@@ -89,8 +95,11 @@ export default function MoneyLeakage({
             </span>
           </div>
           {isV2 && (
-            <span className="leak-perunit cmp-tip" data-tip={`Total leakage split across your ${FLEET_TRUCKS} trucks`}>
-              {perUnit} <span className="leak-perunit-lbl">per unit</span>
+            <span
+              className="leak-perunit cmp-tip"
+              data-tip={`Total leakage split across your ${unitCount} ${byDriver ? 'drivers' : 'trucks'}`}
+            >
+              {perUnit} <span className="leak-perunit-lbl">{perUnitLabel}</span>
             </span>
           )}
         </div>

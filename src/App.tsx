@@ -41,6 +41,9 @@ export default function App() {
   })
   const [truckFilter, setTruckFilter] = useState<string[]>([])
   const [driverFilter, setDriverFilter] = useState<string[]>([])
+  // Analysis dimension (V2 only): the whole dashboard reads either per truck or
+  // per driver — the two filters never coexist, the user switches between them.
+  const [analysisDim, setAnalysisDim] = useState<'trucks' | 'drivers'>('trucks')
   const [deadheadMode, setDeadheadMode] = useState<DeadheadMode>('in-range')
   const [fullDataSubTab, setFullDataSubTab] = useState<SubTab>('Trips')
   // Trips and Fleet Analytics always need each trip's untouched full
@@ -179,6 +182,8 @@ export default function App() {
               onTruckFilterChange={setTruckFilter}
               driverFilter={driverFilter}
               onDriverFilterChange={setDriverFilter}
+              dimension={analysisDim}
+              onDimensionChange={setAnalysisDim}
               view={view}
               deadheadMode={deadheadMode}
               onDeadheadModeChange={setDeadheadMode}
@@ -201,6 +206,7 @@ export default function App() {
                 truckFilter={truckFilter}
                 onTruckFilterChange={setTruckFilter}
                 driverFilter={driverFilter}
+                dimension={analysisDim}
                 view={view}
                 onSubTabChange={setFullDataSubTab}
               />
@@ -208,10 +214,16 @@ export default function App() {
               <>
                 <KpiCards noData={noData} hideMarketPosition={view === 'summary'} />
                 <div className={`grid-2 ${view === 'summary' ? 'grid-2-even' : ''}`}>
-                  <MoneyLeakage noData={noData} view={view} hidePoorPlanning={view === 'summary'} />
+                  <MoneyLeakage
+                    noData={noData}
+                    view={view}
+                    dimension={analysisDim}
+                    hidePoorPlanning={view === 'summary'}
+                  />
                   <PotentialRecovery
                     fleetMode={fleetMode}
                     view={view}
+                    dimension={analysisDim}
                     hideLeaders={view === 'summary'}
                     onViewTrips={(band) => {
                       setTripsBand(band)
@@ -223,7 +235,7 @@ export default function App() {
                 {view === 'dashboard' && (
                   <div className="grid-live">
                     <LiveOperations noData={noData} />
-                    <MarketMap fill />
+                    <MarketMap fill dimension={analysisDim} />
                   </div>
                 )}
               </>

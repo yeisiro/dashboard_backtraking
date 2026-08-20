@@ -971,6 +971,80 @@ const TRIP_BASE: TripBase[] = [
 
 export const tripRows: TripRow[] = computeScores(TRIP_BASE.map((b, i) => buildTrip(b, i)))
 
+// ── By-driver rankings (analysis dimension = drivers) ────────────────────────
+// Same RankRow shape as the truck rankings, keyed by driver name, so Potential
+// Savings and the market benchmark can be read per driver instead of per truck.
+// The number of distinct drivers actually running loads, for the per-driver
+// leakage figure (mirrors FLEET_TRUCKS in MoneyLeakage).
+export const FLEET_DRIVERS = new Set(tripRows.map((r) => r.driver)).size
+
+const DRIVER_ROSTER = DRIVER_POOL.map((d) => d.name)
+export const bottomDrivers: RankRow[] = DRIVER_ROSTER.slice(0, 15).map((name, i) => {
+  const cause = WORST_CAUSES[i % 4]
+  return {
+    rank: String(i + 1).padStart(2, '0'),
+    name,
+    cause,
+    metric: worstMetric(cause, i),
+    weekly: -Math.max(70, 305 - i * 17),
+    tone: 'red' as Tone,
+  }
+})
+export const topDrivers: RankRow[] = [...DRIVER_ROSTER].reverse().slice(0, 15).map((name, i) => {
+  const cause = WORST_CAUSES[(i + 2) % 4]
+  return {
+    rank: String(i + 1).padStart(2, '0'),
+    name,
+    cause,
+    metric: cause === 'idle' ? 4 + (i % 5) : cause === 'deviation' ? 1 + (i % 3) : cause === 'empty' ? 6 + i : 2 + i,
+    weekly: Math.max(120, 460 - i * 18),
+    tone: 'green' as Tone,
+  }
+})
+export const driverLeaders: RankRow[] = DRIVER_ROSTER.slice(0, 15).map((name, i) => ({
+  rank: String(i + 1).padStart(2, '0'),
+  name,
+  weekly: Math.max(300, 470 - i * 12),
+  tone: 'green' as Tone,
+  you: i === 1,
+}))
+
+// Operative repositioning — empty (deadhead) moves the truck makes on dispatch
+// instructions that are NOT tied to any load. Example: a truck sitting in
+// Wolcott, IN is told to reposition empty to Louisville, KY, and only from
+// there deadheads toward its next load's pickup. These are pure cost with no
+// revenue and no adherence/wasted metrics, so they carry operational fields
+// only. `reposition: true` is what tells the Trips table a row is a move, not
+// a load.
+export interface RepositionRow {
+  reposition: true
+  truck: string
+  driver: string
+  cls: TripRow['cls']
+  startDate: string
+  endDate: string
+  lane: string // "Wolcott, IN → Louisville, KY"
+  reason: string // why the move happened — shown on hover
+  totalMiles: number // 100% deadhead
+  effectiveHours: number
+  cost: number
+  // Even an empty operational move is graded: did it follow the optimal route
+  // (adherence), and how much of its cost was avoidable excess (leakage)?
+  adherence: number // %
+  leakage: number // $ excess cost vs the optimal empty move
+}
+
+export const repositionRows: RepositionRow[] = [
+  { reposition: true, truck: '#7834', cls: 'D', driver: driverForIndex(0), startDate: 'May 11', endDate: 'May 11', lane: 'Wolcott, IN → Louisville, KY', reason: 'Moved empty on dispatch instruction to stage for the next pickup', totalMiles: 176, effectiveHours: 3.1, cost: 208, adherence: 91.5, leakage: 14 },
+  { reposition: true, truck: '#2210', cls: 'D', driver: driverForIndex(2), startDate: 'May 12', endDate: 'May 12', lane: 'Houston, TX → San Antonio, TX', reason: 'Repositioned empty to a higher-demand market per dispatch', totalMiles: 197, effectiveHours: 3.4, cost: 231, adherence: 87.2, leakage: 24 },
+  { reposition: true, truck: '#6120', cls: 'B', driver: driverForIndex(3), startDate: 'May 13', endDate: 'May 13', lane: 'Nashville, TN → Louisville, KY', reason: 'Empty move to reset home-time clock', totalMiles: 176, effectiveHours: 3.0, cost: 199, adherence: 93.4, leakage: 9 },
+  { reposition: true, truck: '#5012', cls: 'A', driver: driverForIndex(1), startDate: 'May 14', endDate: 'May 14', lane: 'Houston, TX → Austin, TX', reason: 'Repositioned empty to pre-stage near a booked pickup', totalMiles: 162, effectiveHours: 2.7, cost: 184, adherence: 95.6, leakage: 6 },
+  { reposition: true, truck: '#4456', cls: 'D', driver: driverForIndex(4), startDate: 'May 8', endDate: 'May 8', lane: 'Sacramento, CA → Stockton, CA', reason: 'Moved empty off a slow lane on dispatch instruction', totalMiles: 49, effectiveHours: 1.0, cost: 72, adherence: 89.0, leakage: 11 },
+  { reposition: true, truck: '#4408', cls: 'B', driver: driverForIndex(5), startDate: 'May 13', endDate: 'May 13', lane: 'Indianapolis, IN → Chicago, IL', reason: 'Empty reposition to cover a next-day load commitment', totalMiles: 184, effectiveHours: 3.2, cost: 206, adherence: 88.7, leakage: 18 },
+  { reposition: true, truck: '#4467', cls: 'D', driver: driverForIndex(6), startDate: 'May 4', endDate: 'May 5', lane: 'Omaha, NE → Kansas City, MO', reason: 'Repositioned empty per dispatch after a long dwell', totalMiles: 199, effectiveHours: 3.5, cost: 234, adherence: 82.3, leakage: 31 },
+  { reposition: true, truck: '#8823', cls: 'B', driver: driverForIndex(7), startDate: 'May 10', endDate: 'May 10', lane: 'Albuquerque, NM → Santa Fe, NM', reason: 'Short empty move to stage for the morning pickup', totalMiles: 64, effectiveHours: 1.2, cost: 88, adherence: 96.1, leakage: 4 },
+]
+
 // Cost breakdown segments (share of total lane cost), sorted largest first.
 // Static across trips — only the $ amount they're multiplied against changes.
 // Colors are categorical (each segment is a distinct, independently actionable

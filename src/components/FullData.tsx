@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
-  TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock,
+  TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation,
 } from 'lucide-react'
-import { tripRows, costSegments, deltaTone, deltaTrend, type TripRow, type Goal } from '../data'
+import { tripRows, repositionRows, costSegments, deltaTone, deltaTrend, type TripRow, type RepositionRow, type Goal } from '../data'
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
@@ -76,6 +76,72 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   leakage: (r) => r.totalExcessCost,
 }
 
+// A row in the Trips table is either a load trip or an operative repositioning
+// move (empty, no load). They live in one sorted list when the toggle is on.
+type TableRow = TripRow | RepositionRow
+const isReposition = (r: TableRow): r is RepositionRow => 'reposition' in r
+
+// Sort value that works for both kinds. A move is 100% deadhead, earns no
+// income, and its cost is a straight P&L drag (profit = −cost). It has no
+// quality metrics, so on those keys it sorts to the bottom regardless of dir.
+function sortValue(key: SortKey, r: TableRow): number {
+  if (!isReposition(r)) return SORT_ACCESSOR[key](r)
+  switch (key) {
+    case 'startDate': return dateSortValue(r.startDate)
+    case 'time': return r.effectiveHours
+    case 'distance': return r.totalMiles
+    case 'deadhead': return r.totalMiles
+    case 'income': return 0
+    case 'cost': return r.cost
+    case 'profit': return -r.cost
+    case 'adherence': return r.adherence
+    case 'leakage': return r.leakage
+    default: return -Infinity // score / wastedRate (moves don't carry these)
+  }
+}
+
+// Shape a repositioning move as a TripRow so the detail modal (which is built
+// around TripRow) can render it in `repo` mode: no load, no income, 100%
+// deadhead. optimalCost/excessMilesCost carry the leakage; profit is −cost.
+function repoAsTrip(r: RepositionRow): TripRow {
+  const totalCost = Math.round(r.cost * 1.08)
+  return {
+    score: 0,
+    truck: r.truck,
+    driver: r.driver,
+    cls: r.cls,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    lane: r.lane,
+    loadRef: '—',
+    status: 'delivered',
+    income: 0,
+    negotiatedRpm: 0,
+    executedRpm: 0,
+    effectiveRpm: 0,
+    wastedRpmPct: 0,
+    cost: r.cost,
+    totalCost,
+    optimalCost: Math.max(0, totalCost - r.leakage),
+    totalExcessCost: r.leakage,
+    excessMilesCost: r.leakage,
+    missedFuelSavings: 0,
+    actualSaving: 0,
+    profit: -r.cost,
+    totalMiles: r.totalMiles,
+    loadedMiles: 0,
+    dhMilesPct: 100,
+    deadheadPct: 100,
+    effectiveHours: r.effectiveHours,
+    idleHours: 0,
+    idlePct: 0,
+    mpg: 6.0,
+    adherence: r.adherence,
+    planAdherence: r.adherence,
+    wastedRate: 0,
+  }
+}
+
 // ── Columns ───────────────────────────────────────────────────────────────
 // Every data column is user-reorderable (dragged via the grip handle) —
 // 'truck'/'load'/'status' just don't have a sort accessor, and 'status' gets
@@ -104,11 +170,11 @@ const ALL_COLUMNS: { key: ColId; label: string; left?: boolean; sortable?: boole
 const rowKey = (r: TripRow) => `${r.truck}-${r.startDate}-${r.loadRef}`
 
 // "May 14 → May 15", collapsed to "May 14" when start and end match.
-const dateRange = (r: TripRow) =>
+const dateRange = (r: { startDate: string; endDate: string }) =>
   r.startDate === r.endDate ? r.startDate : `${r.startDate} → ${r.endDate}`
 
 // V1 always spells out both ends of the trip, even for same-day trips.
-const fullDateRange = (r: TripRow) => `${r.startDate} → ${r.endDate}`
+const fullDateRange = (r: { startDate: string; endDate: string }) => `${r.startDate} → ${r.endDate}`
 
 function StatusBadge({ status }: { status: TripRow['status'] }) {
   const { label, color } = STATUS_STYLE[status]
@@ -125,6 +191,7 @@ export default function FullData({
   truckFilter = [],
   onTruckFilterChange,
   driverFilter = [],
+  dimension = 'trucks',
   view = 'dashboard',
   onSubTabChange,
 }: {
@@ -133,6 +200,7 @@ export default function FullData({
   truckFilter?: string[]
   onTruckFilterChange?: (next: string[]) => void
   driverFilter?: string[]
+  dimension?: 'trucks' | 'drivers'
   view?: 'summary' | 'dashboard'
   onSubTabChange?: (tab: SubTab) => void
 }) {
@@ -178,6 +246,7 @@ export default function FullData({
           view={view}
           truckFilter={truckFilter}
           driverFilter={driverFilter}
+          dimension={dimension}
           placeFilter={placeFilter}
           onClearPlaceFilter={() => setPlaceFilter(null)}
         />
@@ -188,6 +257,7 @@ export default function FullData({
       ) : tab === 'Fuel and Savings' ? (
         <FuelSavings
           classFilter={classFilter}
+          dimension={dimension}
           onSelectTrucks={(trucks) => {
             setPlaceFilter(null)
             onTruckFilterChange?.(trucks)
@@ -917,6 +987,7 @@ function TripsTable({
   view = 'dashboard',
   truckFilter = [],
   driverFilter = [],
+  dimension = 'trucks',
   placeFilter = null,
   onClearPlaceFilter,
 }: {
@@ -925,13 +996,17 @@ function TripsTable({
   view?: 'summary' | 'dashboard'
   truckFilter?: string[]
   driverFilter?: string[]
+  dimension?: 'trucks' | 'drivers'
   placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' | 'all' } | null
   onClearPlaceFilter?: () => void
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<TripRow | null>(null)
+  const [selectedMove, setSelectedMove] = useState<RepositionRow | null>(null)
   const [query, setQuery] = useState('')
+  // Also fold in empty repositioning moves (deadhead, no load) alongside trips.
+  const [showReposition, setShowReposition] = useState(false)
   // Empty = all statuses shown.
   const [statusFilter, setStatusFilter] = useState<TripRow['status'][]>([])
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
@@ -995,14 +1070,18 @@ function TripsTable({
   const byClass =
     classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
 
-  // Truck filtering always goes through the header's "Trucks:" filter —
-  // arriving from a truck clicked on the Fuel and Savings map sets that same
-  // filter (see FullData's onSelectTrucks) rather than a side-channel here.
-  const byTruck = truckFilter.length > 0 ? byClass.filter((r) => truckFilter.includes(r.truck)) : byClass
-
-  // Drivers filter (V2 toolbar) — narrow to the selected drivers.
+  // Only the active analysis dimension's filter applies — trucks and drivers
+  // never narrow at the same time. In truck mode the header "Trucks:" filter
+  // (also set by the Fuel & Savings map click) runs; in driver mode the
+  // "Drivers:" filter runs instead.
   const byDriver =
-    driverFilter.length > 0 ? byTruck.filter((r) => driverFilter.includes(r.driver)) : byTruck
+    dimension === 'drivers'
+      ? driverFilter.length > 0
+        ? byClass.filter((r) => driverFilter.includes(r.driver))
+        : byClass
+      : truckFilter.length > 0
+        ? byClass.filter((r) => truckFilter.includes(r.truck))
+        : byClass
 
   // Arriving from a state's "Leaving X" / "Arriving to X" click, or the
   // Trips Here card's "view all" arrow, on the Fuel and Savings map — filters
@@ -1027,29 +1106,65 @@ function TripsTable({
   const byStatus =
     statusFilter.length > 0 ? filtered.filter((r) => statusFilter.includes(r.status)) : filtered
 
-  const rows = sortKey
-    ? [...byStatus].sort((a, b) => {
-        const cmp = SORT_ACCESSOR[sortKey](a) - SORT_ACCESSOR[sortKey](b)
+  // Repositioning moves run through the same class/truck/driver/place/search
+  // filters, but not status (they have no invoice lifecycle) — they're only in
+  // the list when the toggle is on.
+  const repoRows: RepositionRow[] = showReposition
+    ? repositionRows.filter((r) => {
+        if (classFilter.length > 0 && !classFilter.includes(r.cls)) return false
+        if (truckFilter.length > 0 && !truckFilter.includes(r.truck)) return false
+        if (driverFilter.length > 0 && !driverFilter.includes(r.driver)) return false
+        if (placeFilter) {
+          const parsed = parseLane(r.lane)
+          if (placeFilter.direction === 'outbound') return parsed.origin === placeFilter.code
+          if (placeFilter.direction === 'inbound') return parsed.dest === placeFilter.code
+          return parsed.all.includes(placeFilter.code)
+        }
+        if (q) return r.lane.toLowerCase().includes(q) || r.reason.toLowerCase().includes(q)
+        return true
+      })
+    : []
+
+  const combined: TableRow[] = [...byStatus, ...repoRows]
+  const rows: TableRow[] = sortKey
+    ? [...combined].sort((a, b) => {
+        const cmp = sortValue(sortKey, a) - sortValue(sortKey, b)
         return sortDir === 'asc' ? cmp : -cmp
       })
-    : byStatus
+    : combined
 
   // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
   // can't be summed meaningfully, so Adherence/Wasted Rate show the average
   // instead. Computed per subset so both the flat table and each group's own
   // footer can share this.
-  const computeTotals = (subset: TripRow[]) => ({
-    tripCount: subset.length,
-    totalTime: subset.reduce((sum, r) => sum + drivingHours(r), 0),
-    totalDistance: subset.reduce((sum, r) => sum + r.totalMiles, 0),
-    totalDeadhead: subset.reduce((sum, r) => sum + deadheadMiles(r), 0),
-    totalIncome: subset.reduce((sum, r) => sum + r.income, 0),
-    totalCost: subset.reduce((sum, r) => sum + r.cost, 0),
-    totalProfit: subset.reduce((sum, r) => sum + r.profit, 0),
-    avgAdherence: subset.length ? subset.reduce((sum, r) => sum + r.adherence, 0) / subset.length : 0,
-    avgWastedRate: subset.length ? subset.reduce((sum, r) => sum + r.wastedRate, 0) / subset.length : 0,
-    totalLeakage: subset.reduce((sum, r) => sum + r.totalExcessCost, 0),
-  })
+  // Moves add operational load (time, miles — all deadhead — cost) and a straight
+  // profit drag; they earn no income (so income stays trip-only) but they DO
+  // carry route adherence and money leakage, so those fold moves in. Wasted Rate
+  // has no meaning for an empty move, so its average stays trip-only. Profit
+  // reconciles: income − cost still holds because a move's profit is exactly −cost.
+  const computeTotals = (subset: TableRow[]) => {
+    const trips = subset.filter((r): r is TripRow => !isReposition(r))
+    const moves = subset.filter(isReposition)
+    const moveCost = moves.reduce((sum, r) => sum + r.cost, 0)
+    // Adherence averages over everything that carries the metric — every trip
+    // and every move does, so the denominator is the full shown set.
+    const gradedCount = trips.length + moves.length
+    const adherenceSum =
+      trips.reduce((s, r) => s + r.adherence, 0) + moves.reduce((s, r) => s + r.adherence, 0)
+    return {
+      tripCount: trips.length,
+      moveCount: moves.length,
+      totalTime: trips.reduce((sum, r) => sum + drivingHours(r), 0) + moves.reduce((s, r) => s + r.effectiveHours, 0),
+      totalDistance: trips.reduce((sum, r) => sum + r.totalMiles, 0) + moves.reduce((s, r) => s + r.totalMiles, 0),
+      totalDeadhead: trips.reduce((sum, r) => sum + deadheadMiles(r), 0) + moves.reduce((s, r) => s + r.totalMiles, 0),
+      totalIncome: trips.reduce((sum, r) => sum + r.income, 0),
+      totalCost: trips.reduce((sum, r) => sum + r.cost, 0) + moveCost,
+      totalProfit: trips.reduce((sum, r) => sum + r.profit, 0) - moveCost,
+      avgAdherence: gradedCount ? adherenceSum / gradedCount : 0,
+      avgWastedRate: trips.length ? trips.reduce((sum, r) => sum + r.wastedRate, 0) / trips.length : 0,
+      totalLeakage: trips.reduce((sum, r) => sum + r.totalExcessCost, 0) + moves.reduce((s, r) => s + r.leakage, 0),
+    }
+  }
 
   // Cells for every column, rendered in whatever order columnOrder says.
   const renderCell = (key: ColId, r: TripRow) => {
@@ -1107,6 +1222,58 @@ function TripsTable({
         return null
     }
   }
+  // Same columns, but for an empty repositioning move: real operational values
+  // (time / miles — all deadhead — / cost / −cost profit) and a clear
+  // "Repositioning" marker in place of a load; revenue & quality columns read
+  // "—" since a move earns and scores nothing.
+  const na = <span className="fd-na">—</span>
+  const renderRepositionCell = (key: ColId, r: RepositionRow) => {
+    switch (key) {
+      case 'truck':
+        return (
+          <td key={key} className="fd-left">
+            <div className="fd-truck-row">
+              <span className="fd-truck">{r.truck}</span>
+              <span className="fd-class" style={{ background: CLASS_COLOR[r.cls] }}>{r.cls}</span>
+            </div>
+            <div className="fd-driver fd-dim">{r.driver}</div>
+          </td>
+        )
+      case 'startDate':
+        return <td key={key} className="fd-left fd-dim">{view === 'summary' ? fullDateRange(r) : dateRange(r)}</td>
+      case 'load':
+        return (
+          <td key={key} className="fd-left">
+            <span className="fd-repo-tag cf-tip" data-tip={r.reason}>
+              <Navigation size={11} /> Operative trip
+            </span>
+            <div className="fd-load-route fd-dim">{r.lane}</div>
+          </td>
+        )
+      case 'status':
+        return <td key={key} className="fd-left"><span className="fd-status" style={{ color: 'var(--red)' }}>DH</span></td>
+      case 'time':
+        return <td key={key} className="fd-dim">{fmtHours(r.effectiveHours)}</td>
+      case 'distance':
+        return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
+      case 'deadhead':
+        return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
+      case 'income':
+        return <td key={key}>{na}</td>
+      case 'cost':
+        return <td key={key} className="fd-dim">{usd(r.cost)}</td>
+      case 'profit':
+        return <td key={key} className="fd-neg">{usd(-r.cost)}</td>
+      case 'adherence':
+        return <td key={key} className="fd-dim">{pct(r.adherence)}</td>
+      case 'leakage':
+        return <td key={key} className="fd-neg">{usd(r.leakage)}</td>
+      case 'wastedRate':
+        return <td key={key} className="fd-dim">{na}</td>
+      default:
+        return null
+    }
+  }
   const renderFooterCell = (key: ColId, t: ReturnType<typeof computeTotals>) => {
     switch (key) {
       case 'truck':
@@ -1151,16 +1318,26 @@ function TripsTable({
     }
   }
 
-  const renderRow = (r: TripRow) => (
-    <tr key={rowKey(r)}>
-      {columnOrder.map((key) => renderCell(key, r))}
-      <td>
-        <button className="fd-view" aria-label="View trip details" onClick={() => setSelected(r)}>
-          View <Eye size={13} />
-        </button>
-      </td>
-    </tr>
-  )
+  const renderRow = (r: TableRow) =>
+    isReposition(r) ? (
+      <tr key={`repo-${r.truck}-${r.startDate}-${r.lane}`} className="fd-repo-row">
+        {columnOrder.map((key) => renderRepositionCell(key, r))}
+        <td>
+          <button className="fd-view" aria-label="View operative trip details" onClick={() => setSelectedMove(r)}>
+            View <Eye size={13} />
+          </button>
+        </td>
+      </tr>
+    ) : (
+      <tr key={rowKey(r)}>
+        {columnOrder.map((key) => renderCell(key, r))}
+        <td>
+          <button className="fd-view" aria-label="View trip details" onClick={() => setSelected(r)}>
+            View <Eye size={13} />
+          </button>
+        </td>
+      </tr>
+    )
 
   const colCount = columnOrder.length + 1
 
@@ -1254,9 +1431,18 @@ function TripsTable({
           if (i !== 0) return renderFooterCell(key, t)
           const left = ALL_COLUMNS.find((c) => c.key === key)?.left
           return (
-            <td key={key} className={left ? 'fd-left' : ''}>
-              <span className="fd-total-label">Total</span>
-              <span className="fd-total-count">{t.tripCount} trips</span>
+            <td key={key} className={`fd-total-cell ${left ? 'fd-left' : ''}`}>
+              {/* Absolutely positioned so this label never widens the first
+                  column — it just overflows across the empty footer cells to
+                  its right (Date/Load/Status totals are blank). Otherwise the
+                  longer "· N operative" text would stretch the Truck column. */}
+              <span className="fd-total-inner">
+                <span className="fd-total-label">Total</span>
+                <span className="fd-total-count">
+                  {t.tripCount} trips
+                  {t.moveCount > 0 && ` · ${t.moveCount} operative`}
+                </span>
+              </span>
             </td>
           )
         })}
@@ -1295,6 +1481,17 @@ function TripsTable({
             </button>
           </div>
         )}
+        <button
+          className={`fd-repo-toggle cf-tip ${showReposition ? 'on' : ''}`}
+          role="switch"
+          aria-checked={showReposition}
+          onClick={() => setShowReposition((s) => !s)}
+          data-tip="Operative trips — empty (deadhead) moves made on dispatch instruction, not tied to any load"
+        >
+          <Navigation size={14} />
+          Operative trips
+          <span className="fd-repo-switch" aria-hidden="true"><span /></span>
+        </button>
       </div>
       <div className="fd-table-wrap">
         <table className="fd-table">
@@ -1313,6 +1510,9 @@ function TripsTable({
         </table>
       </div>
       {selected && <TripDetailModal trip={selected} onClose={() => setSelected(null)} />}
+      {selectedMove && (
+        <TripDetailModal trip={repoAsTrip(selectedMove)} repo onClose={() => setSelectedMove(null)} />
+      )}
     </>
   )
 }

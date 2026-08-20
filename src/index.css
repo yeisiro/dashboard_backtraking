@@ -224,6 +224,34 @@ button {
   color: var(--text);
   font-weight: 600;
 }
+/* Analysis-dimension segmented control (Trucks | Drivers) */
+.dim-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.dim-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dim-toggle-btn svg { opacity: 0.85; }
+.dim-toggle-btn:hover { color: var(--text-dim); }
+.dim-toggle-btn.active {
+  background: var(--surface-3);
+  color: var(--text);
+}
 .filter .chev {
   color: var(--text-muted);
 }
@@ -3136,6 +3164,78 @@ button {
   padding: 0;
 }
 .fd-place-chip button:hover { color: var(--text-dim); }
+
+/* ── Repositioning: toggle + rows (empty deadhead moves, no load) ── */
+.fd-repo-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.fd-repo-toggle:hover { color: var(--text-dim); }
+.fd-repo-toggle.on {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.fd-repo-toggle svg { opacity: 0.8; }
+.fd-repo-switch {
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.fd-repo-switch > span {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.fd-repo-toggle.on .fd-repo-switch {
+  background: rgba(46, 230, 166, 0.2);
+  border-color: var(--green);
+}
+.fd-repo-toggle.on .fd-repo-switch > span {
+  transform: translateX(13px);
+  background: var(--green);
+}
+
+.fd-repo-row td { background: rgba(255, 255, 255, 0.018); }
+.fd-repo-row td.fd-left:first-child { box-shadow: inset 3px 0 0 var(--border-strong); }
+.fd-repo-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: help;
+}
+.fd-repo-tag svg { opacity: 0.85; }
+.fd-na { color: var(--text-muted); opacity: 0.65; }
+
 .fd-table td.fd-no-results {
   text-align: center;
   padding: 40px 0;
@@ -3234,6 +3334,18 @@ button {
   border-bottom: none;
   box-shadow: 0 12px 16px -12px rgba(0, 0, 0, 0.5);
 }
+.fd-total-cell { position: relative; }
+.fd-total-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.fd-total-inner .fd-total-count { margin-left: 0; }
 .fd-total-label {
   font-size: 15px;
   font-weight: 700;

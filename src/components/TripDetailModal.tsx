@@ -130,13 +130,14 @@ function ringPoint(deg: number, r: number): { left: string; top: string } {
 // the ring itself carries the story instead of splitting attention with a
 // legend list underneath it; hovering either the arc or its callout shows
 // that group's cost in the center.
-function TripCostGauge({ total }: { total: number }) {
+function TripCostGauge({ total, deadheadPct = costGroupPct.deadhead }: { total: number; deadheadPct?: number }) {
   const [hover, setHover] = useState<'deadhead' | 'loaded' | null>(null)
+  const pct = { deadhead: deadheadPct, loaded: 100 - deadheadPct }
   const R = 60
   const C = 2 * Math.PI * R
-  const deadheadDeg = (costGroupPct.deadhead / 100) * 360
-  const deadheadLen = (costGroupPct.deadhead / 100) * C
-  const hoverPct = hover && costGroupPct[hover]
+  const deadheadDeg = (pct.deadhead / 100) * 360
+  const deadheadLen = (pct.deadhead / 100) * C
+  const hoverPct = hover && pct[hover]
   const LABEL_R = 88
 
   return (
@@ -184,7 +185,7 @@ function TripCostGauge({ total }: { total: number }) {
           onMouseEnter={() => setHover('deadhead')}
           onMouseLeave={() => setHover(null)}
         >
-          <span className="ld-gauge-label-pct">{Math.round(costGroupPct.deadhead)}%</span>
+          <span className="ld-gauge-label-pct">{Math.round(pct.deadhead)}%</span>
           <span className="ld-gauge-label-name">Deadhead</span>
         </div>
         <div
@@ -193,7 +194,7 @@ function TripCostGauge({ total }: { total: number }) {
           onMouseEnter={() => setHover('loaded')}
           onMouseLeave={() => setHover(null)}
         >
-          <span className="ld-gauge-label-pct">{Math.round(costGroupPct.loaded)}%</span>
+          <span className="ld-gauge-label-pct">{Math.round(pct.loaded)}%</span>
           <span className="ld-gauge-label-name">Loaded miles</span>
         </div>
       </div>
@@ -264,6 +265,16 @@ const CITY_COORDS: Record<string, [number, number]> = {
   'Charlotte, NC': [-80.843, 35.227],
   'Jacksonville, FL': [-81.656, 30.332],
   'Miami, FL': [-80.194, 25.774],
+  // Cities used by operative (repositioning) trips.
+  'Wolcott, IN': [-87.043, 40.758],
+  'Louisville, KY': [-85.759, 38.253],
+  'San Antonio, TX': [-98.494, 29.424],
+  'Austin, TX': [-97.743, 30.267],
+  'Sacramento, CA': [-121.494, 38.582],
+  'Stockton, CA': [-121.29, 37.958],
+  'Omaha, NE': [-95.995, 41.257],
+  'Albuquerque, NM': [-106.65, 35.084],
+  'Santa Fe, NM': [-105.937, 35.687],
 }
 
 function projectCity(cityName: string): [number, number] {
@@ -634,9 +645,13 @@ const STATUS_META: Record<TripRow['status'], { label: string; bg: string; color:
 export default function TripDetailModal({
   trip,
   onClose,
+  repo = false,
 }: {
   trip: TripRow
   onClose: () => void
+  // Operative-trip mode: the whole run is an empty (deadhead) move, so there's
+  // no load, income, or pickup/delivery timing, and the cost is 100% deadhead.
+  repo?: boolean
 }) {
   const [origin, dest] = splitLane(trip.lane)
   const [costExpanded, setCostExpanded] = useState(false)
@@ -729,7 +744,7 @@ export default function TripDetailModal({
   // stretch visibly sends the truck off onto the red line and back.
   const routeFracs = cumulativeFractions(routePoints)
   const drivenPoints: [number, number][] = [
-    repoStart,
+    ...(repo ? [] : [repoStart]),
     ...routePoints.filter((_, i) => routeFracs[i] < devStart),
     devStartPt.pos,
     devBulge,
@@ -942,16 +957,18 @@ export default function TripDetailModal({
     <>
       <path d={NATION_PATH} fill="#161b21" />
       <path d={STATE_MESH_PATH} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={vbW * 0.0018} />
-      <polyline
-        points={repositionStr}
-        fill="none"
-        stroke="#F5C84B"
-        strokeWidth={vbW * 0.005}
-        strokeDasharray={`${vbW * 0.01} ${vbW * 0.022}`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={0.85}
-      />
+      {!repo && (
+        <polyline
+          points={repositionStr}
+          fill="none"
+          stroke="#F5C84B"
+          strokeWidth={vbW * 0.005}
+          strokeDasharray={`${vbW * 0.01} ${vbW * 0.022}`}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.85}
+        />
+      )}
       <polyline
         points={routeStr}
         fill="none"
@@ -1078,6 +1095,7 @@ export default function TripDetailModal({
           ),
         },
       ]
+        .filter((m) => !(repo && m.key === 'repo'))
         .sort((a, b) => Number(a.hovered) - Number(b.hovered))
         .map((m) => (
           <g key={m.key}>{m.node}</g>
@@ -1232,23 +1250,25 @@ export default function TripDetailModal({
 
   const devT = (devStart + devEnd) / 2
   const tlItems: TlEvent[] = []
-  tlItems.push({
-    t: -0.1,
-    kind: 'radio-yellow',
-    calloutTone: 'yellow',
-    badgeTone: 'yellow',
-    action: 'Reposition',
-    status: 'Completed',
-    place: `${repositionMiles} mi deadhead`,
-    time: timeForT(-0.1),
-    cost: `${money(repositionCost)}`,
-  })
+  if (!repo) {
+    tlItems.push({
+      t: -0.1,
+      kind: 'radio-yellow',
+      calloutTone: 'yellow',
+      badgeTone: 'yellow',
+      action: 'Reposition',
+      status: 'Completed',
+      place: `${repositionMiles} mi deadhead`,
+      time: timeForT(-0.1),
+      cost: `${money(repositionCost)}`,
+    })
+  }
   tlItems.push({
     t: 0,
     kind: 'radio-teal',
     calloutTone: 'teal',
     badgeTone: 'teal',
-    action: 'Pickup',
+    action: repo ? 'Departure' : 'Pickup',
     status: 'Completed',
     place: origin,
     time: timeForT(0),
@@ -1317,7 +1337,7 @@ export default function TripDetailModal({
     kind: 'radio-teal',
     calloutTone: 'teal',
     badgeTone: 'teal',
-    action: 'Delivery',
+    action: repo ? 'Arrival' : 'Delivery',
     status: 'Completed',
     place: dest,
     time: timeForT(1),
@@ -1327,8 +1347,8 @@ export default function TripDetailModal({
   // Clicking a timeline node highlights the matching pin on the map above —
   // same tooltip the pin already shows on hover, just triggered by tap too.
   const selectEvent = (e: TlEvent) => {
-    setHoverStart(e.action === 'Pickup')
-    setHoverEnd(e.action === 'Delivery')
+    setHoverStart(e.action === 'Pickup' || e.action === 'Departure')
+    setHoverEnd(e.action === 'Delivery' || e.action === 'Arrival')
     setHoverFuel(e.fuelIndex ?? null)
     setHoverDev(e.kind === 'x')
     setHoverRepo(e.action === 'Reposition')
@@ -1343,7 +1363,7 @@ export default function TripDetailModal({
             <span className="ld-head-icon">
               <BarChart3 size={28} color="#9A9A9A" />
             </span>
-            Operation details
+            {repo ? 'Operative trip details' : 'Operation details'}
           </span>
           <div className="ld-head-actions">
             <RefreshButton className="ld-refresh" label="Refresh trip data" size={18} />
@@ -1379,22 +1399,24 @@ export default function TripDetailModal({
                 }
                 caption="Route adherence"
               />
-              <AdhStat
-                icon={Clock}
-                tone={TIME_TIER_META[timeTierOverall].tone}
-                status={
-                  <>
-                    <span style={{ color: TONE_VAR[TIME_TIER_META[pickupTier].tone] }}>
-                      {pickupTier === 'onTime' ? 'Pickup on time' : `Pickup ${formatLate(pickupLateMin)}`}
-                    </span>
-                    <span className="ld-adh-sep"> · </span>
-                    <span style={{ color: TONE_VAR[TIME_TIER_META[deliveryTier].tone] }}>
-                      {deliveryTier === 'onTime' ? 'Delivery on time' : `Delivery ${formatLate(deliveryLateMin)}`}
-                    </span>
-                  </>
-                }
-                caption="Timing"
-              />
+              {!repo && (
+                <AdhStat
+                  icon={Clock}
+                  tone={TIME_TIER_META[timeTierOverall].tone}
+                  status={
+                    <>
+                      <span style={{ color: TONE_VAR[TIME_TIER_META[pickupTier].tone] }}>
+                        {pickupTier === 'onTime' ? 'Pickup on time' : `Pickup ${formatLate(pickupLateMin)}`}
+                      </span>
+                      <span className="ld-adh-sep"> · </span>
+                      <span style={{ color: TONE_VAR[TIME_TIER_META[deliveryTier].tone] }}>
+                        {deliveryTier === 'onTime' ? 'Delivery on time' : `Delivery ${formatLate(deliveryLateMin)}`}
+                      </span>
+                    </>
+                  }
+                  caption="Timing"
+                />
+              )}
             </div>
             <div className="ld-loadid ld-loadid-first">
               <span className="ld-loadid-icon">
@@ -1414,25 +1436,34 @@ export default function TripDetailModal({
                 <div className="ld-loadid-sub">Driver</div>
               </div>
             </div>
-            <div className="ld-loadid">
-              <span className="ld-loadid-icon">
-                <Package size={22} color="#7CC8CF" />
-              </span>
-              <div className="ld-loadid-txt">
-                <div className="ld-loadid-val">{trip.loadRef}</div>
-                <div className="ld-loadid-sub">Load id</div>
+            {!repo && (
+              <div className="ld-loadid">
+                <span className="ld-loadid-icon">
+                  <Package size={22} color="#7CC8CF" />
+                </span>
+                <div className="ld-loadid-txt">
+                  <div className="ld-loadid-val">{trip.loadRef}</div>
+                  <div className="ld-loadid-sub">Load id</div>
+                </div>
               </div>
-            </div>
-            <span
-              className="ld-status-pill"
-              style={{ background: STATUS_META[trip.status].bg, color: STATUS_META[trip.status].color }}
-            >
-              {STATUS_META[trip.status].label}
-            </span>
+            )}
+            {repo ? (
+              <span className="ld-status-pill" style={{ background: '#341D24', color: 'var(--red)' }}>
+                DH
+              </span>
+            ) : (
+              <span
+                className="ld-status-pill"
+                style={{ background: STATUS_META[trip.status].bg, color: STATUS_META[trip.status].color }}
+              >
+                {STATUS_META[trip.status].label}
+              </span>
+            )}
           </div>
 
           {/* Top: earnings + cost summary + metric grid + map */}
-          <div className="ld-top">
+          <div className={`ld-top ${repo ? 'ld-top-repo' : ''}`}>
+            {!repo && (
             <section className="ld-card ld-earnings">
               <div className="ld-card-head">
                 <span className="ld-cost-title">Earnings</span>
@@ -1468,6 +1499,7 @@ export default function TripDetailModal({
                 </div>
               </div>
             </section>
+            )}
 
             <section className="ld-card ld-cost">
               <div className="ld-card-head">
@@ -1488,7 +1520,7 @@ export default function TripDetailModal({
                 <CostBreakdownDonut segments={costSegments} total={trip.totalCost} />
               ) : (
                 <>
-                  <TripCostGauge total={trip.totalCost} />
+                  <TripCostGauge total={trip.totalCost} deadheadPct={repo ? 100 : undefined} />
                   <button className="ld-explore" onClick={() => setCostExpanded(true)}>
                     Explore breakdown
                   </button>

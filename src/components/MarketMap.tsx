@@ -339,7 +339,20 @@ function formatAgo(ts: number, now: number) {
 // grouping loosens as the user zooms in (pins spread out, clusters split).
 const CLUSTER_PIXEL_RADIUS = 26
 
-export default function MarketMap({ fill = false }: { fill?: boolean }) {
+export default function MarketMap({
+  fill = false,
+  dimension = 'trucks',
+}: {
+  fill?: boolean
+  dimension?: 'trucks' | 'drivers'
+}) {
+  // In driver mode the same pins are labeled by the driver running that truck
+  // (drivers inherit their truck's live position) instead of the truck id.
+  const byDriver = dimension === 'drivers'
+  const shortDriver = (name: string) => {
+    const [first, ...rest] = name.split(' ')
+    return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first
+  }
   const svgRef = useRef<SVGSVGElement>(null)
   const [selected, setSelected] = useState<Truck | null>(null)
   const [search, setSearch] = useState('')
@@ -610,7 +623,7 @@ export default function MarketMap({ fill = false }: { fill?: boolean }) {
 
     drawPinsRef.current(zoomKRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleTrucks])
+  }, [visibleTrucks, byDriver])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function drawTruckPin(pins: any, t: Truck, px: number, py: number, k: number) {
@@ -639,7 +652,8 @@ export default function MarketMap({ fill = false }: { fill?: boolean }) {
       .attr('cx', 0).attr('cy', -16).attr('r', 3.2)
       .attr('fill', '#fff')
 
-    // Truck ID label — always visible above the pin.
+    // Identity label — always visible above the pin. Truck id in truck mode,
+    // the driver's short name in driver mode.
     g.append('text')
       .attr('x', 0).attr('y', -32)
       .attr('text-anchor', 'middle')
@@ -651,7 +665,7 @@ export default function MarketMap({ fill = false }: { fill?: boolean }) {
       .attr('stroke-width', 3)
       .style('paint-order', 'stroke')
       .style('pointer-events', 'none')
-      .text(t.id)
+      .text(byDriver ? shortDriver(t.driver.name) : t.id)
   }
 
   function drawClusterMarker(
@@ -819,7 +833,7 @@ export default function MarketMap({ fill = false }: { fill?: boolean }) {
         </div>
 
         <div className="market-map-legend">
-          <div className="mm-legend-label">My trucks (click to hide/show)</div>
+          <div className="mm-legend-label">{byDriver ? 'My drivers (click to hide/show)' : 'My trucks (click to hide/show)'}</div>
           {(['A', 'B', 'C', 'D'] as const).map((cls) => (
             <button
               key={cls}

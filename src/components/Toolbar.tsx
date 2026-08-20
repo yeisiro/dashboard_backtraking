@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Settings2 } from 'lucide-react'
+import { Plus, Settings2, Truck, User } from 'lucide-react'
 import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
 import DriversFilter from './DriversFilter'
@@ -11,6 +11,37 @@ import RefreshButton from './RefreshButton'
 import { type FleetCabin, type FleetDriver, type Integration, type PeriodKey } from '../data'
 
 export type DataTab = 'overview' | 'full'
+export type AnalysisDim = 'trucks' | 'drivers'
+
+// The dimension the whole dashboard is analyzed at. Trucks and drivers never
+// filter at the same time — this segmented control picks which one is live,
+// and the filter pill to its right switches to match.
+function DimensionToggle({
+  value,
+  onChange,
+}: {
+  value: AnalysisDim
+  onChange?: (d: AnalysisDim) => void
+}) {
+  return (
+    <div className="dim-toggle" role="group" aria-label="Analyze by">
+      <button
+        className={`dim-toggle-btn ${value === 'trucks' ? 'active' : ''}`}
+        onClick={() => onChange?.('trucks')}
+        aria-pressed={value === 'trucks'}
+      >
+        <Truck size={14} /> Trucks
+      </button>
+      <button
+        className={`dim-toggle-btn ${value === 'drivers' ? 'active' : ''}`}
+        onClick={() => onChange?.('drivers')}
+        aria-pressed={value === 'drivers'}
+      >
+        <User size={14} /> Drivers
+      </button>
+    </div>
+  )
+}
 
 export default function Toolbar({
   tab = 'overview',
@@ -21,6 +52,8 @@ export default function Toolbar({
   onTruckFilterChange,
   driverFilter = [],
   onDriverFilterChange,
+  dimension = 'trucks',
+  onDimensionChange,
   view = 'dashboard',
   deadheadMode = 'in-range',
   onDeadheadModeChange,
@@ -44,6 +77,8 @@ export default function Toolbar({
   onTruckFilterChange?: (next: string[]) => void
   driverFilter?: string[]
   onDriverFilterChange?: (next: string[]) => void
+  dimension?: AnalysisDim
+  onDimensionChange?: (d: AnalysisDim) => void
   view?: 'summary' | 'dashboard'
   deadheadMode?: DeadheadMode
   onDeadheadModeChange?: (next: DeadheadMode) => void
@@ -82,9 +117,17 @@ export default function Toolbar({
       <div className="filters">
         <DeadheadFilter mode={deadheadMode} onChange={onDeadheadModeChange} locked={deadheadLocked} />
         <ClassFilter selected={classFilter} onChange={onClassFilterChange} />
-        <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
-        {view === 'dashboard' && (
-          <DriversFilter selected={driverFilter} onChange={onDriverFilterChange} />
+        {view === 'dashboard' ? (
+          <>
+            <DimensionToggle value={dimension} onChange={onDimensionChange} />
+            {dimension === 'trucks' ? (
+              <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
+            ) : (
+              <DriversFilter selected={driverFilter} onChange={onDriverFilterChange} />
+            )}
+          </>
+        ) : (
+          <TrucksFilter selected={truckFilter} onChange={onTruckFilterChange} />
         )}
         <DateFilter />
         <RefreshButton label="Refresh data" />

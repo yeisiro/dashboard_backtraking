@@ -8,6 +8,9 @@ import {
   bottomSingle,
   topSingle,
   leaders,
+  bottomDrivers,
+  topDrivers,
+  driverLeaders,
   causeText,
   type Cause,
   type RankRow,
@@ -60,12 +63,14 @@ const COUNT_OPTIONS = [5, 10, 15]
 export default function PotentialRecovery({
   fleetMode = 'full',
   view = 'dashboard',
+  dimension = 'trucks',
   hideLeaders = false,
   hideCompare = false,
   onViewTrips,
 }: {
   fleetMode?: FleetMode
   view?: 'summary' | 'dashboard'
+  dimension?: 'trucks' | 'drivers'
   hideLeaders?: boolean
   hideCompare?: boolean
   onViewTrips?: (band: 'best' | 'worst') => void
@@ -73,8 +78,13 @@ export default function PotentialRecovery({
   const [showMarket, setShowMarket] = useState(false)
   const [count, setCount] = useState(5)
   const { rangeDays, rangeEnd } = usePeriod()
-  const data = FLEET_DATA[fleetMode]
   const noData = fleetMode === 'empty'
+  // Drivers mode ranks the roster by driver instead of truck; the demo
+  // fleet-size modes (small/single) stay truck-based.
+  const data =
+    dimension === 'drivers' && !noData
+      ? { bottom: bottomDrivers, top: topDrivers, leaders: driverLeaders }
+      : FLEET_DATA[fleetMode]
   const bottomTitle = "Bottom - What's dragging you down"
   const topTitle = "Top - What's going well"
   const rangeLabel = currentPeriodLabel(rangeEnd, rangeDays)

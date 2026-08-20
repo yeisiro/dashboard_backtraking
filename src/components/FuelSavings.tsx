@@ -781,7 +781,9 @@ interface TruckFuelStats {
 // is priced at IDLE_GPH × the truck's own cost/gallon; whatever's left after
 // those three is bucketed as "route deviations" so the categories always sum
 // back to the truck's actual leakage total instead of drifting from it.
-function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
+// Groups by truck, or by driver when `byDriver` is set — the `truck` field just
+// carries whatever label keys the group, so the same list renders both.
+function computeTruckFuelStats(rows: TripRow[], byDriver = false): TruckFuelStats[] {
   const byTruck = new Map<
     string,
     {
@@ -797,8 +799,9 @@ function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
     }
   >()
   rows.forEach((r) => {
+    const key = byDriver ? r.driver : r.truck
     const gallons = r.totalMiles / r.mpg
-    const cur = byTruck.get(r.truck) ?? {
+    const cur = byTruck.get(key) ?? {
       cls: r.cls,
       miles: 0,
       gallons: 0,
@@ -817,7 +820,7 @@ function computeTruckFuelStats(rows: TripRow[]): TruckFuelStats[] {
     cur.missedFuelSavings += Math.abs(r.missedFuelSavings)
     cur.emptyMiles += r.excessMilesCost
     cur.idleHours += r.idleHours
-    byTruck.set(r.truck, cur)
+    byTruck.set(key, cur)
   })
   return [...byTruck.entries()]
     .map(([truck, s]) => {
@@ -862,7 +865,8 @@ const LEAKAGE_CATEGORIES: { key: keyof LeakageBreakdown; label: string; color: s
   { key: 'idleTime', label: 'Idle time', color: '#d99f42' },
 ]
 
-function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
+function TruckFuelList({ stats, firstColLabel = 'Truck' }: { stats: TruckFuelStats[]; firstColLabel?: string }) {
+  const columns = TRUCK_SORT_COLUMNS.map((c) => (c.key === 'truck' ? { ...c, label: firstColLabel } : c))
   // Gallons desc is the default (busiest truck first) — same order
   // computeTruckFuelStats already returns — everything else defaults to
   // desc (highest first) except the truck name, which reads naturally asc.
@@ -894,7 +898,7 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
   return (
     <div className="tam-sublist">
       <div className="fs-truck-row fs-truck-row-head">
-        {TRUCK_SORT_COLUMNS.map((col) => (
+        {columns.map((col) => (
           <span
             key={col.key}
             className={`fs-truck-sort ${sortKey === col.key ? 'active' : ''}`}
@@ -972,11 +976,14 @@ function TruckFuelList({ stats }: { stats: TruckFuelStats[] }) {
 
 export default function FuelSavings({
   classFilter = [],
+  dimension = 'trucks',
   onSelectTrucks,
 }: {
   classFilter?: string[]
+  dimension?: 'trucks' | 'drivers'
   onSelectTrucks?: (trucks: string[]) => void
 }) {
+  const byDriver = dimension === 'drivers'
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
   const moneySaved = rows.reduce((s, r) => s + r.actualSaving, 0)
   const moneyLeakage = rows.reduce((s, r) => s + r.totalExcessCost, 0)
@@ -1009,7 +1016,7 @@ export default function FuelSavings({
   }
 
   const [showAllTrucks, setShowAllTrucks] = useState(false)
-  const truckStats = useMemo(() => computeTruckFuelStats(rows), [rows])
+  const truckStats = useMemo(() => computeTruckFuelStats(rows, byDriver), [rows, byDriver])
   const totalGallons = truckStats.reduce((s, t) => s + t.gallons, 0)
   const totalMiles = rows.reduce((s, r) => s + r.totalMiles, 0)
   const totalFuelCost = rows.reduce((s, r) => s + r.cost * FUEL_COST_SHARE, 0)
@@ -1028,7 +1035,7 @@ export default function FuelSavings({
         <div className="kpi-head">
           <span className="eyebrow">Fuel &amp; Savings Summary</span>
           <span className="fs-summary-link">
-            View by truck
+            {byDriver ? 'View by driver' : 'View by truck'}
             <ChevronRight size={13} className="tam-stat-chevron" />
           </span>
         </div>
@@ -1067,11 +1074,11 @@ export default function FuelSavings({
 
       {showAllTrucks && (
         <SubDetailModal
-          title="Fuel & savings — by truck"
+          title={byDriver ? 'Fuel & savings — by driver' : 'Fuel & savings — by truck'}
           onClose={() => setShowAllTrucks(false)}
           className="fs-truck-modal"
         >
-          <TruckFuelList stats={truckStats} />
+          <TruckFuelList stats={truckStats} firstColLabel={byDriver ? 'Driver' : 'Truck'} />
         </SubDetailModal>
       )}
     </div>
