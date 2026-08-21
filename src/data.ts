@@ -411,6 +411,7 @@ export const benchmarkAttrs: BenchmarkAttr[] = [
   { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', worstCost: 5200, bestCost: 1400, tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
   { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', worstCost: 6100, bestCost: 2100, tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
   { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', worstCost: 2400, bestCost: 700, tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
+  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '+$0.09/gal', leaders: '$0.00/gal', gap: '−$0.09/gal', worstCost: 3400, bestCost: 500, tip: 'How much over the best achievable price the fleet paid per gallon of fuel. Market leaders fuel at the optimal price, so their gap is $0. Lower is better.' },
   { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', worstCost: 2900, bestCost: 0, tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
 ]
 
