@@ -4986,6 +4986,23 @@ button {
 }
 .bench-val.neg { color: var(--red); }
 .bench-val.lead { color: var(--yellow); }
+/* Metric value + its "cost of not being a leader" stacked in the cell. */
+.bench-metric { display: block; }
+.bench-cost {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #d98a8a;
+}
+.bench-cost-lead {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
 /* Trucks behind each column — revealed from a neutral pill, same dropdown
    pattern as the toolbar filters (no accent color, to match the dashboard). */
 .bench-trucks-wrap {

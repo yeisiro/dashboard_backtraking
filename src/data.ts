@@ -412,15 +412,63 @@ export interface BenchmarkAttr {
   bestCost: number
 }
 
+// The cost of NOT being a market leader, per trip group. Each attribute's $
+// figure is derived from a shared set of per-group numbers so the costs stay
+// internally consistent:
+//  - Adherence  = money lost across Route Deviations + Deadhead Deviations +
+//                 Missed Fuel Savings (adherence is what drives all three).
+//  - % Deadhead / Wasted Rate / RPM Effective = one shared profit-loss figure:
+//                 the profit the group made minus the profit it would have made
+//                 if its deadhead share matched the market leaders'.
+//  - MPG / CPG vs optimal = the group's Missed Fuel Savings loss.
+//  - Idle % = the slice of the group's total idle cost above the leader ratio
+//             (idleCost × (groupIdle − leaderIdle) / groupIdle).
+interface BenchGroup {
+  missedFuel: number
+  deadheadDev: number
+  routeDev: number
+  idleCost: number // total idle $ for the group
+  idlePct: number
+  deadheadPct: number
+  profit: number // profit the group generated
+}
+const BENCH_GROUPS: { worst: BenchGroup; best: BenchGroup } = {
+  worst: { missedFuel: 2600, deadheadDev: 2100, routeDev: 1700, idleCost: 1600, idlePct: 18.1, deadheadPct: 23.8, profit: 9000 },
+  best: { missedFuel: 700, deadheadDev: 900, routeDev: 600, idleCost: 500, idlePct: 7.4, deadheadPct: 16.5, profit: 12000 },
+}
+const LEADER_DEADHEAD_PCT = 14.1
+const LEADER_IDLE_PCT = 5.8
+const adherenceLoss = (g: BenchGroup) => g.routeDev + g.deadheadDev + g.missedFuel
+// Fewer deadhead miles → more loaded miles → proportionally more profit.
+const deadheadProfitLoss = (g: BenchGroup) =>
+  Math.round(g.profit * ((100 - LEADER_DEADHEAD_PCT) / (100 - g.deadheadPct) - 1))
+const fuelLoss = (g: BenchGroup) => g.missedFuel
+const idleLoss = (g: BenchGroup) => Math.round((g.idleCost * (g.idlePct - LEADER_IDLE_PCT)) / g.idlePct)
+// Attribute → how its "cost of not being a leader" is computed for a group.
+const BENCH_COST: Record<string, (g: BenchGroup) => number> = {
+  Adherence: adherenceLoss,
+  'Wasted Rate': deadheadProfitLoss,
+  '% Deadhead': deadheadProfitLoss,
+  'RPM Effective': deadheadProfitLoss,
+  MPG: fuelLoss,
+  'CPG vs optimal': fuelLoss,
+  'Idle %': idleLoss,
+}
+const benchCost = (attr: string, g: BenchGroup) => (BENCH_COST[attr] ? BENCH_COST[attr](g) : 0)
+
 export const benchmarkAttrs: BenchmarkAttr[] = [
-  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', worstCost: 4300, bestCost: 900, tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads.' },
-  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', worstCost: 3800, bestCost: 600, tip: 'Share of paid miles that produced no revenue. Lower is better.' },
-  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', worstCost: 5200, bestCost: 1400, tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
-  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', worstCost: 6100, bestCost: 2100, tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
-  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', worstCost: 2400, bestCost: 700, tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
-  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '+$0.09/gal', leaders: '$0.00/gal', gap: '−$0.09/gal', worstCost: 3400, bestCost: 500, tip: 'How much over the best achievable price the fleet paid per gallon of fuel. Market leaders fuel at the optimal price, so their gap is $0. Lower is better.' },
-  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', worstCost: 2900, bestCost: 0, tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
-]
+  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads. Cost = money lost to Route Deviations + Deadhead Deviations + Missed Fuel Savings.' },
+  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', tip: 'Share of paid miles that produced no revenue. Cost = profit lost by not matching the leaders'+"'"+' deadhead share (shared with % Deadhead & RPM).' },
+  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', tip: 'Empty miles run with no load, as a share of total miles. Cost = the profit the group would have made at the leaders'+"'"+' deadhead share (shared with Wasted Rate & RPM).' },
+  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', tip: 'Revenue per mile after deadhead — what each mile actually earns. Cost = the shared profit lost to deadhead inefficiency.' },
+  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', tip: 'Average miles per gallon. Cost = the group'+"'"+'s Missed Fuel Savings.' },
+  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '+$0.09/gal', leaders: '$0.00/gal', gap: '−$0.09/gal', tip: 'How much over the best achievable price the fleet paid per gallon. Market leaders fuel at the optimal price, so their gap is $0. Cost = the group'+"'"+'s Missed Fuel Savings.' },
+  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', tip: 'Share of engine hours spent idling. Cost = the slice of the group'+"'"+'s idle cost above the leader ratio.' },
+].map((a) => ({
+  ...a,
+  worstCost: benchCost(a.attribute, BENCH_GROUPS.worst),
+  bestCost: benchCost(a.attribute, BENCH_GROUPS.best),
+}))
 
 // Performance drivers — the "why" behind the numbers. Each zone and broker is a
 // row with the same columns as the attributes, measured by effective RPM

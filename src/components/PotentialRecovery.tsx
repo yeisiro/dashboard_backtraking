@@ -167,6 +167,7 @@ export default function PotentialRecovery({
           onClose={() => setShowMarket(false)}
           onViewTrips={onViewTrips}
           v2={view === 'dashboard'}
+          dimension={dimension}
           worstTrucks={data.bottom.slice(0, effCount).map((r) => r.name)}
           bestTrucks={data.top.slice(0, effCount).map((r) => r.name)}
         />
