@@ -220,27 +220,34 @@ export interface LeakBar {
 // "Poor Planning" = money lost to suboptimal planning choices — what you could
 // have saved by following the plan we recommended (the old "Planned" concept,
 // now a leakage category of its own). Named for the cause, not the fix.
+// Execution-side leakage comes first (fuel, deadhead, route, idle, operative
+// moves) and "Poor Planning" sits last on its own — it's the only category
+// that's purely a planning miss, not an execution one. "Operative
+// Inefficiencies" is the cost of the deadhead miles run on operative trips
+// (empty repositioning moves not tied to a load), counted as an inefficiency.
 export const leakBars: LeakBar[] = [
-  { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,000', width: 70, color: '#c2453f' },
-  { name: 'Empty Miles', pct: 24, amount: '-$5,600', width: 56, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 19, amount: '-$4,400', width: 44, color: '#d56b41' },
+  { name: 'Missed Fuel Savings', pct: 28, amount: '-$7,000', width: 70, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 22, amount: '-$5,600', width: 56, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 18, amount: '-$4,400', width: 44, color: '#d56b41' },
+  { name: 'Idle Time Cost', pct: 11, amount: '-$2,800', width: 28, color: '#d99f42' },
+  { name: 'Operative Inefficiencies', pct: 6, amount: '-$1,400', width: 14, color: '#cbb15a' },
   { name: 'Poor Planning', pct: 15, amount: '-$3,700', width: 37, color: '#d9843f' },
-  { name: 'Idle Time Cost', pct: 12, amount: '-$2,800', width: 28, color: '#d99f42' },
 ]
 
 // Total money lost across all leakage categories (sum of leakBars), and the
 // change in dollars vs the comparison period. Goal is 'low' — less is better.
-export const leakTotal = '-$23,500'
+export const leakTotal = '-$24,900'
 export const leakDelta = '-$800'
 
 // Same categories for the comparison period, shown side-by-side in the compare
 // view. Widths are 0..100 relative to the same $10k axis as leakBars.
 export const leakBarsCompare: LeakBar[] = [
-  { name: 'Missed Fuel Savings', pct: 30, amount: '-$7,200', width: 72, color: '#c2453f' },
-  { name: 'Empty Miles', pct: 21, amount: '-$5,200', width: 52, color: '#cf5a44' },
-  { name: 'Route Deviations', pct: 19, amount: '-$4,700', width: 47, color: '#d56b41' },
+  { name: 'Missed Fuel Savings', pct: 28, amount: '-$7,200', width: 72, color: '#c2453f' },
+  { name: 'Empty Miles', pct: 20, amount: '-$5,200', width: 52, color: '#cf5a44' },
+  { name: 'Route Deviations', pct: 18, amount: '-$4,700', width: 47, color: '#d56b41' },
+  { name: 'Idle Time Cost', pct: 12, amount: '-$3,100', width: 31, color: '#d99f42' },
+  { name: 'Operative Inefficiencies', pct: 5, amount: '-$1,300', width: 13, color: '#cbb15a' },
   { name: 'Poor Planning', pct: 17, amount: '-$4,100', width: 41, color: '#d9843f' },
-  { name: 'Idle Time Cost', pct: 13, amount: '-$3,100', width: 31, color: '#d99f42' },
 ]
 
 // Parse a leak amount string like "-$7,200" into a positive number (7200).
