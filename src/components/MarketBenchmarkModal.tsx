@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X, BarChart3, ArrowUpRight, Truck, User, ChevronDown } from 'lucide-react'
-import { benchmarkAttrs } from '../data'
+import { benchmarkAttrs, benchmarkCostGroups, benchmarkGapTotal, type BenchmarkCostGroup } from '../data'
 
 // The trucks (or drivers) that make up a column, revealed on demand from a
 // neutral pill — same dropdown pattern as the toolbar filters.
@@ -49,11 +49,21 @@ function TruckMarker({
   )
 }
 
-// The $ a group loses on an attribute by not performing at market-leader level.
-const costLabel = (n: number) => (n > 0 ? '−$' + Math.round(n).toLocaleString('en-US') : '$0')
+// The $ a group loses by not performing at market-leader level.
+const costLabel = (n: number) => (n > 0 ? '−$' + Math.round(n).toLocaleString('en-US') : 'At market')
 
-// "How the market is doing" — one clean table of your worst/best trips vs the
-// market leaders. In V2 the columns also name the trucks that make them up.
+// Which cost group each attribute belongs to, whether it's the group's first
+// row (where the spanning cost cell is drawn), and how many rows it spans.
+const groupByAttr = new Map<string, { group: BenchmarkCostGroup; isAnchor: boolean; span: number }>()
+benchmarkCostGroups.forEach((g) =>
+  g.attributes.forEach((a, i) =>
+    groupByAttr.set(a, { group: g, isAnchor: i === 0, span: g.attributes.length }),
+  ),
+)
+
+// "How the market is doing" — worst/best trips vs the market leaders across the
+// key attributes, plus what the gap to the leaders costs each group per period.
+// Seven metric rows collapse into four cost figures (cells span their group).
 export default function MarketBenchmarkModal({
   onClose,
   onViewTrips,
@@ -89,51 +99,78 @@ export default function MarketBenchmarkModal({
 
         <div className="modal-body">
           <p className="cfm-sub">
-            Your <strong>worst</strong> and <strong>best</strong> trips vs the market leaders — with
-            what each still loses per period by not performing at leader level.
+            Your <strong>worst</strong> and <strong>best</strong> trips vs the market leaders.
           </p>
 
-          <table className="bench-table">
+          <table className="bench-table bench-table-cost">
             <thead>
               <tr>
-                <th className="bench-attr-col">Attribute</th>
-                <th>
+                <th className="bench-attr-col" rowSpan={2}>Attribute</th>
+                <th rowSpan={2}>
                   <button className="bench-link" onClick={() => goToTrips('worst')} data-tip="See these trips in Full Data">
                     Worst trips <ArrowUpRight size={12} />
                   </button>
                   {v2 && <TruckMarker trucks={worstTrucks} label="Worst trips" noun={noun} onOpen={() => goToTrips('worst')} />}
                 </th>
-                <th>
+                <th rowSpan={2}>
                   <button className="bench-link" onClick={() => goToTrips('best')} data-tip="See these trips in Full Data">
                     Best trips <ArrowUpRight size={12} />
                   </button>
                   {v2 && <TruckMarker trucks={bestTrucks} label="Best trips" noun={noun} onOpen={() => goToTrips('best')} />}
                 </th>
-                <th>Market leaders</th>
+                <th rowSpan={2} className="bench-lead-col">Market leaders</th>
+                <th colSpan={2} className="bench-costhead">Gap Costs</th>
+              </tr>
+              <tr>
+                <th className="bench-costsub bench-cost-worst-col">Worst</th>
+                <th className="bench-costsub">Best</th>
               </tr>
             </thead>
             <tbody>
-              {benchmarkAttrs.map((r) => (
-                <tr key={r.attribute}>
-                  <td className="bench-attr">
-                    <span className="bench-tip" data-tip={r.tip}>{r.attribute}</span>
-                  </td>
-                  <td className="bench-val neg">
-                    <span className="bench-metric">{r.worst}</span>
-                    <span className="bench-cost">{costLabel(r.worstCost)}</span>
-                  </td>
-                  <td className="bench-val">
-                    <span className="bench-metric">{r.best}</span>
-                    <span className="bench-cost">{costLabel(r.bestCost)}</span>
-                  </td>
-                  <td className="bench-val lead">
-                    <span className="bench-metric">{r.leaders}</span>
-                    <span className="bench-cost bench-cost-lead">market</span>
-                  </td>
-                </tr>
-              ))}
+              {benchmarkAttrs.map((r) => {
+                const info = groupByAttr.get(r.attribute)
+                const g = info?.group
+                return (
+                  <tr key={r.attribute}>
+                    <td className="bench-attr">
+                      <span className="bench-tip" data-tip={r.tip}>{r.attribute}</span>
+                      {g?.nameCaption && <div className="bench-attr-cap">{g.nameCaption}</div>}
+                    </td>
+                    <td className="bench-val neg">{r.worst}</td>
+                    <td className="bench-val">{r.best}</td>
+                    <td className="bench-val lead">{r.leaders}</td>
+                    {info?.isAnchor && g && (
+                      <>
+                        <td className="bench-cost-cell bench-cost-worst-col" rowSpan={info.span}>
+                          <div className="bench-cost-amt neg">{costLabel(g.costWorst)}</div>
+                          {g.caption && <div className="bench-cost-cap">{g.caption}</div>}
+                        </td>
+                        <td className="bench-cost-cell" rowSpan={info.span}>
+                          <div className="bench-cost-amt">{costLabel(g.costBest)}</div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
+            <tfoot>
+              <tr className="bench-total-row">
+                <td colSpan={4} className="bench-total-lbl">Total cost of not being a market leader</td>
+                <td className="bench-cost-cell bench-cost-worst-col">
+                  <span className="bench-total-amt neg">{costLabel(benchmarkGapTotal.worst)}</span>
+                </td>
+                <td className="bench-cost-cell">
+                  <span className="bench-total-amt">{costLabel(benchmarkGapTotal.best)}</span>
+                </td>
+              </tr>
+            </tfoot>
           </table>
+
+          <p className="bench-foot">
+            Each figure is what the group would have kept at market-leader level. Adherence dollars
+            break down into the groups below it, so the total counts each loss once.
+          </p>
         </div>
       </div>
     </div>

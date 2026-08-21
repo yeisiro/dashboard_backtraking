@@ -4886,7 +4886,12 @@ button {
 
 /* ---------- Market benchmark table ---------- */
 .bench-modal { width: 800px; }
+/* The cost-of-the-gap version adds two dollar columns, so it needs more room. */
+.bench-modal:has(.bench-table-cost) { width: 1080px; max-width: 94vw; }
 .bench-modal .modal-body { scrollbar-gutter: stable; }
+.bench-table.bench-table-cost th.bench-attr-col { width: 24%; }
+.bench-table.bench-table-cost th.bench-lead-col { width: 13%; }
+.bench-table.bench-table-cost th.bench-costsub { width: 18.5%; }
 .bench-table {
   width: 100%;
   table-layout: fixed;
@@ -4986,22 +4991,88 @@ button {
 }
 .bench-val.neg { color: var(--red); }
 .bench-val.lead { color: var(--yellow); }
-/* Metric value + its "cost of not being a leader" stacked in the cell. */
-.bench-metric { display: block; }
-.bench-cost {
-  display: block;
-  margin-top: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #d98a8a;
-}
-.bench-cost-lead {
+.bench-attr-cap {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-muted);
-  font-weight: 600;
-  font-size: 9.5px;
-  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+/* ── Cost of the gap: two dollar columns spanning grouped metric rows ── */
+/* A subtle tint + a left rule separate the cost block from the metric columns.
+   The left rule lives on the worst-cost column so it runs top to bottom. */
+.bench-cost-worst-col {
+  border-left: 1px solid var(--border-strong);
+  padding-left: 18px !important;
+}
+.bench-table-cost th.bench-costhead,
+.bench-table-cost th.bench-costsub,
+.bench-cost-cell {
+  background: rgba(255, 255, 255, 0.02);
+}
+.bench-table-cost th.bench-costhead {
+  text-align: left;
+  border-left: 1px solid var(--border-strong);
+  padding-left: 18px;
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.bench-table-cost th.bench-costsub {
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bench-cost-cell {
+  text-align: right;
+  vertical-align: middle;
+}
+.bench-cost-amt {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.bench-cost-amt.neg { color: var(--red); }
+.bench-cost-cap {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+/* Total row */
+.bench-total-row td {
+  border-top: 1px solid var(--border-strong);
+  border-bottom: none;
+  padding-top: 16px;
+}
+.bench-total-lbl {
+  text-align: left !important;
+  padding-left: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.bench-total-amt {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.bench-total-amt.neg { color: var(--red); }
+.bench-foot {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 /* Trucks behind each column — revealed from a neutral pill, same dropdown
    pattern as the toolbar filters (no accent color, to match the dashboard). */
