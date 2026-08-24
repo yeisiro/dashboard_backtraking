@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
-  TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation,
+  TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
 } from 'lucide-react'
 import { tripRows, repositionRows, costSegments, deltaTone, deltaTrend, type TripRow, type RepositionRow, type Goal } from '../data'
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
 import FuelSavings, { parseLane } from './FuelSavings'
+import OperativeGapDrawer from './OperativeGapDrawer'
+import Toast from './Toast'
 
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel and Savings', 'Rewards'] as const
 export type SubTab = (typeof SUBTABS)[number]
@@ -80,25 +82,6 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
 // move (empty, no load). They live in one sorted list when the toggle is on.
 type TableRow = TripRow | RepositionRow
 const isReposition = (r: TableRow): r is RepositionRow => 'reposition' in r
-
-// Sort value that works for both kinds. A move is 100% deadhead, earns no
-// income, and its cost is a straight P&L drag (profit = −cost). It has no
-// quality metrics, so on those keys it sorts to the bottom regardless of dir.
-function sortValue(key: SortKey, r: TableRow): number {
-  if (!isReposition(r)) return SORT_ACCESSOR[key](r)
-  switch (key) {
-    case 'startDate': return dateSortValue(r.startDate)
-    case 'time': return r.effectiveHours
-    case 'distance': return r.totalMiles
-    case 'deadhead': return r.totalMiles
-    case 'income': return 0
-    case 'cost': return r.cost
-    case 'profit': return -r.cost
-    case 'adherence': return r.adherence
-    case 'leakage': return r.leakage
-    default: return -Infinity // score / wastedRate (moves don't carry these)
-  }
-}
 
 // Shape a repositioning move as a TripRow so the detail modal (which is built
 // around TripRow) can render it in `repo` mode: no load, no income, 100%
@@ -1007,6 +990,14 @@ function TripsTable({
   const [query, setQuery] = useState('')
   // Also fold in empty repositioning moves (deadhead, no load) alongside trips.
   const [showReposition, setShowReposition] = useState(false)
+  // Trips are stateful so assigning an operative gap can fold its empty miles
+  // into the target load's deadhead and have the table reflect it live.
+  const [trips, setTrips] = useState<TripRow[]>(tripRows)
+  // Operative legs are editable: the operator can merge consecutive legs or
+  // assign a run to the neighbouring load's deadhead. Seeded from data.
+  const [opLegs, setOpLegs] = useState<RepositionRow[]>(repositionRows)
+  const [gapDrawer, setGapDrawer] = useState<string | null>(null) // gapId being managed
+  const [opToast, setOpToast] = useState<string | null>(null)
   // Empty = all statuses shown.
   const [statusFilter, setStatusFilter] = useState<TripRow['status'][]>([])
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
@@ -1068,7 +1059,7 @@ function TripsTable({
   }
 
   const byClass =
-    classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
+    classFilter.length > 0 ? trips.filter((r) => classFilter.includes(r.cls)) : trips
 
   // Only the active analysis dimension's filter applies — trucks and drivers
   // never narrow at the same time. In truck mode the header "Trucks:" filter
@@ -1110,7 +1101,7 @@ function TripsTable({
   // filters, but not status (they have no invoice lifecycle) — they're only in
   // the list when the toggle is on.
   const repoRows: RepositionRow[] = showReposition
-    ? repositionRows.filter((r) => {
+    ? opLegs.filter((r) => {
         if (classFilter.length > 0 && !classFilter.includes(r.cls)) return false
         if (truckFilter.length > 0 && !truckFilter.includes(r.truck)) return false
         if (driverFilter.length > 0 && !driverFilter.includes(r.driver)) return false
@@ -1125,13 +1116,28 @@ function TripsTable({
       })
     : []
 
-  const combined: TableRow[] = [...byStatus, ...repoRows]
-  const rows: TableRow[] = sortKey
-    ? [...combined].sort((a, b) => {
-        const cmp = sortValue(sortKey, a) - sortValue(sortKey, b)
+  // Trips sort normally; operative legs render in their own grouped section
+  // below (grouped by gap), so they're kept out of the sorted trip list.
+  const rows: TripRow[] = sortKey
+    ? [...byStatus].sort((a, b) => {
+        const cmp = SORT_ACCESSOR[sortKey](a) - SORT_ACCESSOR[sortKey](b)
         return sortDir === 'asc' ? cmp : -cmp
       })
-    : combined
+    : byStatus
+  const combined: TableRow[] = [...byStatus, ...repoRows]
+
+  // Operative legs grouped into their gaps (a gap = one empty stretch split into
+  // consecutive legs), ordered by seq, preserving the order gaps first appear.
+  const opGroups: { gapId: string; legs: RepositionRow[] }[] = []
+  repoRows.forEach((leg) => {
+    let g = opGroups.find((x) => x.gapId === leg.gapId)
+    if (!g) {
+      g = { gapId: leg.gapId, legs: [] }
+      opGroups.push(g)
+    }
+    g.legs.push(leg)
+  })
+  opGroups.forEach((g) => g.legs.sort((a, b) => a.seq - b.seq))
 
   // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
   // can't be summed meaningfully, so Adherence/Wasted Rate show the average
@@ -1164,6 +1170,73 @@ function TripsTable({
       avgWastedRate: trips.length ? trips.reduce((sum, r) => sum + r.wastedRate, 0) / trips.length : 0,
       totalLeakage: trips.reduce((sum, r) => sum + r.totalExcessCost, 0) + moves.reduce((s, r) => s + r.leakage, 0),
     }
+  }
+
+  // ── Operative-leg actions (driven by the timeline drawer) ──
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const laneEnds = (lane: string) => lane.split('→').map((s) => s.trim())
+  // Merge consecutive legs of one gap into a single operative trip spanning the
+  // first leg's start to the last leg's end.
+  const mergeLegs = (ids: string[]) => {
+    setOpLegs((prev) => {
+      const chosen = prev.filter((l) => ids.includes(l.id)).sort((a, b) => a.seq - b.seq)
+      if (chosen.length < 2) return prev
+      const first = chosen[0]
+      const last = chosen[chosen.length - 1]
+      const sum = (f: (l: RepositionRow) => number) => chosen.reduce((s, l) => s + f(l), 0)
+      const miles = sum((l) => l.totalMiles)
+      const merged: RepositionRow = {
+        ...first,
+        id: `${first.gapId}-merged-${first.seq}`,
+        endDate: last.endDate,
+        lane: `${laneEnds(first.lane)[0]} → ${laneEnds(last.lane)[1]}`,
+        reason: `Merged ${chosen.length} empty legs into one operative trip`,
+        totalMiles: miles,
+        effectiveHours: round1(sum((l) => l.effectiveHours)),
+        cost: sum((l) => l.cost),
+        leakage: sum((l) => l.leakage),
+        adherence: miles ? round1(sum((l) => l.adherence * l.totalMiles) / miles) : first.adherence,
+      }
+      return [...prev.filter((l) => !ids.includes(l.id)), merged]
+    })
+    setGapDrawer(null)
+    setOpToast(`Merged ${ids.length} legs into one operative trip`)
+  }
+  // The load an operative gap leads into — the same truck's next load in the
+  // table. Assigning the gap folds its empty miles into this load's deadhead.
+  const targetLoadFor = (truck: string) => trips.find((t) => t.truck === truck) ?? null
+  // Reassign a contiguous run to that load's deadhead: the legs leave the
+  // operative list and the load's deadhead miles, cost, profit, leakage and
+  // deadhead % all update to include them.
+  const assignLegs = (ids: string[]) => {
+    const chosen = opLegs.filter((l) => ids.includes(l.id))
+    if (chosen.length === 0) return
+    const miles = chosen.reduce((s, l) => s + l.totalMiles, 0)
+    const cost = chosen.reduce((s, l) => s + l.cost, 0)
+    const leak = chosen.reduce((s, l) => s + l.leakage, 0)
+    const target = targetLoadFor(chosen[0].truck)
+    if (target) {
+      setTrips((prev) =>
+        prev.map((t) => {
+          if (t.loadRef !== target.loadRef) return t
+          const totalMiles = t.totalMiles + miles
+          const newCost = t.cost + cost
+          return {
+            ...t,
+            totalMiles,
+            cost: newCost,
+            profit: t.income - newCost,
+            totalExcessCost: t.totalExcessCost + leak,
+            deadheadPct: round1(((totalMiles - t.loadedMiles) / totalMiles) * 100),
+          }
+        }),
+      )
+    }
+    setOpLegs((prev) => prev.filter((l) => !ids.includes(l.id)))
+    setGapDrawer(null)
+    setOpToast(
+      `Assigned ${chosen.length} leg${chosen.length === 1 ? '' : 's'} · ${miles.toLocaleString()} mi · ${usd(cost)} to ${target ? target.loadRef : 'the next load'} deadhead`,
+    )
   }
 
   // Cells for every column, rendered in whatever order columnOrder says.
@@ -1318,28 +1391,62 @@ function TripsTable({
     }
   }
 
-  const renderRow = (r: TableRow) =>
-    isReposition(r) ? (
-      <tr key={`repo-${r.truck}-${r.startDate}-${r.lane}`} className="fd-repo-row">
-        {columnOrder.map((key) => renderRepositionCell(key, r))}
-        <td>
-          <button className="fd-view" aria-label="View operative trip details" onClick={() => setSelectedMove(r)}>
-            View <Eye size={13} />
-          </button>
-        </td>
-      </tr>
-    ) : (
-      <tr key={rowKey(r)}>
-        {columnOrder.map((key) => renderCell(key, r))}
-        <td>
-          <button className="fd-view" aria-label="View trip details" onClick={() => setSelected(r)}>
-            View <Eye size={13} />
-          </button>
-        </td>
-      </tr>
-    )
+  const renderTripRow = (r: TripRow) => (
+    <tr key={rowKey(r)}>
+      {columnOrder.map((key) => renderCell(key, r))}
+      <td>
+        <button className="fd-view" aria-label="View trip details" onClick={() => setSelected(r)}>
+          View <Eye size={13} />
+        </button>
+      </td>
+    </tr>
+  )
 
   const colCount = columnOrder.length + 1
+
+  // Operative legs, grouped by gap. Each gap gets a header (truck · legs · lane ·
+  // the load it leads into) with an "Open timeline" that launches the drawer
+  // where legs are merged or assigned to the load's deadhead. Legs render read-only.
+  const renderOpSection = () =>
+    opGroups.map((g) => {
+      const legs = g.legs
+      const first = legs[0]
+      const last = legs[legs.length - 1]
+      const [origin] = laneEnds(first.lane)
+      const dest = laneEnds(last.lane)[1]
+      const target = targetLoadFor(first.truck)
+      return (
+        <tbody key={g.gapId} className="fd-op-group">
+          <tr className="fd-op-gap-head">
+            <td colSpan={colCount}>
+              <div className="fd-op-gap-inner">
+                <span className="fd-op-gap-title">
+                  <Navigation size={13} />
+                  <span className="fd-op-gap-truck">{first.truck}</span>
+                  <span className="fd-op-gap-meta">
+                    {legs.length} {legs.length === 1 ? 'leg' : 'legs'} · {origin} → {dest} · leads to{' '}
+                    <span className="fd-op-gap-load">{target ? target.loadRef : first.nextLoadId}</span>
+                  </span>
+                </span>
+                <button className="fd-op-manage" onClick={() => setGapDrawer(g.gapId)}>
+                  <Merge size={13} /> Merge trips
+                </button>
+              </div>
+            </td>
+          </tr>
+          {legs.map((r) => (
+            <tr key={r.id} className="fd-repo-row">
+              {columnOrder.map((key) => renderRepositionCell(key, r))}
+              <td>
+                <button className="fd-view" aria-label="View operative trip details" onClick={() => setSelectedMove(r)}>
+                  View <Eye size={13} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      )
+    })
 
   const renderThead = () => (
     <thead>
@@ -1497,22 +1604,40 @@ function TripsTable({
         <table className="fd-table">
           {renderThead()}
           <tbody>
-            {rows.length === 0 && (
+            {rows.length === 0 && opGroups.length === 0 && (
               <tr>
                 <td className="fd-no-results" colSpan={colCount}>
                   {query ? `No trips match "${query}"` : 'No trips match this filter'}
                 </td>
               </tr>
             )}
-            {rows.map(renderRow)}
+            {rows.map(renderTripRow)}
           </tbody>
-          {renderFooterRow(computeTotals(rows))}
+          {showReposition && renderOpSection()}
+          {renderFooterRow(computeTotals(combined))}
         </table>
       </div>
       {selected && <TripDetailModal trip={selected} onClose={() => setSelected(null)} />}
       {selectedMove && (
         <TripDetailModal trip={repoAsTrip(selectedMove)} repo onClose={() => setSelectedMove(null)} />
       )}
+      {gapDrawer && (() => {
+        const legs = opLegs.filter((l) => l.gapId === gapDrawer).sort((a, b) => a.seq - b.seq)
+        const target = legs[0] ? targetLoadFor(legs[0].truck) : null
+        return (
+          <OperativeGapDrawer
+            legs={legs}
+            nextLoad={{
+              id: target ? target.loadRef : legs[0]?.nextLoadId ?? '',
+              lane: target ? target.lane : legs[0]?.nextLoadLane ?? '',
+            }}
+            onClose={() => setGapDrawer(null)}
+            onMerge={mergeLegs}
+            onAssign={assignLegs}
+          />
+        )
+      })()}
+      {opToast && <Toast message={opToast} onDone={() => setOpToast(null)} />}
     </>
   )
 }
