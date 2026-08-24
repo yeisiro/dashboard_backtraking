@@ -20,6 +20,8 @@ import {
   Clock,
   RefreshCw,
   User,
+  ShieldCheck,
+  PanelRight,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
@@ -381,21 +383,6 @@ function pointAtFraction(
   return { pos: points[points.length - 1], heading: 0 }
 }
 
-// Cumulative arc-length fraction (0..1) at each point of a polyline — used to
-// splice a deviation into the middle of a route while keeping any original
-// points that fall outside the spliced window.
-function cumulativeFractions(points: [number, number][]): number[] {
-  const segLens = points.slice(0, -1).map((p, i) => Math.hypot(points[i + 1][0] - p[0], points[i + 1][1] - p[1]))
-  const total = segLens.reduce((a, b) => a + b, 0) || 1
-  const fracs = [0]
-  let acc = 0
-  for (const len of segLens) {
-    acc += len
-    fracs.push(acc / total)
-  }
-  return fracs
-}
-
 // A map pin: a small diamond badge by default, expanding into a labeled
 // pill on hover (Google Maps-style "Route start"/"Route end" markers).
 function MapPinMarker({
@@ -502,6 +489,7 @@ function FuelStopMarker({
   hovered,
   onHoverChange,
   dashed,
+  onClick,
 }: {
   x: number
   y: number
@@ -514,6 +502,7 @@ function FuelStopMarker({
   hovered: boolean
   onHoverChange: (v: boolean) => void
   dashed?: boolean
+  onClick?: () => void
 }) {
   const r = vbW * 0.021
   const iconSize = r * 1.3
@@ -534,6 +523,7 @@ function FuelStopMarker({
     <g
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick() } : undefined}
       style={{ cursor: 'pointer' }}
     >
       <circle
@@ -585,6 +575,8 @@ interface TlEvent {
   time?: string // omitted for stops that were never actually visited (e.g. Skipped)
   cost?: string // shown below, only when a $ figure applies
   fuelIndex?: number // index into `fuelStops`, so a click can highlight the matching map pin
+  devId?: string // set on route-deviation nodes so they can be marked justified
+  devIndex?: number // index into `deviations`, for syncing map hover
 }
 
 function NodeIcon({ kind }: { kind: NodeKind }) {
@@ -658,8 +650,16 @@ export default function TripDetailModal({
   const [hoverStart, setHoverStart] = useState(false)
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
-  const [hoverDev, setHoverDev] = useState(false)
+  const [hoverDev, setHoverDev] = useState<number | null>(null)
   const [hoverRepo, setHoverRepo] = useState(false)
+  // Deviations the operator has marked justified, in the order they were
+  // justified (so the history reads newest-first). The optimal plan is treated
+  // as if it went that way, so their excess stops counting against the trip.
+  const [justifiedIds, setJustifiedIds] = useState<string[]>([])
+  // Every justify/undo re-runs the optimizer and re-fetches the trip, so we
+  // show a brief recalculating overlay before the new numbers land.
+  const [recalcing, setRecalcing] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [fullMap, setFullMap] = useState(false)
   // Sync-from-map: re-pull the trip's telematics without leaving the map. Held
   // briefly since the (mock) data returns instantly — same idea as the header
@@ -718,39 +718,66 @@ export default function TripDetailModal({
   const vbW = halfW * 2
   const vbH = halfH * 2
 
-  // Route deviation — a real detour off the planned/executed line, scaled by
-  // this trip's actual deadhead share (worse trips drift further and for
-  // longer before rejoining the main route). Seeded so it's stable per trip.
-  const devRand = seededRandom(routeSeed + 4242)
-  const devStart = 0.22 + devRand() * 0.28
-  const devSpan = 0.1 + devRand() * 0.1
-  const devEnd = Math.min(devStart + devSpan, 0.92)
-  const devStartPt = pointAtFraction(routePoints, devStart)
-  const devMidPt = pointAtFraction(routePoints, (devStart + devEnd) / 2)
-  const devEndPt = pointAtFraction(routePoints, devEnd)
-  const devHeadingRad = (devMidPt.heading * Math.PI) / 180
-  const devPerpX = Math.sin(devHeadingRad)
-  const devPerpY = -Math.cos(devHeadingRad)
-  const devMagnitude = (trip.deadheadPct / 100) * Math.max(spanX, spanY) * 2.1
-  const devBulge: [number, number] = [
-    devMidPt.pos[0] + devPerpX * devMagnitude,
-    devMidPt.pos[1] + devPerpY * devMagnitude,
-  ]
-  const deviationStr = [devStartPt.pos, devBulge, devEndPt.pos].map(([x, y]) => `${x},${y}`).join(' ')
+  // Route deviations — real detours off the planned line. A trip has a few,
+  // each owning a share of the trip's excess miles/cost. The operator can mark
+  // any of them justified (a legitimate detour, e.g. a closure or a customer
+  // request): the optimal plan is then treated as if it went that way, so that
+  // deviation's excess stops counting and adherence recovers.
+  interface Deviation {
+    id: string
+    t: number // position along the route (0..1), for the timeline node
+    mid: [number, number]
+    str: string
+    excessCost: number
+    excessMiles: number
+    adhImpact: number
+  }
+  const devCount = trip.totalMiles > 550 ? 3 : 2
+  const devWeights = devCount === 3 ? [0.45, 0.33, 0.22] : [0.6, 0.4]
+  const totalExcessMiles = Math.round((trip.excessMilesCost * trip.totalMiles) / trip.totalCost)
+  const adhGap = Math.max(0, 96 - trip.adherence) // adherence recoverable by justifying all
+  const deviations: Deviation[] = devWeights.map((w, i) => {
+    const dr = seededRandom(routeSeed + 4242 + i * 97)
+    const center = 0.18 + (0.64 * (i + 0.5)) / devCount
+    const span = 0.05 + dr() * 0.045
+    const sPt = pointAtFraction(routePoints, Math.max(0.04, center - span))
+    const mPt = pointAtFraction(routePoints, center)
+    const ePt = pointAtFraction(routePoints, Math.min(0.95, center + span))
+    const hr = (mPt.heading * Math.PI) / 180
+    const mag = (trip.deadheadPct / 100) * Math.max(spanX, spanY) * 1.7 * (0.7 + dr() * 0.6)
+    const bulge: [number, number] = [mPt.pos[0] + Math.sin(hr) * mag, mPt.pos[1] - Math.cos(hr) * mag]
+    return {
+      id: `dev-${i}`,
+      t: center,
+      mid: mPt.pos,
+      str: [sPt.pos, bulge, ePt.pos].map(([x, y]) => `${x},${y}`).join(' '),
+      excessCost: Math.round(trip.excessMilesCost * w),
+      excessMiles: Math.round(totalExcessMiles * w),
+      adhImpact: Math.round(adhGap * w * 10) / 10,
+    }
+  })
+  // Apply a justification change behind a short recalculating overlay — the
+  // metrics, optimal plan and map all re-derive once it lands.
+  const applyJust = (updater: (p: string[]) => string[]) => {
+    setRecalcing(true)
+    setTimeout(() => {
+      setJustifiedIds(updater)
+      setRecalcing(false)
+    }, 950)
+  }
+  const toggleDev = (id: string) =>
+    applyJust((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  const undoAllJust = () => applyJust(() => [])
+  const isJust = (id: string) => justifiedIds.includes(id)
+  // Effective (post-justification) figures the whole modal reads from.
+  const effExcessCost = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessCost, 0)
+  const effExcessMiles = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessMiles, 0)
+  const recoveredAdh = deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.adhImpact, 0)
+  const effAdherence = Math.min(97, Math.round((trip.adherence + recoveredAdh) * 10) / 10)
 
-  // The truck's actual driven path for playback: starts empty from the
-  // reposition point (before pickup), then the main route with the deviation
-  // window swapped out for the detour itself, so scrubbing through that
-  // stretch visibly sends the truck off onto the red line and back.
-  const routeFracs = cumulativeFractions(routePoints)
-  const drivenPoints: [number, number][] = [
-    ...(repo ? [] : [repoStart]),
-    ...routePoints.filter((_, i) => routeFracs[i] < devStart),
-    devStartPt.pos,
-    devBulge,
-    devEndPt.pos,
-    ...routePoints.filter((_, i) => routeFracs[i] > devEnd),
-  ]
+  // Playback follows the route backbone (deviations are drawn as their own
+  // bulges); no per-deviation splicing so multiple detours stay simple.
+  const drivenPoints: [number, number][] = [...(repo ? [] : [repoStart]), ...routePoints]
 
   // Scroll to zoom in/out around the auto-fit crop above. Marker/text sizes
   // stay tied to the base vbW (not the zoomed-in one), so zooming in also
@@ -978,15 +1005,18 @@ export default function TripDetailModal({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <polyline
-        points={deviationStr}
-        fill="none"
-        stroke="#f2585d"
-        strokeWidth={vbW * 0.005}
-        strokeDasharray={`${vbW * 0.012} ${vbW * 0.024}`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {deviations.map((d) => (
+        <polyline
+          key={d.id}
+          points={d.str}
+          fill="none"
+          stroke={isJust(d.id) ? '#33DB9E' : '#f2585d'}
+          strokeWidth={vbW * 0.005}
+          strokeDasharray={isJust(d.id) ? undefined : `${vbW * 0.012} ${vbW * 0.024}`}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
       <g>
         <circle
           cx={curX} cy={curY} r={vbW * 0.028}
@@ -1017,22 +1047,23 @@ export default function TripDetailModal({
             />
           ),
         },
-        {
-          key: 'dev',
-          hovered: hoverDev,
+        ...deviations.map((d, i) => ({
+          key: d.id,
+          hovered: hoverDev === i,
           node: (
             <FuelStopMarker
-              x={devMidPt.pos[0]} y={devMidPt.pos[1]} vbW={vbW}
+              x={d.mid[0]} y={d.mid[1]} vbW={vbW}
               icon={Route}
-              color="#f2585d"
-              title="Route deviation"
-              line2="Off-route detour"
-              line3={`$${Math.round(trip.excessMilesCost)} excess cost`}
-              hovered={hoverDev}
-              onHoverChange={setHoverDev}
+              color={isJust(d.id) ? '#33DB9E' : '#f2585d'}
+              title={isJust(d.id) ? 'Justified detour' : 'Route deviation'}
+              line2={isJust(d.id) ? 'Now part of the optimal plan' : 'Off-route detour'}
+              line3={isJust(d.id) ? 'Recovered · click to undo' : `$${d.excessCost} excess · click to justify`}
+              hovered={hoverDev === i}
+              onHoverChange={(v) => setHoverDev(v ? i : null)}
+              onClick={() => toggleDev(d.id)}
             />
           ),
-        },
+        })),
         ...fuelStops.map((s, i) => {
           const title =
             s.status === 'optimal-executed'
@@ -1103,12 +1134,10 @@ export default function TripDetailModal({
     </>
   )
 
-  // Excess miles: excessMilesCost is already "the $ caused by driving off the
-  // optimal plan" — converting it back through the trip's own $/mi rate gives
-  // how many of the driven miles were excess, without inventing a second,
-  // independent estimate of the plan.
-  const excessMiles = Math.round((trip.excessMilesCost * trip.totalMiles) / trip.totalCost)
-  const milesOptimal = trip.totalMiles - excessMiles
+  // Excess miles/cost react to justified deviations: a justified detour is now
+  // part of the optimal plan, so it no longer counts as excess.
+  const excessMiles = effExcessMiles
+  const milesOptimal = trip.totalMiles - effExcessMiles
 
   // Fuel executed/optimal share the same $ basis as the fuel-stop map above
   // (fuelCostTotal), just netted against missedFuelSavings (already negative)
@@ -1126,7 +1155,7 @@ export default function TripDetailModal({
   // One combined missed-saving figure for the earnings card — the fuel side
   // is already a $ figure, the miles side is excessMilesCost (the $ that
   // excess miles cost, the same basis excessMiles above was derived from).
-  const totalMissedSaving = missedSavingFuel + trip.excessMilesCost
+  const totalMissedSaving = missedSavingFuel + effExcessCost
   // What the trip would have earned running the optimal plan (same optimal
   // cost the Miles cost card already shows) — the Earnings card's own
   // "Optimal" column pairs this against that cost so the reader sees what's
@@ -1167,7 +1196,7 @@ export default function TripDetailModal({
 
   // Route adherence: the plan-following score already used elsewhere,
   // graded into the same on-time/late/critical tone system.
-  const adherenceTier: 'good' | 'fair' | 'poor' = trip.adherence >= 90 ? 'good' : trip.adherence >= 75 ? 'fair' : 'poor'
+  const adherenceTier: 'good' | 'fair' | 'poor' = effAdherence >= 90 ? 'good' : effAdherence >= 75 ? 'fair' : 'poor'
   const ADHERENCE_TIER_META = {
     good: { label: 'Good', tone: 'green' as Tone },
     fair: { label: 'Fair', tone: 'yellow' as Tone },
@@ -1217,13 +1246,13 @@ export default function TripDetailModal({
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{money(trip.optimalCost)}</span>
+            <span className="ld-miles-num">{money(trip.totalCost - effExcessCost)}</span>
             <span className="ld-miles-num-sub">{milesOptimal.toLocaleString()} mi</span>
             <span className="ld-miles-lbl">Optimal</span>
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat ld-miles-missed">
-            <span className="ld-miles-num">{money(trip.excessMilesCost)}</span>
+            <span className="ld-miles-num">{money(effExcessCost)}</span>
             <span className="ld-miles-num-sub">{excessMiles.toLocaleString()} mi</span>
             <span className="ld-miles-lbl">Miles missed savings</span>
           </div>
@@ -1248,7 +1277,6 @@ export default function TripDetailModal({
     return `${hh}:${mm} - ${dateForT(t)}`
   }
 
-  const devT = (devStart + devEnd) / 2
   const tlItems: TlEvent[] = []
   if (!repo) {
     tlItems.push({
@@ -1321,16 +1349,21 @@ export default function TripDetailModal({
         })
       }
     })
-  tlItems.push({
-    t: devT,
-    kind: 'x',
-    calloutTone: 'red',
-    badgeTone: 'red',
-    action: 'Route deviation',
-    status: 'Deviated',
-    place: 'Off-route detour',
-    time: timeForT(devT),
-    cost: `$${Math.round(trip.excessMilesCost)} excess cost`,
+  deviations.forEach((d, i) => {
+    const j = isJust(d.id)
+    tlItems.push({
+      t: d.t,
+      kind: j ? 'check' : 'x',
+      calloutTone: j ? 'green' : 'red',
+      badgeTone: j ? 'green' : 'red',
+      action: j ? 'Justified detour' : 'Route deviation',
+      status: j ? 'Justified' : 'Deviated',
+      place: j ? 'Added to optimal plan' : 'Off-route detour',
+      time: timeForT(d.t),
+      cost: j ? `$${d.excessCost} recovered` : `$${d.excessCost} excess cost`,
+      devId: d.id,
+      devIndex: i,
+    })
   })
   tlItems.push({
     t: 1,
@@ -1350,7 +1383,7 @@ export default function TripDetailModal({
     setHoverStart(e.action === 'Pickup' || e.action === 'Departure')
     setHoverEnd(e.action === 'Delivery' || e.action === 'Arrival')
     setHoverFuel(e.fuelIndex ?? null)
-    setHoverDev(e.kind === 'x')
+    setHoverDev(e.devIndex ?? null)
     setHoverRepo(e.action === 'Reposition')
   }
 
@@ -1366,6 +1399,18 @@ export default function TripDetailModal({
             {repo ? 'Operative trip details' : 'Operation details'}
           </span>
           <div className="ld-head-actions">
+            {!repo && (
+              <button
+                className="ld-hist-btn"
+                onClick={() => setHistoryOpen(true)}
+                data-tip="View justification history"
+              >
+                <ShieldCheck size={15} />
+                Justifications
+                {justifiedIds.length > 0 && <span className="ld-hist-count">{justifiedIds.length}</span>}
+                <PanelRight size={14} className="ld-hist-btn-chev" />
+              </button>
+            )}
             <RefreshButton className="ld-refresh" label="Refresh trip data" size={18} />
             <button className="ld-close" onClick={onClose} aria-label="Close">
               <X size={30} color="#9A9A9A" />
@@ -1394,7 +1439,7 @@ export default function TripDetailModal({
                 tone={ADHERENCE_TIER_META[adherenceTier].tone}
                 status={
                   <span style={{ color: TONE_VAR[ADHERENCE_TIER_META[adherenceTier].tone] }}>
-                    {Math.round(trip.adherence)}% · {ADHERENCE_TIER_META[adherenceTier].label}
+                    {Math.round(effAdherence)}% · {ADHERENCE_TIER_META[adherenceTier].label}
                   </span>
                 }
                 caption="Route adherence"
@@ -1652,14 +1697,96 @@ export default function TripDetailModal({
                       <div className="ld-tl-time">{e.time ?? 'Not visited'}</div>
                       {e.cost && <div className="ld-tl-cost">{e.cost}</div>}
                     </div>
+                    {e.devId && (
+                      <button
+                        className={`ld-tl-justify ${isJust(e.devId) ? 'on' : ''}`}
+                        onClick={() => toggleDev(e.devId!)}
+                      >
+                        {isJust(e.devId) ? (
+                          <>
+                            <Check size={12} strokeWidth={3} /> Justified · undo
+                          </>
+                        ) : (
+                          'Mark justified'
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
+        {recalcing && (
+          <div className="ld-recalc">
+            <RefreshCw size={22} className="refresh-spin" />
+            <span className="ld-recalc-txt">Recalculating the plan…</span>
+            <span className="ld-recalc-sub">Re-running the optimizer and refreshing the trip</span>
+          </div>
+        )}
       </div>
     </div>
+
+    {historyOpen && (
+      <div className="ld-hist-overlay" onClick={() => setHistoryOpen(false)}>
+        <aside className="ld-hist-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="ld-hist-head">
+            <span className="ld-hist-title">
+              <ShieldCheck size={17} color="#33DB9E" /> Justification history
+            </span>
+            <button className="cfm-x" onClick={() => setHistoryOpen(false)} aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
+          {justifiedIds.length === 0 ? (
+            <div className="ld-hist-empty">
+              No justifications yet. Mark a route deviation as justified on the map or the
+              timeline, and it will appear here.
+            </div>
+          ) : (
+            <>
+              <div className="ld-hist-summary">
+                <div>
+                  <span className="ld-hist-sum-val">
+                    {money(deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.excessCost, 0))}
+                  </span>
+                  <span className="ld-hist-sum-lbl">Recovered</span>
+                </div>
+                <div>
+                  <span className="ld-hist-sum-val">+{Math.round(recoveredAdh * 10) / 10}%</span>
+                  <span className="ld-hist-sum-lbl">Adherence</span>
+                </div>
+                <button className="ld-hist-undoall" onClick={undoAllJust}>
+                  Undo all
+                </button>
+              </div>
+              <div className="ld-hist-list">
+                {[...justifiedIds].reverse().map((id) => {
+                  const d = deviations.find((x) => x.id === id)
+                  if (!d) return null
+                  const n = deviations.findIndex((x) => x.id === id) + 1
+                  return (
+                    <div className="ld-hist-item" key={id}>
+                      <span className="ld-hist-item-icon"><Check size={13} strokeWidth={3} /></span>
+                      <div className="ld-hist-item-txt">
+                        <span className="ld-hist-item-name">Detour {n} justified</span>
+                        <span className="ld-hist-item-meta">
+                          {timeForT(d.t).split(' - ')[1] ?? ''} · {money(d.excessCost)} recovered · +
+                          {d.adhImpact}% adherence
+                        </span>
+                      </div>
+                      <button className="ld-hist-item-undo" onClick={() => toggleDev(id)}>
+                        Undo
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+    )}
 
     {fullMap && (
       <div className="ld-fullmap-overlay" onClick={() => setFullMap(false)}>
