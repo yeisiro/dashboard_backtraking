@@ -73,7 +73,7 @@ export default function PotentialRecovery({
   dimension?: 'trucks' | 'drivers'
   hideLeaders?: boolean
   hideCompare?: boolean
-  onViewTrips?: (band: 'best' | 'worst') => void
+  onViewTrips?: (band: 'best' | 'worst', members?: string[]) => void
 }) {
   const [showMarket, setShowMarket] = useState(false)
   const [count, setCount] = useState(5)

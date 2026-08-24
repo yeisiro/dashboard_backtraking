@@ -412,8 +412,8 @@ export const benchmarkAttrs: BenchmarkAttr[] = [
   { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', tip: 'Share of paid miles that produced no revenue. Lower is better.' },
   { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
   { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
-  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.21', leaders: '6.42', gap: '+0.21', tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
-  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '+$0.09/gal', leaders: '$0.00/gal', gap: '−$0.09/gal', tip: 'How much over the best achievable price the fleet paid per gallon. Market leaders fuel at the optimal price, so their gap is $0.' },
+  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.42', leaders: '6.42', gap: '0.00', tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
+  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '$0.00/gal', leaders: '$0.00/gal', gap: '$0.00/gal', tip: 'How much over the best achievable price the fleet paid per gallon. Market leaders fuel at the optimal price, so their gap is $0.' },
   { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
 ]
 
@@ -439,7 +439,7 @@ export interface BenchmarkCostGroup {
 export const benchmarkCostGroups: BenchmarkCostGroup[] = [
   { attributes: ['Adherence'], costWorst: 6400, costBest: 2200, nameCaption: 'Route + deadhead deviations, missed fuel', inTotal: false },
   { attributes: ['Wasted Rate', '% Deadhead', 'RPM Effective'], costWorst: 8200, costBest: 2400, caption: 'Profit lost across rate, deadhead and RPM', inTotal: true },
-  { attributes: ['MPG', 'CPG vs optimal'], costWorst: 2600, costBest: 700, caption: 'Missed fuel savings across MPG and price', inTotal: true },
+  { attributes: ['MPG', 'CPG vs optimal'], costWorst: 2600, costBest: 0, caption: 'Missed fuel savings across MPG and price', inTotal: true },
   { attributes: ['Idle %'], costWorst: 2000, costBest: 200, nameCaption: 'Idle cost above the leader idle share', inTotal: true },
 ]
 // Total cost of not being a leader — sum of the groups that count (Adherence

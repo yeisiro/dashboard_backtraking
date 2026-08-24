@@ -225,8 +225,14 @@ export default function App() {
                     view={view}
                     dimension={analysisDim}
                     hideLeaders={view === 'summary'}
-                    onViewTrips={(band) => {
+                    onViewTrips={(band, members) => {
                       setTripsBand(band)
+                      // Filter Full Data to the picked trucks/drivers — by the
+                      // active analysis dimension so the right filter applies.
+                      if (members && members.length) {
+                        if (analysisDim === 'drivers') setDriverFilter(members)
+                        else setTruckFilter(members)
+                      }
                       setDataTab('full')
                     }}
                   />

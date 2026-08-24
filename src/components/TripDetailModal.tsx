@@ -634,6 +634,10 @@ const STATUS_META: Record<TripRow['status'], { label: string; bg: string; color:
   paid: { label: 'Paid', bg: '#0E1F22', color: '#00A065' },
 }
 
+// One entry in a trip's plan-change history: a justified deviation or a stop
+// added to the optimal plan. `refId` points at the deviation or stop it acts on.
+type PlanChange = { kind: 'justify' | 'add-stop'; refId: string }
+
 export default function TripDetailModal({
   trip,
   onClose,
@@ -651,13 +655,17 @@ export default function TripDetailModal({
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
   const [hoverDev, setHoverDev] = useState<number | null>(null)
+  const [hoverStop, setHoverStop] = useState<number | null>(null)
   const [hoverRepo, setHoverRepo] = useState(false)
-  // Deviations the operator has marked justified, in the order they were
-  // justified (so the history reads newest-first). The optimal plan is treated
-  // as if it went that way, so their excess stops counting against the trip.
-  const [justifiedIds, setJustifiedIds] = useState<string[]>([])
-  // Every justify/undo re-runs the optimizer and re-fetches the trip, so we
-  // show a brief recalculating overlay before the new numbers land.
+  // The plan-change log, newest last: the operator can justify a detour (the
+  // optimal plan is treated as if it went that way) or add a stop to the plan
+  // (the optimal reroutes through it). Both reshape the optimal plan and its
+  // metrics, and both appear in the Plan history.
+  const [changes, setChanges] = useState<PlanChange[]>([])
+  const justifiedIds = changes.filter((c) => c.kind === 'justify').map((c) => c.refId)
+  const addedStopIds = changes.filter((c) => c.kind === 'add-stop').map((c) => c.refId)
+  // Every change re-runs the optimizer and re-fetches the trip, so we show a
+  // brief recalculating overlay before the new numbers land.
   const [recalcing, setRecalcing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [fullMap, setFullMap] = useState(false)
@@ -756,24 +764,55 @@ export default function TripDetailModal({
       adhImpact: Math.round(adhGap * w * 10) / 10,
     }
   })
-  // Apply a justification change behind a short recalculating overlay — the
-  // metrics, optimal plan and map all re-derive once it lands.
-  const applyJust = (updater: (p: string[]) => string[]) => {
+  // Apply a plan change behind a short recalculating overlay — the metrics,
+  // optimal plan and map all re-derive once it lands.
+  const applyChange = (updater: (p: PlanChange[]) => PlanChange[]) => {
     setRecalcing(true)
     setTimeout(() => {
-      setJustifiedIds(updater)
+      setChanges(updater)
       setRecalcing(false)
     }, 950)
   }
-  const toggleDev = (id: string) =>
-    applyJust((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-  const undoAllJust = () => applyJust(() => [])
+  const toggleChange = (kind: PlanChange['kind'], refId: string) =>
+    applyChange((p) =>
+      p.some((c) => c.kind === kind && c.refId === refId)
+        ? p.filter((c) => !(c.kind === kind && c.refId === refId))
+        : [...p, { kind, refId }],
+    )
+  const toggleDev = (id: string) => toggleChange('justify', id)
+  const toggleStop = (id: string) => toggleChange('add-stop', id)
+  const undoAllChanges = () => applyChange(() => [])
   const isJust = (id: string) => justifiedIds.includes(id)
-  // Effective (post-justification) figures the whole modal reads from.
+  const isAdded = (id: string) => addedStopIds.includes(id)
+  // Stops the optimizer suggests adding to the plan. Adding one reroutes the
+  // optimal through it and captures the savings it represents (a cheaper fuel
+  // corridor, a consolidation point) — reducing the trip's missed savings.
+  interface PlanStop {
+    id: string
+    t: number
+    pos: [number, number] // where the stop sits (just off the route)
+    anchor: [number, number] // the route point it reroutes from
+    name: string
+    savings: number
+  }
+  const stopRand = seededRandom(routeSeed + 8080)
+  const planStops: PlanStop[] = [
+    { id: 'stop-0', name: 'Fuel corridor stop', t: 0.42, savings: 60 + Math.round(stopRand() * 40) },
+    { id: 'stop-1', name: 'Consolidation point', t: 0.72, savings: 40 + Math.round(stopRand() * 40) },
+  ].map((s) => {
+    const p = pointAtFraction(routePoints, s.t)
+    const hr = (p.heading * Math.PI) / 180
+    const off = Math.max(spanX, spanY) * 0.16 // opposite side from the red deviations
+    return { ...s, anchor: p.pos, pos: [p.pos[0] - Math.sin(hr) * off, p.pos[1] + Math.cos(hr) * off] as [number, number] }
+  })
+
+  // Effective (post-change) figures the whole modal reads from.
   const effExcessCost = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessCost, 0)
   const effExcessMiles = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessMiles, 0)
   const recoveredAdh = deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.adhImpact, 0)
   const effAdherence = Math.min(97, Math.round((trip.adherence + recoveredAdh) * 10) / 10)
+  // Savings captured by stops added to the plan — trims the fuel missed savings.
+  const capturedStopSavings = planStops.filter((s) => isAdded(s.id)).reduce((sum, s) => sum + s.savings, 0)
 
   // Playback follows the route backbone (deviations are drawn as their own
   // bulges); no per-deviation splicing so multiple detours stay simple.
@@ -1017,6 +1056,18 @@ export default function TripDetailModal({
           strokeLinejoin="round"
         />
       ))}
+      {/* Reroute spur to each added plan stop — the optimal now detours through it. */}
+      {planStops.filter((s) => isAdded(s.id)).map((s) => (
+        <polyline
+          key={s.id}
+          points={`${s.anchor[0]},${s.anchor[1]} ${s.pos[0]},${s.pos[1]} ${s.anchor[0]},${s.anchor[1]}`}
+          fill="none"
+          stroke="#33DB9E"
+          strokeWidth={vbW * 0.005}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
       <g>
         <circle
           cx={curX} cy={curY} r={vbW * 0.028}
@@ -1061,6 +1112,24 @@ export default function TripDetailModal({
               hovered={hoverDev === i}
               onHoverChange={(v) => setHoverDev(v ? i : null)}
               onClick={() => toggleDev(d.id)}
+            />
+          ),
+        })),
+        ...(repo ? [] : planStops).map((s, i) => ({
+          key: s.id,
+          hovered: hoverStop === i,
+          node: (
+            <FuelStopMarker
+              x={s.pos[0]} y={s.pos[1]} vbW={vbW}
+              icon={MapPin}
+              color={isAdded(s.id) ? '#33DB9E' : '#7CC8CF'}
+              dashed={!isAdded(s.id)}
+              title={isAdded(s.id) ? 'Stop added to plan' : 'Suggested stop'}
+              line2={s.name}
+              line3={isAdded(s.id) ? 'In the optimal plan · click to remove' : `Saves ${money(s.savings)} · click to add`}
+              hovered={hoverStop === i}
+              onHoverChange={(v) => setHoverStop(v ? i : null)}
+              onClick={() => toggleStop(s.id)}
             />
           ),
         })),
@@ -1144,6 +1213,8 @@ export default function TripDetailModal({
   // to get what the optimal plan would have cost.
   const fuelOptimal = fuelCostTotal + trip.missedFuelSavings
   const missedSavingFuel = Math.abs(trip.missedFuelSavings)
+  // Fuel missed savings after any stops added to the plan capture their share.
+  const effFuelMissed = Math.max(0, missedSavingFuel - capturedStopSavings)
   // Gallons scale with miles at the same mpg, so the optimal plan — fewer
   // miles, no deviation — also burns fewer gallons. The $ gap above is then
   // partly extra gallons (from the extra miles) and partly a worse price
@@ -1155,7 +1226,7 @@ export default function TripDetailModal({
   // One combined missed-saving figure for the earnings card — the fuel side
   // is already a $ figure, the miles side is excessMilesCost (the $ that
   // excess miles cost, the same basis excessMiles above was derived from).
-  const totalMissedSaving = missedSavingFuel + effExcessCost
+  const totalMissedSaving = effFuelMissed + effExcessCost
   // What the trip would have earned running the optimal plan (same optimal
   // cost the Miles cost card already shows) — the Earnings card's own
   // "Optimal" column pairs this against that cost so the reader sees what's
@@ -1226,7 +1297,7 @@ export default function TripDetailModal({
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat ld-miles-missed">
-            <span className="ld-miles-num">{money(missedSavingFuel)}</span>
+            <span className="ld-miles-num">{money(effFuelMissed)}</span>
             <span className="ld-miles-lbl">Fuel missed savings</span>
           </div>
         </div>
@@ -1403,11 +1474,11 @@ export default function TripDetailModal({
               <button
                 className="ld-hist-btn"
                 onClick={() => setHistoryOpen(true)}
-                data-tip="View justification history"
+                data-tip="View the route's plan-change history"
               >
                 <ShieldCheck size={15} />
-                Justifications
-                {justifiedIds.length > 0 && <span className="ld-hist-count">{justifiedIds.length}</span>}
+                Plan history
+                {changes.length > 0 && <span className="ld-hist-count">{changes.length}</span>}
                 <PanelRight size={14} className="ld-hist-btn-chev" />
               </button>
             )}
@@ -1732,23 +1803,26 @@ export default function TripDetailModal({
         <aside className="ld-hist-panel" onClick={(e) => e.stopPropagation()}>
           <div className="ld-hist-head">
             <span className="ld-hist-title">
-              <ShieldCheck size={17} color="#33DB9E" /> Justification history
+              <ShieldCheck size={17} color="#33DB9E" /> Plan history
             </span>
             <button className="cfm-x" onClick={() => setHistoryOpen(false)} aria-label="Close">
               <X size={18} />
             </button>
           </div>
-          {justifiedIds.length === 0 ? (
+          {changes.length === 0 ? (
             <div className="ld-hist-empty">
-              No justifications yet. Mark a route deviation as justified on the map or the
-              timeline, and it will appear here.
+              No changes yet. Justify a route deviation, or add a suggested stop to the plan, from the
+              map or timeline — every change to the optimal plan is logged here.
             </div>
           ) : (
             <>
               <div className="ld-hist-summary">
                 <div>
                   <span className="ld-hist-sum-val">
-                    {money(deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.excessCost, 0))}
+                    {money(
+                      deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.excessCost, 0) +
+                        capturedStopSavings,
+                    )}
                   </span>
                   <span className="ld-hist-sum-lbl">Recovered</span>
                 </div>
@@ -1756,26 +1830,44 @@ export default function TripDetailModal({
                   <span className="ld-hist-sum-val">+{Math.round(recoveredAdh * 10) / 10}%</span>
                   <span className="ld-hist-sum-lbl">Adherence</span>
                 </div>
-                <button className="ld-hist-undoall" onClick={undoAllJust}>
+                <button className="ld-hist-undoall" onClick={undoAllChanges}>
                   Undo all
                 </button>
               </div>
               <div className="ld-hist-list">
-                {[...justifiedIds].reverse().map((id) => {
-                  const d = deviations.find((x) => x.id === id)
-                  if (!d) return null
-                  const n = deviations.findIndex((x) => x.id === id) + 1
+                {[...changes].reverse().map((c) => {
+                  if (c.kind === 'justify') {
+                    const d = deviations.find((x) => x.id === c.refId)
+                    if (!d) return null
+                    const n = deviations.findIndex((x) => x.id === c.refId) + 1
+                    return (
+                      <div className="ld-hist-item" key={`justify-${c.refId}`}>
+                        <span className="ld-hist-item-icon"><Check size={13} strokeWidth={3} /></span>
+                        <div className="ld-hist-item-txt">
+                          <span className="ld-hist-item-name">Detour {n} justified</span>
+                          <span className="ld-hist-item-meta">
+                            {timeForT(d.t).split(' - ')[1] ?? ''} · {money(d.excessCost)} recovered · +
+                            {d.adhImpact}% adherence
+                          </span>
+                        </div>
+                        <button className="ld-hist-item-undo" onClick={() => toggleDev(c.refId)}>
+                          Undo
+                        </button>
+                      </div>
+                    )
+                  }
+                  const s = planStops.find((x) => x.id === c.refId)
+                  if (!s) return null
                   return (
-                    <div className="ld-hist-item" key={id}>
-                      <span className="ld-hist-item-icon"><Check size={13} strokeWidth={3} /></span>
+                    <div className="ld-hist-item" key={`stop-${c.refId}`}>
+                      <span className="ld-hist-item-icon"><MapPin size={13} /></span>
                       <div className="ld-hist-item-txt">
-                        <span className="ld-hist-item-name">Detour {n} justified</span>
+                        <span className="ld-hist-item-name">Added stop · {s.name}</span>
                         <span className="ld-hist-item-meta">
-                          {timeForT(d.t).split(' - ')[1] ?? ''} · {money(d.excessCost)} recovered · +
-                          {d.adhImpact}% adherence
+                          Rerouted the optimal plan · {money(s.savings)} saved
                         </span>
                       </div>
-                      <button className="ld-hist-item-undo" onClick={() => toggleDev(id)}>
+                      <button className="ld-hist-item-undo" onClick={() => toggleStop(c.refId)}>
                         Undo
                       </button>
                     </div>

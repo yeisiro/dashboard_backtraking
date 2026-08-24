@@ -3,17 +3,18 @@ import { X, BarChart3, ArrowUpRight, Truck, User, ChevronDown } from 'lucide-rea
 import { benchmarkAttrs, benchmarkCostGroups, benchmarkGapTotal, type BenchmarkCostGroup } from '../data'
 
 // The trucks (or drivers) that make up a column, revealed on demand from a
-// neutral pill — same dropdown pattern as the toolbar filters.
+// neutral pill. Clicking one jumps to just that truck's/driver's trips in Full
+// Data (the column header link handles the whole group).
 function TruckMarker({
   trucks,
   label,
   noun = 'truck',
-  onOpen,
+  onPickMember,
 }: {
   trucks: string[]
   label: string
   noun?: 'truck' | 'driver'
-  onOpen?: () => void
+  onPickMember?: (member: string) => void
 }) {
   const [open, setOpen] = useState(false)
   if (trucks.length === 0) return null
@@ -29,17 +30,18 @@ function TruckMarker({
         <>
           <div className="cf-backdrop" onClick={() => setOpen(false)} />
           <div className="bench-trucks-menu">
-            <div className="bench-trucks-menu-head">{label}</div>
+            <div className="bench-trucks-menu-head">{label} · open one in Full Data</div>
             {trucks.map((t) => (
               <button
                 key={t}
                 className="bench-trucks-item"
                 onClick={() => {
                   setOpen(false)
-                  onOpen?.()
+                  onPickMember?.(t)
                 }}
               >
                 {t}
+                <ArrowUpRight size={13} className="bench-trucks-item-arrow" />
               </button>
             ))}
           </div>
@@ -49,8 +51,14 @@ function TruckMarker({
   )
 }
 
-// The $ a group loses by not performing at market-leader level.
-const costLabel = (n: number) => (n > 0 ? '−$' + Math.round(n).toLocaleString('en-US') : 'At market')
+// The $ a group loses by not performing at market-leader level. A group already
+// at (or above) market level has no loss — shown as a green "−$0". `worst` tones
+// an actual loss red; the best column stays neutral.
+function CostAmount({ n, worst = false, total = false }: { n: number; worst?: boolean; total?: boolean }) {
+  const cls = total ? 'bench-total-amt' : 'bench-cost-amt'
+  if (n <= 0) return <span className={`${cls} atmarket`}>−$0</span>
+  return <span className={`${cls} ${worst ? 'neg' : ''}`}>−${Math.round(n).toLocaleString('en-US')}</span>
+}
 
 // Which cost group each attribute belongs to, whether it's the group's first
 // row (where the spanning cost cell is drawn), and how many rows it spans.
@@ -73,15 +81,23 @@ export default function MarketBenchmarkModal({
   bestTrucks = [],
 }: {
   onClose: () => void
-  onViewTrips?: (band: 'best' | 'worst') => void
+  // members: the specific trucks/drivers to filter Full Data to. A column
+  // header passes its whole group; a dropdown item passes just that one.
+  onViewTrips?: (band: 'best' | 'worst', members?: string[]) => void
   v2?: boolean
   dimension?: 'trucks' | 'drivers'
   worstTrucks?: string[]
   bestTrucks?: string[]
 }) {
   const noun = dimension === 'drivers' ? 'driver' : 'truck'
-  const goToTrips = (band: 'best' | 'worst') => {
-    onViewTrips?.(band)
+  // Header link → filter Full Data to the whole worst/best group.
+  const goToGroup = (band: 'best' | 'worst') => {
+    onViewTrips?.(band, band === 'worst' ? worstTrucks : bestTrucks)
+    onClose()
+  }
+  // Dropdown item → filter Full Data to just that one truck/driver.
+  const pickMember = (band: 'best' | 'worst') => (member: string) => {
+    onViewTrips?.(band, [member])
     onClose()
   }
 
@@ -107,16 +123,16 @@ export default function MarketBenchmarkModal({
               <tr>
                 <th className="bench-attr-col" rowSpan={2}>Attribute</th>
                 <th rowSpan={2}>
-                  <button className="bench-link" onClick={() => goToTrips('worst')} data-tip="See these trips in Full Data">
+                  <button className="bench-link" onClick={() => goToGroup('worst')} data-tip="See all these trips in Full Data">
                     Worst trips <ArrowUpRight size={12} />
                   </button>
-                  {v2 && <TruckMarker trucks={worstTrucks} label="Worst trips" noun={noun} onOpen={() => goToTrips('worst')} />}
+                  {v2 && <TruckMarker trucks={worstTrucks} label="Worst trips" noun={noun} onPickMember={pickMember('worst')} />}
                 </th>
                 <th rowSpan={2}>
-                  <button className="bench-link" onClick={() => goToTrips('best')} data-tip="See these trips in Full Data">
+                  <button className="bench-link" onClick={() => goToGroup('best')} data-tip="See all these trips in Full Data">
                     Best trips <ArrowUpRight size={12} />
                   </button>
-                  {v2 && <TruckMarker trucks={bestTrucks} label="Best trips" noun={noun} onOpen={() => goToTrips('best')} />}
+                  {v2 && <TruckMarker trucks={bestTrucks} label="Best trips" noun={noun} onPickMember={pickMember('best')} />}
                 </th>
                 <th rowSpan={2} className="bench-lead-col">Market leaders</th>
                 <th colSpan={2} className="bench-costhead">Gap Costs</th>
@@ -142,11 +158,11 @@ export default function MarketBenchmarkModal({
                     {info?.isAnchor && g && (
                       <>
                         <td className="bench-cost-cell bench-cost-worst-col" rowSpan={info.span}>
-                          <div className="bench-cost-amt neg">{costLabel(g.costWorst)}</div>
+                          <CostAmount n={g.costWorst} worst />
                           {g.caption && <div className="bench-cost-cap">{g.caption}</div>}
                         </td>
                         <td className="bench-cost-cell" rowSpan={info.span}>
-                          <div className="bench-cost-amt">{costLabel(g.costBest)}</div>
+                          <CostAmount n={g.costBest} />
                         </td>
                       </>
                     )}
@@ -158,10 +174,10 @@ export default function MarketBenchmarkModal({
               <tr className="bench-total-row">
                 <td colSpan={4} className="bench-total-lbl">Total cost of not being a market leader</td>
                 <td className="bench-cost-cell bench-cost-worst-col">
-                  <span className="bench-total-amt neg">{costLabel(benchmarkGapTotal.worst)}</span>
+                  <CostAmount n={benchmarkGapTotal.worst} worst total />
                 </td>
                 <td className="bench-cost-cell">
-                  <span className="bench-total-amt">{costLabel(benchmarkGapTotal.best)}</span>
+                  <CostAmount n={benchmarkGapTotal.best} total />
                 </td>
               </tr>
             </tfoot>

@@ -5176,6 +5176,9 @@ button {
   color: var(--text);
 }
 .bench-cost-amt.neg { color: var(--red); }
+/* At (or above) market level — no loss, shown as a green −$0. */
+.bench-cost-amt.atmarket,
+.bench-total-amt.atmarket { color: var(--green); }
 .bench-cost-cap {
   font-size: 11.5px;
   font-weight: 500;
@@ -5206,12 +5209,26 @@ button {
 }
 .bench-total-amt.neg { color: var(--red); }
 .bench-foot {
-  margin: 14px 0 0;
+  margin: 16px 0 2px;
   font-size: 11.5px;
   font-weight: 500;
   line-height: 1.5;
   color: var(--text-muted);
 }
+/* ── Cost-block spacing: symmetric inset + breathing room, so the section
+   reads as a tidy panel rather than a slab pinned to the modal edge. ── */
+/* Right inset on the BEST column so its amounts aren't flush to the edge —
+   sized to match the ~19px inset the Attribute column has on the left. */
+.bench-table.bench-table-cost td.bench-cost-cell:last-child,
+.bench-table.bench-table-cost th.bench-costsub:last-child { padding-right: 6px; }
+/* Keep Market-leader values off the divider rule. */
+.bench-table.bench-table-cost td.bench-val.lead,
+.bench-table.bench-table-cost th.bench-lead-col { padding-right: 14px; }
+/* Room after the rule before the WORST amount, matching the leaders gap. */
+.bench-table.bench-table-cost .bench-cost-worst-col { padding-left: 16px !important; }
+/* Consistent vertical rhythm across every row of the cost table. */
+.bench-table.bench-table-cost td { padding-top: 14px; padding-bottom: 14px; }
+.bench-table.bench-table-cost .bench-total-row td { padding-top: 18px; padding-bottom: 4px; }
 /* Trucks behind each column — revealed from a neutral pill, same dropdown
    pattern as the toolbar filters (no accent color, to match the dashboard). */
 .bench-trucks-wrap {
@@ -5289,6 +5306,12 @@ button {
   background: var(--surface-2);
   color: var(--text);
 }
+.bench-trucks-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bench-trucks-item-arrow { color: var(--text-muted); opacity: 0.7; }
 .bench-gap {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
