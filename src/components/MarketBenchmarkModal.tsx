@@ -124,15 +124,15 @@ export default function MarketBenchmarkModal({
                 <th className="bench-attr-col" rowSpan={2}>Attribute</th>
                 <th rowSpan={2}>
                   <button className="bench-link" onClick={() => goToGroup('worst')} data-tip="See all these trips in Full Data">
-                    Worst trips <ArrowUpRight size={12} />
+                    Worst <ArrowUpRight size={12} />
                   </button>
-                  {v2 && <TruckMarker trucks={worstTrucks} label="Worst trips" noun={noun} onPickMember={pickMember('worst')} />}
+                  {v2 && <TruckMarker trucks={worstTrucks} label="Worst" noun={noun} onPickMember={pickMember('worst')} />}
                 </th>
                 <th rowSpan={2}>
                   <button className="bench-link" onClick={() => goToGroup('best')} data-tip="See all these trips in Full Data">
-                    Best trips <ArrowUpRight size={12} />
+                    Best <ArrowUpRight size={12} />
                   </button>
-                  {v2 && <TruckMarker trucks={bestTrucks} label="Best trips" noun={noun} onPickMember={pickMember('best')} />}
+                  {v2 && <TruckMarker trucks={bestTrucks} label="Best" noun={noun} onPickMember={pickMember('best')} />}
                 </th>
                 <th rowSpan={2} className="bench-lead-col">Market leaders</th>
                 <th colSpan={2} className="bench-costhead">Gap Costs</th>
