@@ -437,7 +437,7 @@ export interface BenchmarkCostGroup {
   inTotal: boolean
 }
 export const benchmarkCostGroups: BenchmarkCostGroup[] = [
-  { attributes: ['Adherence'], costWorst: 6400, costBest: 2200, nameCaption: 'Route + deadhead deviations, missed fuel', inTotal: false },
+  { attributes: ['Adherence'], costWorst: 6400, costBest: 2200, inTotal: false },
   { attributes: ['Wasted Rate', '% Deadhead', 'RPM Effective'], costWorst: 8200, costBest: 2400, caption: 'Profit lost across rate, deadhead and RPM', inTotal: true },
   { attributes: ['MPG', 'CPG vs optimal'], costWorst: 2600, costBest: 0, caption: 'Missed fuel savings across MPG and price', inTotal: true },
   { attributes: ['Idle %'], costWorst: 2000, costBest: 200, nameCaption: 'Idle cost above the leader idle share', inTotal: true },
