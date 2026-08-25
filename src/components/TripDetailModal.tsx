@@ -1504,7 +1504,7 @@ export default function TripDetailModal({
             <div className="ld-hub">
               <div className="ld-hub-name">{dest}</div>
             </div>
-            <div className="ld-adh-icons">
+            <div className={`ld-adh-icons${repo ? ' ld-adh-icons-repo' : ''}`}>
               <AdhStat
                 icon={Route}
                 tone={ADHERENCE_TIER_META[adherenceTier].tone}
@@ -1534,7 +1534,7 @@ export default function TripDetailModal({
                 />
               )}
             </div>
-            <div className="ld-loadid ld-loadid-first">
+            <div className={`ld-loadid ld-loadid-first${repo ? ' ld-loadid-first-repo' : ''}`}>
               <span className="ld-loadid-icon">
                 <Truck size={22} color="#7CC8CF" />
               </span>

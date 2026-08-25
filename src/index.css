@@ -6193,6 +6193,11 @@ button {
 .ld-loadid-first {
   margin-left: auto;
 }
+/* Operative trips have no timing/load-id in the middle, so the Route adherence
+   reads better pushed right next to the truck/driver/DH cluster: the adh block
+   takes the auto margin and the truck pill drops it so they stay grouped. */
+.ld-adh-icons-repo { margin-left: auto; }
+.ld-loadid-first-repo { margin-left: 0; }
 .ld-loadid-icon {
   width: 40px;
   height: 40px;
