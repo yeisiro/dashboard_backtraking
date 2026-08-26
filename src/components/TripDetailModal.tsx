@@ -22,6 +22,12 @@ import {
   User,
   ShieldCheck,
   PanelRight,
+  Wrench,
+  AlertTriangle,
+  Construction,
+  MoreHorizontal,
+  StickyNote,
+  SendHorizontal,
 } from 'lucide-react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
@@ -634,9 +640,31 @@ const STATUS_META: Record<TripRow['status'], { label: string; bg: string; color:
   paid: { label: 'Paid', bg: '#0E1F22', color: '#00A065' },
 }
 
-// One entry in a trip's plan-change history: a justified deviation or a stop
-// added to the optimal plan. `refId` points at the deviation or stop it acts on.
-type PlanChange = { kind: 'justify' | 'add-stop'; refId: string }
+// The reason a deviation was justified — required when justifying, shown in the
+// Plan history.
+const DEVIATION_CATEGORIES = [
+  'Load instructions',
+  'Truck breakdown',
+  'Road incident',
+  'Road closed',
+  'Other',
+] as const
+type DeviationCategory = (typeof DEVIATION_CATEGORIES)[number]
+const CATEGORY_ICON: Record<DeviationCategory, typeof Package> = {
+  'Load instructions': Package,
+  'Truck breakdown': Wrench,
+  'Road incident': AlertTriangle,
+  'Road closed': Construction,
+  Other: MoreHorizontal,
+}
+
+// A single submitted note in a change's note log (append-only, newest last).
+type PlanNote = { id: string; text: string; at: string }
+
+// One entry in a trip's plan-change history: a justified route deviation, with
+// its reason category (required) and a log of optional free-text notes added
+// afterwards. `refId` points at the deviation it acts on.
+type PlanChange = { kind: 'justify'; refId: string; category: DeviationCategory; notes: PlanNote[] }
 
 export default function TripDetailModal({
   trip,
@@ -655,15 +683,17 @@ export default function TripDetailModal({
   const [hoverEnd, setHoverEnd] = useState(false)
   const [hoverFuel, setHoverFuel] = useState<number | null>(null)
   const [hoverDev, setHoverDev] = useState<number | null>(null)
-  const [hoverStop, setHoverStop] = useState<number | null>(null)
   const [hoverRepo, setHoverRepo] = useState(false)
-  // The plan-change log, newest last: the operator can justify a detour (the
-  // optimal plan is treated as if it went that way) or add a stop to the plan
-  // (the optimal reroutes through it). Both reshape the optimal plan and its
-  // metrics, and both appear in the Plan history.
+  // The plan-change log, newest last: the operator can justify a detour — the
+  // optimal plan is then treated as if it went that way, reshaping the optimal
+  // plan and its metrics. Every justification appears in the Plan history.
   const [changes, setChanges] = useState<PlanChange[]>([])
+  // The deviation currently awaiting a reason category in the picker modal.
+  const [justifyingId, setJustifyingId] = useState<string | null>(null)
+  // Per-change draft text for the note composer (keyed by the change's refId).
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
+  const noteSeq = useRef(0)
   const justifiedIds = changes.filter((c) => c.kind === 'justify').map((c) => c.refId)
-  const addedStopIds = changes.filter((c) => c.kind === 'add-stop').map((c) => c.refId)
   // Every change re-runs the optimizer and re-fetches the trip, so we show a
   // brief recalculating overlay before the new numbers land.
   const [recalcing, setRecalcing] = useState(false)
@@ -773,46 +803,38 @@ export default function TripDetailModal({
       setRecalcing(false)
     }, 950)
   }
-  const toggleChange = (kind: PlanChange['kind'], refId: string) =>
-    applyChange((p) =>
-      p.some((c) => c.kind === kind && c.refId === refId)
-        ? p.filter((c) => !(c.kind === kind && c.refId === refId))
-        : [...p, { kind, refId }],
-    )
-  const toggleDev = (id: string) => toggleChange('justify', id)
-  const toggleStop = (id: string) => toggleChange('add-stop', id)
+  // Justifying now takes a reason: clicking an un-justified deviation opens the
+  // category picker; picking a reason applies the justification. Un-justifying
+  // (clicking an already-justified one) just removes it.
+  const toggleDev = (id: string) => {
+    if (isJust(id)) applyChange((p) => p.filter((c) => c.refId !== id))
+    else setJustifyingId(id)
+  }
+  // Confirm a justification with its required reason category.
+  const confirmJustify = (id: string, category: DeviationCategory) => {
+    setJustifyingId(null)
+    applyChange((p) => [...p.filter((c) => c.refId !== id), { kind: 'justify', refId: id, category, notes: [] }])
+  }
+  // Notes are optional and don't change any metric, so they update the log
+  // directly (no recalc). Each submit appends to the change's note log.
+  const addNote = (refId: string) => {
+    const text = (noteDraft[refId] ?? '').trim()
+    if (!text) return
+    const at = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    const id = `note-${(noteSeq.current += 1)}`
+    setChanges((p) => p.map((c) => (c.refId === refId ? { ...c, notes: [...c.notes, { id, text, at }] } : c)))
+    setNoteDraft((d) => ({ ...d, [refId]: '' }))
+  }
+  const removeNote = (refId: string, noteId: string) =>
+    setChanges((p) => p.map((c) => (c.refId === refId ? { ...c, notes: c.notes.filter((n) => n.id !== noteId) } : c)))
   const undoAllChanges = () => applyChange(() => [])
   const isJust = (id: string) => justifiedIds.includes(id)
-  const isAdded = (id: string) => addedStopIds.includes(id)
-  // Stops the optimizer suggests adding to the plan. Adding one reroutes the
-  // optimal through it and captures the savings it represents (a cheaper fuel
-  // corridor, a consolidation point) — reducing the trip's missed savings.
-  interface PlanStop {
-    id: string
-    t: number
-    pos: [number, number] // where the stop sits (just off the route)
-    anchor: [number, number] // the route point it reroutes from
-    name: string
-    savings: number
-  }
-  const stopRand = seededRandom(routeSeed + 8080)
-  const planStops: PlanStop[] = [
-    { id: 'stop-0', name: 'Fuel corridor stop', t: 0.42, savings: 60 + Math.round(stopRand() * 40) },
-    { id: 'stop-1', name: 'Consolidation point', t: 0.72, savings: 40 + Math.round(stopRand() * 40) },
-  ].map((s) => {
-    const p = pointAtFraction(routePoints, s.t)
-    const hr = (p.heading * Math.PI) / 180
-    const off = Math.max(spanX, spanY) * 0.16 // opposite side from the red deviations
-    return { ...s, anchor: p.pos, pos: [p.pos[0] - Math.sin(hr) * off, p.pos[1] + Math.cos(hr) * off] as [number, number] }
-  })
 
   // Effective (post-change) figures the whole modal reads from.
   const effExcessCost = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessCost, 0)
   const effExcessMiles = deviations.filter((d) => !isJust(d.id)).reduce((s, d) => s + d.excessMiles, 0)
   const recoveredAdh = deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.adhImpact, 0)
   const effAdherence = Math.min(97, Math.round((trip.adherence + recoveredAdh) * 10) / 10)
-  // Savings captured by stops added to the plan — trims the fuel missed savings.
-  const capturedStopSavings = planStops.filter((s) => isAdded(s.id)).reduce((sum, s) => sum + s.savings, 0)
 
   // Playback follows the route backbone (deviations are drawn as their own
   // bulges); no per-deviation splicing so multiple detours stay simple.
@@ -1056,18 +1078,6 @@ export default function TripDetailModal({
           strokeLinejoin="round"
         />
       ))}
-      {/* Reroute spur to each added plan stop — the optimal now detours through it. */}
-      {planStops.filter((s) => isAdded(s.id)).map((s) => (
-        <polyline
-          key={s.id}
-          points={`${s.anchor[0]},${s.anchor[1]} ${s.pos[0]},${s.pos[1]} ${s.anchor[0]},${s.anchor[1]}`}
-          fill="none"
-          stroke="#33DB9E"
-          strokeWidth={vbW * 0.005}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
       <g>
         <circle
           cx={curX} cy={curY} r={vbW * 0.028}
@@ -1112,24 +1122,6 @@ export default function TripDetailModal({
               hovered={hoverDev === i}
               onHoverChange={(v) => setHoverDev(v ? i : null)}
               onClick={() => toggleDev(d.id)}
-            />
-          ),
-        })),
-        ...(repo ? [] : planStops).map((s, i) => ({
-          key: s.id,
-          hovered: hoverStop === i,
-          node: (
-            <FuelStopMarker
-              x={s.pos[0]} y={s.pos[1]} vbW={vbW}
-              icon={MapPin}
-              color={isAdded(s.id) ? '#33DB9E' : '#7CC8CF'}
-              dashed={!isAdded(s.id)}
-              title={isAdded(s.id) ? 'Stop added to plan' : 'Suggested stop'}
-              line2={s.name}
-              line3={isAdded(s.id) ? 'In the optimal plan · click to remove' : `Saves ${money(s.savings)} · click to add`}
-              hovered={hoverStop === i}
-              onHoverChange={(v) => setHoverStop(v ? i : null)}
-              onClick={() => toggleStop(s.id)}
             />
           ),
         })),
@@ -1213,8 +1205,7 @@ export default function TripDetailModal({
   // to get what the optimal plan would have cost.
   const fuelOptimal = fuelCostTotal + trip.missedFuelSavings
   const missedSavingFuel = Math.abs(trip.missedFuelSavings)
-  // Fuel missed savings after any stops added to the plan capture their share.
-  const effFuelMissed = Math.max(0, missedSavingFuel - capturedStopSavings)
+  const effFuelMissed = missedSavingFuel
   // Gallons scale with miles at the same mpg, so the optimal plan — fewer
   // miles, no deviation — also burns fewer gallons. The $ gap above is then
   // partly extra gallons (from the extra miles) and partly a worse price
@@ -1811,18 +1802,15 @@ export default function TripDetailModal({
           </div>
           {changes.length === 0 ? (
             <div className="ld-hist-empty">
-              No changes yet. Justify a route deviation, or add a suggested stop to the plan, from the
-              map or timeline — every change to the optimal plan is logged here.
+              No changes yet. Justify a route deviation from the map or timeline — a legitimate detour
+              (a closure, a customer request) — and every justification is logged here.
             </div>
           ) : (
             <>
               <div className="ld-hist-summary">
                 <div>
                   <span className="ld-hist-sum-val">
-                    {money(
-                      deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.excessCost, 0) +
-                        capturedStopSavings,
-                    )}
+                    {money(deviations.filter((d) => isJust(d.id)).reduce((s, d) => s + d.excessCost, 0))}
                   </span>
                   <span className="ld-hist-sum-lbl">Recovered</span>
                 </div>
@@ -1836,12 +1824,14 @@ export default function TripDetailModal({
               </div>
               <div className="ld-hist-list">
                 {[...changes].reverse().map((c) => {
-                  if (c.kind === 'justify') {
-                    const d = deviations.find((x) => x.id === c.refId)
-                    if (!d) return null
-                    const n = deviations.findIndex((x) => x.id === c.refId) + 1
-                    return (
-                      <div className="ld-hist-item" key={`justify-${c.refId}`}>
+                  const d = deviations.find((x) => x.id === c.refId)
+                  if (!d) return null
+                  const n = deviations.findIndex((x) => x.id === c.refId) + 1
+                  const CatIcon = CATEGORY_ICON[c.category]
+                  const draft = noteDraft[c.refId] ?? ''
+                  return (
+                    <div className="ld-hist-item ld-hist-item-col" key={`justify-${c.refId}`}>
+                      <div className="ld-hist-item-row">
                         <span className="ld-hist-item-icon"><Check size={13} strokeWidth={3} /></span>
                         <div className="ld-hist-item-txt">
                           <span className="ld-hist-item-name">Detour {n} justified</span>
@@ -1854,22 +1844,48 @@ export default function TripDetailModal({
                           Undo
                         </button>
                       </div>
-                    )
-                  }
-                  const s = planStops.find((x) => x.id === c.refId)
-                  if (!s) return null
-                  return (
-                    <div className="ld-hist-item" key={`stop-${c.refId}`}>
-                      <span className="ld-hist-item-icon"><MapPin size={13} /></span>
-                      <div className="ld-hist-item-txt">
-                        <span className="ld-hist-item-name">Added stop · {s.name}</span>
-                        <span className="ld-hist-item-meta">
-                          Rerouted the optimal plan · {money(s.savings)} saved
-                        </span>
+                      <span className="ld-hist-cat">
+                        <CatIcon size={12} /> {c.category}
+                      </span>
+                      {c.notes.length > 0 && (
+                        <div className="ld-hist-notelog">
+                          {c.notes.map((note) => (
+                            <div className="ld-hist-noteitem" key={note.id}>
+                              <StickyNote size={12} className="ld-hist-noteitem-icon" />
+                              <p className="ld-hist-noteitem-text">{note.text}</p>
+                              <span className="ld-hist-noteitem-at">{note.at}</span>
+                              <button
+                                className="ld-hist-noteitem-x"
+                                onClick={() => removeNote(c.refId, note.id)}
+                                aria-label="Delete note"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="ld-hist-notecompose">
+                        <textarea
+                          className="ld-hist-note"
+                          placeholder="Add a note (optional)…"
+                          value={draft}
+                          onChange={(e) => setNoteDraft((prev) => ({ ...prev, [c.refId]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              addNote(c.refId)
+                            }
+                          }}
+                        />
+                        <button
+                          className="ld-hist-notesend"
+                          disabled={!draft.trim()}
+                          onClick={() => addNote(c.refId)}
+                        >
+                          <SendHorizontal size={13} /> Add
+                        </button>
                       </div>
-                      <button className="ld-hist-item-undo" onClick={() => toggleStop(c.refId)}>
-                        Undo
-                      </button>
                     </div>
                   )
                 })}
@@ -1879,6 +1895,44 @@ export default function TripDetailModal({
         </aside>
       </div>
     )}
+
+    {justifyingId && (() => {
+      const d = deviations.find((x) => x.id === justifyingId)
+      const n = deviations.findIndex((x) => x.id === justifyingId) + 1
+      return (
+        <div className="ld-cat-overlay" onClick={() => setJustifyingId(null)}>
+          <div className="ld-cat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ld-cat-head">
+              <span className="ld-cat-title">
+                <ShieldCheck size={16} color="#33DB9E" /> Justify detour {n}
+              </span>
+              <button className="cfm-x" onClick={() => setJustifyingId(null)} aria-label="Cancel">
+                <X size={17} />
+              </button>
+            </div>
+            <p className="ld-cat-sub">
+              Pick the reason for this deviation{d ? ` · ${money(d.excessCost)} excess` : ''}. A
+              category is required; you can add a note afterwards from Plan history.
+            </p>
+            <div className="ld-cat-list">
+              {DEVIATION_CATEGORIES.map((cat) => {
+                const Icon = CATEGORY_ICON[cat]
+                return (
+                  <button
+                    key={cat}
+                    className="ld-cat-opt"
+                    onClick={() => confirmJustify(justifyingId, cat)}
+                  >
+                    <span className="ld-cat-opt-icon"><Icon size={16} /></span>
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )
+    })()}
 
     {fullMap && (
       <div className="ld-fullmap-overlay" onClick={() => setFullMap(false)}>

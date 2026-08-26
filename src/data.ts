@@ -401,63 +401,144 @@ export const leaders: RankRow[] = [
   })),
 ]
 
-// Market benchmark table — how your trips compare to the market. For each
-// attribute we show your 3 worst trips, your 3 best trips, the market leaders,
-// and the gap your best trips still have to close to reach the leaders.
-// `betterHigher` says which direction is good, so the gap can be toned right.
-export interface BenchmarkAttr {
+// Market benchmark — an action-first read of how the fleet compares to the
+// market leaders. Every metric is owned by the Dispatcher (planning & pricing)
+// or the Driver (on-road execution), and the list is ordered as a recipe:
+// planning quality first, then execution. Each metric carries its own gap cost
+// to each trip group plus a concrete "how to reach the leader" action (revealed
+// on expand) so the user sees what to fix, who owns it, and what it's costing.
+export type BenchOwner = 'Dispatcher' | 'Driver'
+
+export interface BenchmarkMetric {
+  key: string
   attribute: string
-  betterHigher: boolean
-  worst: string // avg of your 3 worst trips
-  best: string // avg of your 3 best trips
+  owner: BenchOwner
+  betterHigher: boolean // which direction is good (tones the values)
+  worst: string // avg of the worst trip group
+  best: string // avg of the best trip group
   leaders: string // market leaders
-  gap: string // best trips → market leaders
-  tip: string // what the metric means, shown on hover
+  tip: string // what the metric means (hover)
+  costWorst: number // $ the worst group would keep by matching the leader here
+  costBest: number // $ the best group would keep by matching the leader here
+  action: string // how to become a market leader on this metric
+  basis: string // how the gap cost is figured
 }
 
-export const benchmarkAttrs: BenchmarkAttr[] = [
-  { attribute: 'Adherence', betterHigher: true, worst: '63.4%', best: '76.2%', leaders: '80.5%', gap: '+4.3 pp', tip: 'How closely drivers followed the planned route. Higher means fewer unplanned detours and reloads.' },
-  { attribute: 'Wasted Rate', betterHigher: false, worst: '11.2%', best: '4.8%', leaders: '4.2%', gap: '−0.6 pp', tip: 'Share of paid miles that produced no revenue. Lower is better.' },
-  { attribute: '% Deadhead', betterHigher: false, worst: '23.8%', best: '16.5%', leaders: '14.1%', gap: '−2.4 pp', tip: 'Empty miles run with no load, as a share of total miles. Lower is better.' },
-  { attribute: 'RPM Effective', betterHigher: true, worst: '$2.41', best: '$2.77', leaders: '$2.94', gap: '+$0.17', tip: 'Revenue per mile after deadhead — what each mile actually earns.' },
-  { attribute: 'MPG', betterHigher: true, worst: '6.05', best: '6.42', leaders: '6.42', gap: '0.00', tip: 'Average miles per gallon. Higher means lower fuel cost per mile.' },
-  { attribute: 'CPG vs optimal', betterHigher: false, worst: '+$0.31/gal', best: '$0.00/gal', leaders: '$0.00/gal', gap: '$0.00/gal', tip: 'How much over the best achievable price the fleet paid per gallon. Market leaders fuel at the optimal price, so their gap is $0.' },
-  { attribute: 'Idle %', betterHigher: false, worst: '18.1%', best: '7.4%', leaders: '5.8%', gap: '−1.6 pp', tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.' },
+export const benchmarkMetrics: BenchmarkMetric[] = [
+  // ── Dispatcher: how well the work was planned and priced ──────────────
+  {
+    key: 'loadedRpm',
+    attribute: 'Loaded RPM',
+    owner: 'Dispatcher',
+    betterHigher: true,
+    worst: '$2.58',
+    best: '$2.95',
+    leaders: '$3.12',
+    tip: 'Revenue per loaded mile — how well each load was priced and negotiated. This is the planning quality the rest of the trip builds on.',
+    costWorst: 5400,
+    costBest: 1600,
+    action: 'Book at or above $3.12 / loaded mile: sort the board by rate, pass on sub-$2.80 freight, and re-price backhauls to market instead of taking the first offer.',
+    basis: '(leader $3.12 − your loaded RPM) × loaded miles = revenue left on the table before the truck even rolls.',
+  },
+  {
+    key: 'deadhead',
+    attribute: 'Deadhead %',
+    owner: 'Dispatcher',
+    betterHigher: false,
+    worst: '23.8%',
+    best: '16.5%',
+    leaders: '14.1%',
+    tip: 'Empty miles run with no load, as a share of total miles. Set by how loads are sequenced. Lower is better.',
+    costWorst: 2800,
+    costBest: 800,
+    action: 'Pre-book the next load before the current delivery and cluster loads by region so trucks reload close by — target under 14% empty.',
+    basis: 'empty miles above the 14.1% leader share × operating cost per mile.',
+  },
+  // ── Driver: how well the plan was executed on the road ────────────────
+  {
+    key: 'wasted',
+    attribute: 'Wasted Rate %',
+    owner: 'Driver',
+    betterHigher: false,
+    worst: '11.2%',
+    best: '4.8%',
+    leaders: '4.2%',
+    tip: 'Share of expected revenue lost during execution — unplanned detours, reloads and delays that erode the rate the dispatcher booked.',
+    costWorst: 3200,
+    costBest: 700,
+    action: 'Run the dispatched route, avoid unplanned detours and reloads, and keep pickups and deliveries on time so the negotiated rate is actually earned.',
+    basis: 'expected revenue lost above the 4.2% leader waste share.',
+  },
+  {
+    key: 'mpg',
+    attribute: 'MPG',
+    owner: 'Driver',
+    betterHigher: true,
+    worst: '6.05',
+    best: '6.42',
+    leaders: '6.42',
+    tip: 'Average miles per gallon. Higher MPG means a lower fuel cost on every mile driven.',
+    costWorst: 2000,
+    costBest: 0,
+    action: 'Hold a steady highway speed, brake progressively and shift early to lift fleet MPG to the 6.42 leader level.',
+    basis: 'Rule of three on fuel cost per mile (fuel price ÷ MPG): your $0.65/mi at 6.05 MPG vs the leader $0.62/mi at 6.42 MPG, over the same ~53k miles = −$2,000.',
+  },
+  {
+    key: 'cpg',
+    attribute: 'CPG vs optimal',
+    owner: 'Driver',
+    betterHigher: false,
+    worst: '+$0.31/gal',
+    best: '$0.00/gal',
+    leaders: '$0.00/gal',
+    tip: 'How much over the best achievable price the fleet paid per gallon. Leaders fuel at the optimal price, so their gap is $0.',
+    costWorst: 1300,
+    costBest: 0,
+    action: 'Fuel at in-network stops on the optimized fuel plan and avoid off-route premium pricing.',
+    basis: 'overpay per gallon × gallons burned.',
+  },
+  {
+    key: 'idle',
+    attribute: 'Idle %',
+    owner: 'Driver',
+    betterHigher: false,
+    worst: '18.1%',
+    best: '7.4%',
+    leaders: '5.8%',
+    tip: 'Share of engine hours spent idling. Lower saves fuel and engine wear.',
+    costWorst: 2000,
+    costBest: 200,
+    action: 'Cut idle time: use the APU or bunk heat, shut down after 5 minutes stopped, and enforce the idle policy toward the 5.8% leader share.',
+    basis: 'idle fuel and engine wear above the 5.8% leader idle share.',
+  },
 ]
 
-// Cost of NOT being a market leader, grouped by cost driver (not per metric).
-// Seven attributes collapse into four dollar figures per trip group, because
-// several metrics share one underlying cost:
-//  - Adherence            → money lost to Route + Deadhead deviations + Missed Fuel.
-//  - Wasted Rate/% Deadhead/RPM Effective → ONE profit-lost figure (profit the
-//    group made minus profit at the leaders' deadhead share).
-//  - MPG/CPG vs optimal   → ONE missed-fuel-savings figure.
-//  - Idle %               → idle cost above the leader idle share.
-// `attributes` are the metric rows the group's cost cell spans (in table order).
-// `inTotal` is false for Adherence — its dollars overlap the other groups
-// (route/deadhead/fuel), so the total sums the other three to count each loss once.
-export interface BenchmarkCostGroup {
-  attributes: string[]
-  costWorst: number
-  costBest: number
-  caption?: string // shown inside the cost cell (multi-row groups)
-  nameCaption?: string // shown under the attribute name (single-row groups)
-  inTotal: boolean
-}
-export const benchmarkCostGroups: BenchmarkCostGroup[] = [
-  { attributes: ['Adherence'], costWorst: 6400, costBest: 2200, inTotal: false },
-  { attributes: ['Wasted Rate', '% Deadhead', 'RPM Effective'], costWorst: 8200, costBest: 2400, caption: 'Profit lost across rate, deadhead and RPM', inTotal: true },
-  { attributes: ['MPG', 'CPG vs optimal'], costWorst: 2600, costBest: 0, caption: 'Missed fuel savings across MPG and price', inTotal: true },
-  { attributes: ['Idle %'], costWorst: 2000, costBest: 200, nameCaption: 'Idle cost above the leader idle share', inTotal: true },
+// The two responsibility sections, in the order a fleet should work them
+// (planning before execution).
+export const benchmarkOwners: { owner: BenchOwner; label: string; blurb: string }[] = [
+  {
+    owner: 'Dispatcher',
+    label: 'Dispatcher',
+    blurb: 'Planning & pricing — fix these first; better rates and fewer empty miles shrink the driver-side losses below.',
+  },
+  {
+    owner: 'Driver',
+    label: 'Driver',
+    blurb: 'On-road execution — what the driver controls once the load is booked.',
+  },
 ]
-// Total cost of not being a leader — sum of the groups that count (Adherence
-// excluded to avoid double-counting its overlap with the others).
-export const benchmarkGapTotal = benchmarkCostGroups
-  .filter((g) => g.inTotal)
-  .reduce(
-    (acc, g) => ({ worst: acc.worst + g.costWorst, best: acc.best + g.costBest }),
-    { worst: 0, best: 0 },
-  )
+
+// Per-owner subtotal (each metric counts once).
+export function benchmarkOwnerTotal(owner: BenchOwner) {
+  return benchmarkMetrics
+    .filter((m) => m.owner === owner)
+    .reduce((a, m) => ({ worst: a.worst + m.costWorst, best: a.best + m.costBest }), { worst: 0, best: 0 })
+}
+// Grand total across every metric.
+export const benchmarkGapTotal = benchmarkMetrics.reduce(
+  (acc, m) => ({ worst: acc.worst + m.costWorst, best: acc.best + m.costBest }),
+  { worst: 0, best: 0 },
+)
 
 // Performance drivers — the "why" behind the numbers. Each zone and broker is a
 // row with the same columns as the attributes, measured by effective RPM
@@ -1092,6 +1173,9 @@ export interface RepositionRow {
   // timeline) — target for "assign to load's deadhead".
   nextLoadId: string
   nextLoadLane: string
+  // When this row is the product of merging several legs, the originals are kept
+  // here so the merge can be undone (split back into its legs).
+  mergedFrom?: RepositionRow[]
 }
 
 // Dates chain backward so each gap ENDS exactly on the start date of the load

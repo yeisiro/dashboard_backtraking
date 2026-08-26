@@ -3259,6 +3259,10 @@ button {
 
 .fd-repo-row td { background: rgba(255, 255, 255, 0.018); }
 .fd-repo-row td.fd-left:first-child { box-shadow: inset 3px 0 0 var(--border-strong); }
+/* A load with operative gaps pinned above it reads as one block: a shared left
+   rail down the gap header, its legs, and the load row ties them together so
+   the user can see at a glance which empty legs feed that load's deadhead. */
+.fd-load-block.has-ops td:first-child { box-shadow: inset 3px 0 0 var(--border-strong); }
 .fd-repo-tag {
   display: inline-flex;
   align-items: center;
@@ -3315,6 +3319,181 @@ button {
   transition: background 0.15s, color 0.15s;
 }
 .fd-op-manage:hover { background: var(--surface-3); color: var(--text); }
+/* "Merged from N legs" tag inside a merged gap header */
+.fd-op-merged-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.fd-op-merged-tag:hover { border-color: var(--green); }
+.fd-op-merged-tag.open { background: color-mix(in srgb, var(--green) 24%, transparent); }
+.fd-op-merged-tag svg { color: var(--green); }
+/* The original legs behind a merged operative trip (revealed on expand): a
+   deeper indent + dimmer text mark them as the pre-merge components. */
+.fd-repo-subleg td { background: rgba(255, 255, 255, 0.01); opacity: 0.9; }
+.fd-repo-subleg td.fd-left:first-child { box-shadow: inset 3px 0 0 var(--border), inset 18px 0 0 rgba(124, 200, 207, 0.12); }
+
+/* Load-row hint: operative legs folded into this load's deadhead */
+.fd-load-ophint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--green) 40%, var(--border-strong));
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fd-load-ophint:hover { background: color-mix(in srgb, var(--green) 18%, transparent); }
+.fd-load-ophint svg { flex-shrink: 0; }
+
+/* Heads-up on a load that has operative trips before its pickup, shown only
+   while the operative toggle is off. Neutral/teal, not the green DH badge —
+   clicking it turns the toggle on to reveal the trips pinned above. */
+.fd-load-opnote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.fd-load-opnote:hover { color: var(--text-dim); border-color: #7CC8CF; }
+.fd-load-opnote svg { flex-shrink: 0; color: #7CC8CF; }
+
+/* Change-log button in the toolbar row */
+.fd-oplog-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fd-oplog-btn:hover { background: var(--surface-3); color: var(--text); }
+.fd-oplog-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #05080b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* ── Operative change-log side panel ── */
+.op-log-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(6, 9, 12, 0.5);
+  display: flex;
+  justify-content: flex-end;
+}
+.op-log-panel {
+  width: 420px;
+  max-width: 92vw;
+  height: 100%;
+  background: #0c0f15;
+  border-left: 1px solid var(--border);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: ld-hist-in 0.18s ease;
+}
+.op-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.op-log-title { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; color: var(--text); }
+.op-log-clearscope {
+  margin: 12px 20px 0;
+  align-self: flex-start;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.op-log-clearscope:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.op-log-empty { padding: 28px 22px; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.op-log-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 9px; }
+.op-log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.op-log-item.reverted { opacity: 0.55; }
+.op-log-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.op-log-icon-merge { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.op-log-icon-assign { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); }
+.op-log-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.op-log-item-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.op-log-item-detail { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+.op-log-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.op-log-undo:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.op-log-reverted-tag { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* ── Operative gap drawer ── */
 .og-drawer { width: 680px; }
@@ -5086,7 +5265,7 @@ button {
 /* ---------- Market benchmark table ---------- */
 .bench-modal { width: 800px; }
 /* The cost-of-the-gap version adds two dollar columns, so it needs more room. */
-.bench-modal:has(.bench-table-cost) { width: 1080px; max-width: 94vw; }
+.bench-modal:has(.bench-table-cost) { width: 1240px; max-width: 92vw; }
 .bench-modal .modal-body { scrollbar-gutter: stable; }
 .bench-table.bench-table-cost th.bench-attr-col { width: 24%; }
 .bench-table.bench-table-cost th.bench-lead-col { width: 13%; }
@@ -5236,7 +5415,12 @@ button {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-.bench-cost-amt.neg { color: var(--red); }
+/* Per-category losses use a softer red; aggregate figures (owner subtotals and
+   the grand total, marked .bench-sum) use the full-strength red so it reads as
+   "this is the sum of the muted ones". */
+.bench-cost-amt.neg { color: color-mix(in srgb, var(--red) 60%, var(--text-muted)); }
+.bench-cost-amt.neg.bench-sum,
+.bench-total-amt.neg { color: var(--red); }
 /* At (or above) market level — no loss, shown as a green −$0. */
 .bench-cost-amt.atmarket,
 .bench-total-amt.atmarket { color: var(--green); }
@@ -5290,6 +5474,94 @@ button {
 /* Consistent vertical rhythm across every row of the cost table. */
 .bench-table.bench-table-cost td { padding-top: 14px; padding-bottom: 14px; }
 .bench-table.bench-table-cost .bench-total-row td { padding-top: 18px; padding-bottom: 4px; }
+/* ── Owner sections (Dispatcher / Driver) + expandable metric rows ────── */
+.bench-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex: 0 0 auto;
+}
+.bench-owner-dispatcher {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 15%, transparent);
+}
+.bench-owner-driver {
+  color: var(--teal, #4fd1c5);
+  background: color-mix(in srgb, var(--teal, #4fd1c5) 15%, transparent);
+}
+.bench-section td {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border-strong);
+  padding-top: 16px !important;
+  padding-bottom: 12px !important;
+  vertical-align: middle;
+}
+.bench-section-lbl {
+  text-align: left !important;
+  padding-left: 0 !important;
+}
+/* Flex lives on an inner div, NOT the <td> — display:flex on a table cell drops
+   its table-cell role and silently breaks colSpan, shoving the subtotal cells
+   left out of the Gap Cost columns. */
+.bench-section-inner {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.bench-section-blurb {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.bench-section-sub { text-align: right; vertical-align: middle; }
+.bench-section-sub .bench-cost-amt { font-size: 15px; font-weight: 800; }
+/* Clickable metric rows */
+.bench-metric-row { cursor: pointer; transition: background 0.12s; }
+.bench-metric-row:hover { background: rgba(255, 255, 255, 0.025); }
+.bench-metric-row.open { background: rgba(255, 255, 255, 0.03); }
+.bench-attr-name { display: inline-flex; align-items: center; gap: 7px; }
+.bench-caret {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  transition: transform 0.15s;
+}
+.bench-metric-row.open .bench-caret { transform: rotate(90deg); color: var(--text-dim); }
+/* Expanded detail: recommendation + cost basis, side by side */
+.bench-detail-row td {
+  padding: 0 0 16px 0 !important;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.bench-detail {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 26px;
+  padding: 2px 18px 6px 21px;
+  text-align: left;
+}
+.bench-detail-block { display: flex; flex-direction: column; gap: 5px; }
+.bench-detail-h {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.bench-detail-block:last-child .bench-detail-h { color: var(--text-muted); }
+.bench-detail-block p {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
 /* Trucks behind each column — revealed from a neutral pill, same dropdown
    pattern as the toolbar filters (no accent color, to match the dashboard). */
 .bench-trucks-wrap {
@@ -6995,6 +7267,127 @@ button {
   flex-shrink: 0;
 }
 .ld-hist-item-undo:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+/* History item that also carries a category tag + optional note */
+.ld-hist-item-col { flex-direction: column; align-items: stretch; gap: 9px; }
+.ld-hist-item-row { display: flex; align-items: center; gap: 11px; }
+.ld-hist-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 3px 9px;
+  border-radius: 100px;
+  background: rgba(124, 200, 207, 0.14);
+  color: #7CC8CF;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+/* Submitted note log for a change */
+.ld-hist-notelog { display: flex; flex-direction: column; gap: 6px; }
+.ld-hist-noteitem {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.ld-hist-noteitem-icon { color: var(--text-muted); margin-top: 2px; }
+.ld-hist-noteitem-text { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
+.ld-hist-noteitem-at { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; margin-top: 2px; }
+.ld-hist-noteitem-x {
+  display: grid; place-items: center;
+  width: 18px; height: 18px;
+  border: none; background: none; cursor: pointer;
+  color: var(--text-muted); border-radius: 5px;
+}
+.ld-hist-noteitem-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+/* Note composer (textarea + submit) */
+.ld-hist-notecompose { display: flex; flex-direction: column; gap: 6px; }
+.ld-hist-note {
+  width: 100%;
+  min-height: 40px;
+  resize: vertical;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.ld-hist-note::placeholder { color: var(--text-muted); }
+.ld-hist-note:focus { outline: none; border-color: #33DB9E; }
+.ld-hist-notesend {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ld-hist-notesend:hover:not(:disabled) { background: rgba(51, 219, 158, 0.14); border-color: #33DB9E; color: var(--text); }
+.ld-hist-notesend:disabled { opacity: 0.45; cursor: default; }
+
+/* ── Deviation reason-category picker ── */
+.ld-cat-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(6, 9, 12, 0.62);
+  display: grid;
+  place-items: center;
+}
+.ld-cat-modal {
+  width: 420px;
+  max-width: 92vw;
+  background: #0e131a;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  padding: 20px 22px 22px;
+  animation: ld-cat-in 0.16s ease;
+}
+@keyframes ld-cat-in { from { transform: translateY(8px); opacity: 0.5; } to { transform: none; opacity: 1; } }
+.ld-cat-head { display: flex; align-items: center; justify-content: space-between; }
+.ld-cat-title { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; color: var(--text); }
+.ld-cat-sub { margin: 10px 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--text-muted); }
+.ld-cat-list { display: flex; flex-direction: column; gap: 8px; }
+.ld-cat-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.13s, border-color 0.13s;
+}
+.ld-cat-opt:hover { background: var(--surface-3); border-color: #33DB9E; }
+.ld-cat-opt-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: rgba(124, 200, 207, 0.14);
+  color: #7CC8CF;
+}
 
 @media (max-width: 1200px) {
   .ld-top {

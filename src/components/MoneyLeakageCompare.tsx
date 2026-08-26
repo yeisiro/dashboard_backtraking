@@ -262,7 +262,7 @@ function LeakTrend({
     <div className="mlc-trend">
       <div className="mlc-trend-head">
         <div>
-          <div className="mlc-trend-title">Daily money leaked</div>
+          <div className="mlc-trend-title">Daily Money Leakage</div>
           <div className="mlc-trend-sub">
             {periodLabel} · click the legend to toggle a series · hover for the day
           </div>

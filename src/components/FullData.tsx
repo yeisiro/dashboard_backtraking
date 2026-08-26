@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
+  History, Split, Undo2, Layers,
 } from 'lucide-react'
 import { tripRows, repositionRows, costSegments, deltaTone, deltaTrend, type TripRow, type RepositionRow, type Goal } from '../data'
 import { usePeriod } from '../PeriodContext'
@@ -82,6 +83,30 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
 // move (empty, no load). They live in one sorted list when the toggle is on.
 type TableRow = TripRow | RepositionRow
 const isReposition = (r: TableRow): r is RepositionRow => 'reposition' in r
+
+// A run of operative legs folded into one load's deadhead. Keeps everything
+// needed to detach them again and restore the load's pre-assign figures.
+interface OpAssignment {
+  id: string
+  loadRef: string
+  legs: RepositionRow[]
+  miles: number
+  cost: number
+  leak: number
+}
+
+// One entry in the operative-trips change log. `kind` drives the icon/wording;
+// `refId` points at the thing to undo (a merged leg id, or an assignment id);
+// `active` is false once the change has been reversed.
+interface OpLogEntry {
+  id: string
+  kind: 'merge' | 'assign' | 'unmerge' | 'detach'
+  title: string
+  detail: string
+  loadRef?: string // the load the change concerns (for the per-load filter)
+  refId?: string
+  active: boolean
+}
 
 // Shape a repositioning move as a TripRow so the detail modal (which is built
 // around TripRow) can render it in `repo` mode: no load, no income, 100%
@@ -989,7 +1014,7 @@ function TripsTable({
   const [selectedMove, setSelectedMove] = useState<RepositionRow | null>(null)
   const [query, setQuery] = useState('')
   // Also fold in empty repositioning moves (deadhead, no load) alongside trips.
-  const [showReposition, setShowReposition] = useState(false)
+  const [showReposition, setShowReposition] = useState(true)
   // Trips are stateful so assigning an operative gap can fold its empty miles
   // into the target load's deadhead and have the table reflect it live.
   const [trips, setTrips] = useState<TripRow[]>(tripRows)
@@ -998,6 +1023,18 @@ function TripsTable({
   const [opLegs, setOpLegs] = useState<RepositionRow[]>(repositionRows)
   const [gapDrawer, setGapDrawer] = useState<string | null>(null) // gapId being managed
   const [opToast, setOpToast] = useState<string | null>(null)
+  // Merged operative trips whose constituent legs are expanded for viewing.
+  const [expandedMerge, setExpandedMerge] = useState<Set<string>>(new Set())
+  // Operative legs assigned into a load's deadhead. Each record keeps the
+  // original legs + the miles/cost/leak folded in, so an assign can be undone.
+  const [assignments, setAssignments] = useState<OpAssignment[]>([])
+  // Append-only history of merge/assign actions, newest first. Entries flip to
+  // active:false when reversed. Powers the change-log panel and the Undo actions.
+  const [changeLog, setChangeLog] = useState<OpLogEntry[]>([])
+  const [logOpen, setLogOpen] = useState(false)
+  const [logScope, setLogScope] = useState<string | null>(null) // filter log to one loadRef
+  const logSeq = useRef(0)
+  const nextLogId = () => `log-${(logSeq.current += 1)}`
   // Empty = all statuses shown.
   const [statusFilter, setStatusFilter] = useState<TripRow['status'][]>([])
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
@@ -1116,8 +1153,9 @@ function TripsTable({
       })
     : []
 
-  // Trips sort normally; operative legs render in their own grouped section
-  // below (grouped by gap), so they're kept out of the sorted trip list.
+  // Trips sort normally; operative gaps aren't sorted on their own — each one
+  // renders pinned directly above the load it leads into (see gapsByLoadRef),
+  // so sorting the loads carries their operative trips along with them.
   const rows: TripRow[] = sortKey
     ? [...byStatus].sort((a, b) => {
         const cmp = SORT_ACCESSOR[sortKey](a) - SORT_ACCESSOR[sortKey](b)
@@ -1138,6 +1176,34 @@ function TripsTable({
     g.legs.push(leg)
   })
   opGroups.forEach((g) => g.legs.sort((a, b) => a.seq - b.seq))
+
+  // How many operative trips (legs) lead into each load — computed from the full
+  // opLegs list regardless of the toggle, so a load can hint "N operative trips
+  // before pickup" even when the operative rows are hidden.
+  const opCountByLoad = new Map<string, number>()
+  opLegs.forEach((leg) => {
+    const target = trips.find((t) => t.truck === leg.truck)
+    if (target) opCountByLoad.set(target.loadRef, (opCountByLoad.get(target.loadRef) ?? 0) + 1)
+  })
+
+  // Pin each operative gap above the load it leads into, so the user reads the
+  // empty legs immediately before the deadhead they'd become part of. A gap
+  // whose target load isn't in the current view (filtered out) falls back to an
+  // "orphan" list rendered after the loads. `targetLoadFor` decides the load.
+  type OpGroup = { gapId: string; legs: RepositionRow[] }
+  const gapsByLoadRef = new Map<string, OpGroup[]>()
+  const orphanGaps: OpGroup[] = []
+  opGroups.forEach((g) => {
+    // Same rule as targetLoadFor (defined below): the truck's load in the table.
+    const target = trips.find((t) => t.truck === g.legs[0].truck)
+    if (target && rows.some((r) => r.loadRef === target.loadRef)) {
+      const arr = gapsByLoadRef.get(target.loadRef) ?? []
+      arr.push(g)
+      gapsByLoadRef.set(target.loadRef, arr)
+    } else {
+      orphanGaps.push(g)
+    }
+  })
 
   // Totals: dollar columns (and Total Miles) sum across all trips. Percentages
   // can't be summed meaningfully, so Adherence/Wasted Rate show the average
@@ -1178,29 +1244,44 @@ function TripsTable({
   // Merge consecutive legs of one gap into a single operative trip spanning the
   // first leg's start to the last leg's end.
   const mergeLegs = (ids: string[]) => {
-    setOpLegs((prev) => {
-      const chosen = prev.filter((l) => ids.includes(l.id)).sort((a, b) => a.seq - b.seq)
-      if (chosen.length < 2) return prev
-      const first = chosen[0]
-      const last = chosen[chosen.length - 1]
-      const sum = (f: (l: RepositionRow) => number) => chosen.reduce((s, l) => s + f(l), 0)
-      const miles = sum((l) => l.totalMiles)
-      const merged: RepositionRow = {
-        ...first,
-        id: `${first.gapId}-merged-${first.seq}`,
-        endDate: last.endDate,
-        lane: `${laneEnds(first.lane)[0]} → ${laneEnds(last.lane)[1]}`,
-        reason: `Merged ${chosen.length} empty legs into one operative trip`,
-        totalMiles: miles,
-        effectiveHours: round1(sum((l) => l.effectiveHours)),
-        cost: sum((l) => l.cost),
-        leakage: sum((l) => l.leakage),
-        adherence: miles ? round1(sum((l) => l.adherence * l.totalMiles) / miles) : first.adherence,
-      }
-      return [...prev.filter((l) => !ids.includes(l.id)), merged]
-    })
+    const chosen = opLegs.filter((l) => ids.includes(l.id)).sort((a, b) => a.seq - b.seq)
+    if (chosen.length < 2) return
+    const first = chosen[0]
+    const last = chosen[chosen.length - 1]
+    const sum = (f: (l: RepositionRow) => number) => chosen.reduce((s, l) => s + f(l), 0)
+    const miles = sum((l) => l.totalMiles)
+    const mergedId = `${first.gapId}-merged-${first.seq}`
+    const merged: RepositionRow = {
+      ...first,
+      id: mergedId,
+      endDate: last.endDate,
+      lane: `${laneEnds(first.lane)[0]} → ${laneEnds(last.lane)[1]}`,
+      reason: `Merged ${chosen.length} empty legs into one operative trip`,
+      totalMiles: miles,
+      effectiveHours: round1(sum((l) => l.effectiveHours)),
+      cost: sum((l) => l.cost),
+      leakage: sum((l) => l.leakage),
+      adherence: miles ? round1(sum((l) => l.adherence * l.totalMiles) / miles) : first.adherence,
+      mergedFrom: chosen,
+    }
+    // Merges of unassigned operative trips are NOT logged in the change log —
+    // they're managed inline on the merged trip itself (see the "Merged from N
+    // legs" control + Separate). The change log is only for load assignments.
+    setOpLegs((prev) => [...prev.filter((l) => !ids.includes(l.id)), merged])
     setGapDrawer(null)
     setOpToast(`Merged ${ids.length} legs into one operative trip`)
+  }
+  // Split a merged operative trip back into the legs it was built from.
+  const unmergeLeg = (mergedId: string) => {
+    const merged = opLegs.find((l) => l.id === mergedId)
+    if (!merged?.mergedFrom) return
+    setOpLegs((prev) => [...prev.filter((l) => l.id !== mergedId), ...merged.mergedFrom!])
+    setExpandedMerge((prev) => {
+      const next = new Set(prev)
+      next.delete(mergedId)
+      return next
+    })
+    setOpToast(`Split back into ${merged.mergedFrom.length} operative legs`)
   }
   // The load an operative gap leads into — the same truck's next load in the
   // table. Assigning the gap folds its empty miles into this load's deadhead.
@@ -1233,10 +1314,51 @@ function TripsTable({
       )
     }
     setOpLegs((prev) => prev.filter((l) => !ids.includes(l.id)))
+    if (target) {
+      const assignmentId = `asg-${(logSeq.current += 1)}`
+      setAssignments((prev) => [...prev, { id: assignmentId, loadRef: target.loadRef, legs: chosen, miles, cost, leak }])
+      setChangeLog((prev) => [
+        {
+          id: nextLogId(),
+          kind: 'assign',
+          title: `Assigned ${chosen.length} leg${chosen.length === 1 ? '' : 's'} to ${target.loadRef}`,
+          detail: `${miles.toLocaleString()} mi · ${usd(cost)} folded into the load's deadhead`,
+          loadRef: target.loadRef,
+          refId: assignmentId,
+          active: true,
+        },
+        ...prev,
+      ])
+    }
     setGapDrawer(null)
     setOpToast(
       `Assigned ${chosen.length} leg${chosen.length === 1 ? '' : 's'} · ${miles.toLocaleString()} mi · ${usd(cost)} to ${target ? target.loadRef : 'the next load'} deadhead`,
     )
+  }
+  // Reverse an assign: pull the folded miles/cost/leak back out of the load and
+  // return the legs to the operative list.
+  const detachAssignment = (assignmentId: string) => {
+    const a = assignments.find((x) => x.id === assignmentId)
+    if (!a) return
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.loadRef !== a.loadRef) return t
+        const totalMiles = t.totalMiles - a.miles
+        const newCost = t.cost - a.cost
+        return {
+          ...t,
+          totalMiles,
+          cost: newCost,
+          profit: t.income - newCost,
+          totalExcessCost: t.totalExcessCost - a.leak,
+          deadheadPct: totalMiles > 0 ? round1(((totalMiles - t.loadedMiles) / totalMiles) * 100) : 0,
+        }
+      }),
+    )
+    setOpLegs((prev) => [...prev, ...a.legs])
+    setAssignments((prev) => prev.filter((x) => x.id !== assignmentId))
+    setChangeLog((prev) => prev.map((e) => (e.refId === assignmentId ? { ...e, active: false } : e)))
+    setOpToast(`Detached ${a.legs.length} leg${a.legs.length === 1 ? '' : 's'} from ${a.loadRef}`)
   }
 
   // Cells for every column, rendered in whatever order columnOrder says.
@@ -1260,13 +1382,46 @@ function TripsTable({
             {view === 'summary' ? fullDateRange(r) : dateRange(r)}
           </td>
         )
-      case 'load':
+      case 'load': {
+        const asg = assignments.filter((a) => a.loadRef === r.loadRef)
+        const legCount = asg.reduce((s, a) => s + a.legs.length, 0)
+        // Operative trips leading into this load, shown as a heads-up only when
+        // the toggle is off (when it's on they're pinned above the row instead).
+        const opCount = opCountByLoad.get(r.loadRef) ?? 0
         return (
           <td key={key} className="fd-left">
             <div className="fd-load-ref">{r.loadRef}</div>
             <div className="fd-load-route fd-dim">{r.lane}</div>
+            {legCount > 0 && (
+              <button
+                className="fd-load-ophint cf-tip"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setLogScope(r.loadRef)
+                  setLogOpen(true)
+                }}
+                data-tip="Operative trips folded into this load's deadhead — click to manage or detach"
+              >
+                <Layers size={12} />
+                {legCount} operative trip{legCount === 1 ? '' : 's'} in DH
+              </button>
+            )}
+            {!showReposition && opCount > 0 && (
+              <button
+                className="fd-load-opnote cf-tip"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowReposition(true)
+                }}
+                data-tip="Operative Trips are DH movements before going to pickup the Load"
+              >
+                <Navigation size={12} />
+                {opCount} operative trip{opCount === 1 ? '' : 's'} before pickup of this load
+              </button>
+            )}
           </td>
         )
+      }
       case 'status':
         return (
           <td key={key} className="fd-left">
@@ -1418,19 +1573,23 @@ function TripsTable({
 
   const colCount = columnOrder.length + 1
 
-  // Operative legs, grouped by gap. Each gap gets a header (truck · legs · lane ·
-  // the load it leads into) with an "Open timeline" that launches the drawer
-  // where legs are merged or assigned to the load's deadhead. Legs render read-only.
-  const renderOpSection = () =>
-    opGroups.map((g) => {
+  // One operative gap, rendered as its header row (truck · legs · lane · the
+  // load it leads into, with merge/assign/separate actions) followed by its leg
+  // rows. Returned as a keyed fragment so it can sit inside a load's <tbody>,
+  // pinned directly above that load.
+  const renderOpGroup = (g: OpGroup) => {
       const legs = g.legs
       const first = legs[0]
       const last = legs[legs.length - 1]
       const [origin] = laneEnds(first.lane)
       const dest = laneEnds(last.lane)[1]
       const target = targetLoadFor(first.truck)
+      // A single merged leg carries mergedFrom — offer to split it back instead
+      // of merging. Multi-leg gaps offer merge/assign via the drawer.
+      const mergedLeg = legs.length === 1 && legs[0].mergedFrom ? legs[0] : null
+      const mergeExpanded = mergedLeg ? expandedMerge.has(mergedLeg.id) : false
       return (
-        <tbody key={g.gapId} className="fd-op-group">
+        <Fragment key={g.gapId}>
           <tr className="fd-op-gap-head">
             <td colSpan={colCount}>
               <div className="fd-op-gap-inner">
@@ -1438,13 +1597,42 @@ function TripsTable({
                   <Navigation size={13} />
                   <span className="fd-op-gap-truck">{first.truck}</span>
                   <span className="fd-op-gap-meta">
-                    {legs.length} {legs.length === 1 ? 'leg' : 'legs'} · {origin} → {dest} · leads to{' '}
+                    {mergedLeg ? (
+                      <>
+                        <button
+                          type="button"
+                          className={`fd-op-merged-tag cf-tip ${mergeExpanded ? 'open' : ''}`}
+                          onClick={() =>
+                            setExpandedMerge((prev) => {
+                              const next = new Set(prev)
+                              next.has(mergedLeg.id) ? next.delete(mergedLeg.id) : next.add(mergedLeg.id)
+                              return next
+                            })
+                          }
+                          data-tip="See the legs this operative trip was merged from"
+                        >
+                          <Merge size={11} /> Merged from {mergedLeg.mergedFrom!.length} legs
+                          {mergeExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        </button>{' '}
+                        · {origin} → {dest} · leads to{' '}
+                      </>
+                    ) : (
+                      <>
+                        {legs.length} {legs.length === 1 ? 'leg' : 'legs'} · {origin} → {dest} · leads to{' '}
+                      </>
+                    )}
                     <span className="fd-op-gap-load">{target ? target.loadRef : first.nextLoadId}</span>
                   </span>
                 </span>
-                <button className="fd-op-manage" onClick={() => setGapDrawer(g.gapId)}>
-                  <Merge size={13} /> Merge trips
-                </button>
+                {mergedLeg ? (
+                  <button className="fd-op-manage" onClick={() => unmergeLeg(mergedLeg.id)}>
+                    <Split size={13} /> Separate
+                  </button>
+                ) : (
+                  <button className="fd-op-manage" onClick={() => setGapDrawer(g.gapId)}>
+                    <Merge size={13} /> {legs.length >= 2 ? 'Merge trips' : 'Assign to load'}
+                  </button>
+                )}
               </div>
             </td>
           </tr>
@@ -1458,9 +1646,24 @@ function TripsTable({
               </td>
             </tr>
           ))}
-        </tbody>
+          {/* The original legs behind a merged operative trip, shown read-only
+              when the "Merged from N legs" tag is expanded — so the user can see
+              exactly what was combined before deciding to Separate. */}
+          {mergedLeg &&
+            mergeExpanded &&
+            mergedLeg.mergedFrom!.map((sub) => (
+              <tr key={`sub-${sub.id}`} className="fd-repo-row fd-repo-subleg">
+                {columnOrder.map((key) => renderRepositionCell(key, sub))}
+                <td>
+                  <button className="fd-view" aria-label="View leg details" onClick={() => setSelectedMove(sub)}>
+                    View <Eye size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+        </Fragment>
       )
-    })
+  }
 
   const renderThead = () => (
     <thead>
@@ -1602,6 +1805,20 @@ function TripsTable({
             </button>
           </div>
         )}
+        {changeLog.length > 0 && (
+          <button
+            className="fd-oplog-btn cf-tip"
+            onClick={() => {
+              setLogScope(null)
+              setLogOpen(true)
+            }}
+            data-tip="History of operative-trip merges and deadhead assignments — undo any of them"
+          >
+            <History size={14} />
+            Change log
+            <span className="fd-oplog-count">{changeLog.filter((e) => e.active).length}</span>
+          </button>
+        )}
         <button
           className={`fd-repo-toggle cf-tip ${showReposition ? 'on' : ''}`}
           role="switch"
@@ -1617,17 +1834,32 @@ function TripsTable({
       <div className="fd-table-wrap">
         <table className="fd-table">
           {renderThead()}
-          <tbody>
-            {rows.length === 0 && opGroups.length === 0 && (
+          {rows.length === 0 && opGroups.length === 0 ? (
+            <tbody>
               <tr>
                 <td className="fd-no-results" colSpan={colCount}>
                   {query ? `No trips match "${query}"` : 'No trips match this filter'}
                 </td>
               </tr>
-            )}
-            {rows.map(renderTripRow)}
-          </tbody>
-          {showReposition && renderOpSection()}
+            </tbody>
+          ) : (
+            // Each load gets its own <tbody> block holding the operative gaps
+            // pinned above it, then the load row — so sorting reorders whole
+            // blocks and each load's operative trips stay glued to it.
+            rows.map((load) => {
+              const gaps = gapsByLoadRef.get(load.loadRef)
+              return (
+                <tbody key={rowKey(load)} className={gaps?.length ? 'fd-load-block has-ops' : 'fd-load-block'}>
+                  {gaps?.map((g) => renderOpGroup(g))}
+                  {renderTripRow(load)}
+                </tbody>
+              )
+            })
+          )}
+          {/* Gaps whose load isn't in the current view fall here so they're never lost. */}
+          {showReposition && orphanGaps.length > 0 && (
+            <tbody className="fd-op-group">{orphanGaps.map((g) => renderOpGroup(g))}</tbody>
+          )}
           {renderFooterRow(computeTotals(combined))}
         </table>
       </div>
@@ -1649,6 +1881,65 @@ function TripsTable({
             onMerge={mergeLegs}
             onAssign={assignLegs}
           />
+        )
+      })()}
+      {logOpen && (() => {
+        const entries = logScope ? changeLog.filter((e) => e.loadRef === logScope) : changeLog
+        const close = () => {
+          setLogOpen(false)
+          setLogScope(null)
+        }
+        return (
+          <div className="op-log-overlay" onClick={close}>
+            <div className="op-log-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="op-log-head">
+                <span className="op-log-title">
+                  <History size={15} />
+                  {logScope ? `Changes to ${logScope}` : 'Operative trips · change log'}
+                </span>
+                <button className="cfm-x" onClick={close} aria-label="Close">
+                  <X size={17} />
+                </button>
+              </div>
+              {logScope && (
+                <button className="op-log-clearscope" onClick={() => setLogScope(null)}>
+                  Show all changes
+                </button>
+              )}
+              <div className="op-log-body">
+                {entries.length === 0 ? (
+                  <p className="op-log-empty">No changes recorded yet.</p>
+                ) : (
+                  entries.map((e) => (
+                    <div key={e.id} className={`op-log-item ${e.active ? '' : 'reverted'}`}>
+                      <span className={`op-log-icon op-log-icon-${e.kind}`}>
+                        {e.kind === 'merge' ? <Merge size={14} /> : <ArrowUpRight size={14} />}
+                      </span>
+                      <div className="op-log-text">
+                        <span className="op-log-item-title">{e.title}</span>
+                        <span className="op-log-item-detail">{e.detail}</span>
+                      </div>
+                      {e.active ? (
+                        <button
+                          className="op-log-undo"
+                          onClick={() =>
+                            e.kind === 'merge'
+                              ? e.refId && unmergeLeg(e.refId)
+                              : e.refId && detachAssignment(e.refId)
+                          }
+                        >
+                          {e.kind === 'merge' ? <Split size={12} /> : <Undo2 size={12} />}
+                          {e.kind === 'merge' ? 'Separate' : 'Detach'}
+                        </button>
+                      ) : (
+                        <span className="op-log-reverted-tag">Reverted</span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         )
       })()}
       {opToast && <Toast message={opToast} onDone={() => setOpToast(null)} />}

@@ -127,7 +127,7 @@ export default function PotentialRecovery({
             )}
             {!hideCompare && (
               <button className="btn-teal" onClick={() => setShowMarket(true)}>
-                <BarChart3 size={13} /> Compare to market
+                <BarChart3 size={13} /> Compare
               </button>
             )}
           </div>
