@@ -121,6 +121,16 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
                         {m.delta} <span className="kd-vs">{compareLabel}</span>
                       </span>
                     )}
+                    {m.flow && (
+                      <span className="kd-flow">
+                        <span className="kd-flow-item pos">
+                          <span className="kd-flow-lbl">Income</span> {m.flow.income}
+                        </span>
+                        <span className="kd-flow-item neg">
+                          <span className="kd-flow-lbl">Costs</span> {m.flow.costs}
+                        </span>
+                      </span>
+                    )}
                   </>
                 )}
               </button>

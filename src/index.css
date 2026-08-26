@@ -1323,6 +1323,26 @@ button {
   color: var(--text-muted);
   font-weight: 400;
 }
+/* Income/Costs behind a ratio metric (Margin) — inside its selectable chip. */
+.kd-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.kd-flow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.kd-flow-item.pos { color: var(--green); }
+.kd-flow-item.neg { color: var(--red); }
+.kd-flow-lbl { color: var(--text-muted); font-weight: 500; }
 .kd-chart-box {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -2754,6 +2774,26 @@ button {
   align-items: center;
   gap: 3px;
 }
+/* Income/Costs behind the Margin, on the Profitability KPI card. */
+.kpi-flow {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpi-flow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.kpi-flow-item.pos { color: var(--green); }
+.kpi-flow-item.neg { color: var(--red); }
+.kpi-flow-lbl { color: var(--text-muted); font-weight: 500; }
 
 /* ---------- two-column grids ---------- */
 .grid-2 {
@@ -3508,6 +3548,27 @@ button {
   vertical-align: 1px;
 }
 .fd-dim { color: var(--text-dim); }
+/* Driving time the ELD couldn't report exactly — shown as an estimate with a
+   dotted underline and an "Est." tag; hover for the reason. */
+.fd-est {
+  align-items: center;
+  gap: 7px;
+  cursor: help;
+  border-bottom: 1px dotted var(--text-muted);
+  padding-bottom: 1px;
+}
+.fd-est-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 16%, transparent);
+}
+.fd-est.cf-tip::after { width: auto; white-space: nowrap; }
 .fd-strong { font-weight: 700; }
 .fd-neg { color: var(--red); }
 .fd-pos { color: var(--green); }
@@ -6028,6 +6089,105 @@ button {
 }
 .mlc-ttotal .mlc-tname { font-weight: 700; }
 .mlc-ttotal .mlc-tval { font-size: 16px; font-weight: 700; }
+
+/* Comparison ↔ Trend switch, sits by the close button in the header. */
+.mlc-head-right { display: flex; align-items: center; gap: 14px; }
+.mlc-mode {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 3px;
+  gap: 2px;
+}
+.mlc-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.mlc-mode-btn.active {
+  color: var(--text);
+  background: var(--surface-3, #1b2530);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Trend (time-series) view */
+.mlc-trend { display: flex; flex-direction: column; gap: 14px; }
+.mlc-trend-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.mlc-trend-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.mlc-trend-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.mlc-legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.mlc-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.mlc-leg-line { width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.mlc-leg.off { opacity: 0.4; }
+.mlc-leg.off .mlc-leg-line { opacity: 0.5; }
+.mlc-range {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.mlc-range-btn {
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.mlc-range-btn.active {
+  color: var(--text);
+  background: var(--surface-3, #1b2530);
+}
+.mlc-plot { position: relative; }
+.mlc-chart { width: 100%; height: 300px; display: block; overflow: visible; }
+.mlc-axis-label { font-size: 15px; fill: var(--text-muted); font-weight: 500; }
+.mlc-hitlayer { position: absolute; top: 0; left: 0; right: 0; bottom: 26px; cursor: crosshair; }
+.mlc-tip {
+  position: absolute;
+  top: 6px;
+  margin-left: 12px;
+  background: var(--surface-3, #11181f);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+  min-width: 150px;
+}
+.mlc-tip-date { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.mlc-tip-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; font-size: 12px; }
+.mlc-tip-row i { width: 9px; height: 9px; border-radius: 2px; }
+.mlc-tip-name { color: var(--text-dim); }
+.mlc-tip-row strong { color: var(--text); font-variant-numeric: tabular-nums; }
 
 
 /* ── Lane detail modal (Figma "Detalle de operación por lane") ──────────── */

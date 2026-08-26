@@ -115,7 +115,7 @@ export default function MarketBenchmarkModal({
 
         <div className="modal-body">
           <p className="cfm-sub">
-            Your <strong>worst</strong> and <strong>best</strong> trips vs the market leaders.
+            Your <strong>worst</strong> and <strong>best</strong> vs the market leaders.
           </p>
 
           <table className="bench-table bench-table-cost">
@@ -172,7 +172,7 @@ export default function MarketBenchmarkModal({
             </tbody>
             <tfoot>
               <tr className="bench-total-row">
-                <td colSpan={4} className="bench-total-lbl">Total cost of not being a market leader</td>
+                <td colSpan={4} className="bench-total-lbl">Total missed out vs market leaders</td>
                 <td className="bench-cost-cell bench-cost-worst-col">
                   <CostAmount n={benchmarkGapTotal.worst} worst total />
                 </td>

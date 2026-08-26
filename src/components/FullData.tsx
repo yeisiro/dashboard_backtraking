@@ -1274,7 +1274,21 @@ function TripsTable({
           </td>
         )
       case 'time':
-        return <td key={key} className="fd-dim">{fmtHours(drivingHours(r))}</td>
+        return (
+          <td key={key} className="fd-dim">
+            {r.estimatedTime ? (
+              <span
+                className="fd-est cf-tip"
+                data-tip="Estimated Driving Hours"
+              >
+                {fmtHours(drivingHours(r))}
+                <span className="fd-est-tag">Est.</span>
+              </span>
+            ) : (
+              fmtHours(drivingHours(r))
+            )}
+          </td>
+        )
       case 'distance':
         return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
       case 'deadhead':

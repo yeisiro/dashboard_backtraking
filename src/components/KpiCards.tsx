@@ -123,6 +123,18 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
         )}
       </div>
       {m.foot && <div className="foot">{m.foot}</div>}
+      {m.flow && (
+        <div className="kpi-flow">
+          <span className="kpi-flow-item pos">
+            <span className="kpi-flow-lbl">Income</span>
+            <span>{m.flow.income}</span>
+          </span>
+          <span className="kpi-flow-item neg">
+            <span className="kpi-flow-lbl">Costs</span>
+            <span>{m.flow.costs}</span>
+          </span>
+        </div>
+      )}
     </>
   )
 }

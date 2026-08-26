@@ -41,6 +41,9 @@ export interface KpiMetric {
   // (e.g. cents/gal over the optimal price). Drives the "distance from optimal"
   // scale on the KPI card. `value`/`max` are numeric magnitudes of the overpay.
   penalty?: { value: number; max: number; unit: string }
+  // The gross totals behind a ratio metric (Margin): Income (green) and Costs
+  // (red) shown under the value on both the KPI card and its detail chip.
+  flow?: { income: string; costs: string; profit: string }
 }
 
 export interface DetailMetric {
@@ -56,6 +59,10 @@ export interface DetailMetric {
   // Optional second line drawn on the same chart, for related pairs
   // (e.g. total vs in-route cost, actual vs optimal CPG).
   compare?: { label: string; value: string; delta?: string; gap?: string; gapDelta?: string; series: number[] }
+  // For a ratio metric (e.g. Margin), the gross totals behind it over the
+  // window: Income (green) − Costs (red) = the profit the ratio is built on.
+  // Shown both inside the metric chip and above its chart.
+  flow?: { income: string; costs: string; profit: string }
 }
 
 export interface KpiCard {
@@ -91,10 +98,11 @@ export const kpiCards: KpiCard[] = [
         footDelta: '+0.4',
         goal: 'high',
         tip: 'Of every $1 you bill, this is what is left as profit after fuel, driver pay, and all other operating costs. Higher is better.',
+        flow: { income: '$186,000', costs: '-$173,700', profit: '$12,300' },
       },
     ],
     details: [
-      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0) },
+      { label: 'Margin', value: '6.6%', delta: '+0.4', goal: 'high', hint: 'Net margin on revenue', series: ts(6.6, 0), flow: { income: '$186,000', costs: '-$173,700', profit: '$12,300' } },
       { label: 'Profit / mile', value: '$0.921', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Profit earned per mile driven', series: ts(0.921, 2) },
       { label: 'Income / truck', value: '$740', unit: '/day', delta: '+18', goal: 'high', hint: 'Average revenue per truck per day', series: ts(740, 3) },
       { label: 'Total leak', value: '-$1,200', unit: '/day', delta: '-40', goal: 'low', hint: 'Money lost to inefficiency per day', series: ts(1.2, 1) },
@@ -877,6 +885,9 @@ export interface TripRow {
   adherence: number // %
   planAdherence: number // %
   wastedRate: number // %
+  // True when the ELD API failed to report exact driving hours for this trip,
+  // so the value shown is a calculated estimate (flagged with an "Est." tag).
+  estimatedTime?: boolean
 }
 
 interface TripBase {
@@ -903,6 +914,7 @@ interface TripBase {
   adherence: number
   planAdherence: number
   wastedRate: number
+  estimatedTime?: boolean
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -974,14 +986,14 @@ function computeScores(rows: TripRow[]): TripRow[] {
 
 const TRIP_BASE: TripBase[] = [
   { truck: '#5007', cls: 'A', startDate: 'May 14', endDate: 'May 15', lane: 'Atlanta, GA → Orlando, FL', band: 'best', status: 'delivered', income: 1180, negotiatedRpm: 3.02, executedRpm: 2.88, effectiveRpm: 2.72, cost: 480, optimalCost: 440, totalMiles: 415, loadedMiles: 372, effectiveHours: 9.4, idleHours: 0.5, mpg: 6.5, missedFuelSavings: -30, actualSaving: 720, adherence: 94.2, planAdherence: 90.1, wastedRate: 3.8 },
-  { truck: '#5012', cls: 'A', startDate: 'May 14', endDate: 'May 14', lane: 'Dallas, TX → Houston, TX', band: 'best', status: 'delivered', income: 690, negotiatedRpm: 2.95, executedRpm: 2.82, effectiveRpm: 2.68, cost: 300, optimalCost: 280, totalMiles: 239, loadedMiles: 220, effectiveHours: 5.1, idleHours: 0.3, mpg: 6.6, missedFuelSavings: -18, actualSaving: 540, adherence: 92.8, planAdherence: 89.0, wastedRate: 4.1 },
+  { truck: '#5012', cls: 'A', startDate: 'May 14', endDate: 'May 14', lane: 'Dallas, TX → Houston, TX', band: 'best', status: 'delivered', income: 690, negotiatedRpm: 2.95, executedRpm: 2.82, effectiveRpm: 2.68, cost: 300, optimalCost: 280, totalMiles: 239, loadedMiles: 220, effectiveHours: 5.1, idleHours: 0.3, mpg: 6.6, missedFuelSavings: -18, actualSaving: 540, adherence: 92.8, planAdherence: 89.0, wastedRate: 4.1, estimatedTime: true },
   { truck: '#4408', cls: 'B', startDate: 'May 13', endDate: 'May 13', lane: 'Chicago, IL → Indianapolis, IN', band: 'best', status: 'invoiced', income: 540, negotiatedRpm: 2.90, executedRpm: 2.78, effectiveRpm: 2.64, cost: 250, optimalCost: 232, totalMiles: 182, loadedMiles: 168, effectiveHours: 3.9, idleHours: 0.2, mpg: 6.5, missedFuelSavings: -22, actualSaving: 480, adherence: 90.1, planAdherence: 87.2, wastedRate: 4.4 },
-  { truck: '#6120', cls: 'B', startDate: 'May 13', endDate: 'May 13', lane: 'Memphis, TN → Nashville, TN', status: 'invoiced', income: 620, negotiatedRpm: 2.75, executedRpm: 2.60, effectiveRpm: 2.45, cost: 300, optimalCost: 270, totalMiles: 210, loadedMiles: 182, effectiveHours: 4.6, idleHours: 0.7, mpg: 6.2, missedFuelSavings: -35, actualSaving: 450, adherence: 84.6, planAdherence: 80.3, wastedRate: 5.6 },
+  { truck: '#6120', cls: 'B', startDate: 'May 13', endDate: 'May 13', lane: 'Memphis, TN → Nashville, TN', status: 'invoiced', income: 620, negotiatedRpm: 2.75, executedRpm: 2.60, effectiveRpm: 2.45, cost: 300, optimalCost: 270, totalMiles: 210, loadedMiles: 182, effectiveHours: 4.6, idleHours: 0.7, mpg: 6.2, missedFuelSavings: -35, actualSaving: 450, adherence: 84.6, planAdherence: 80.3, wastedRate: 5.6, estimatedTime: true },
   { truck: '#3301', cls: 'C', startDate: 'May 12', endDate: 'May 12', lane: 'Kansas City, MO → St. Louis, MO', status: 'paid', income: 710, negotiatedRpm: 2.68, executedRpm: 2.52, effectiveRpm: 2.38, cost: 360, optimalCost: 320, totalMiles: 248, loadedMiles: 210, effectiveHours: 5.4, idleHours: 1.1, mpg: 6.0, missedFuelSavings: -60, actualSaving: 410, adherence: 81.5, planAdherence: 76.8, wastedRate: 6.4 },
   { truck: '#2884', cls: 'C', startDate: 'May 12', endDate: 'May 12', lane: 'Charlotte, NC → Atlanta, GA', status: 'paid', income: 700, negotiatedRpm: 2.55, executedRpm: 2.40, effectiveRpm: 2.28, cost: 370, optimalCost: 330, totalMiles: 245, loadedMiles: 205, effectiveHours: 5.6, idleHours: 1.3, mpg: 5.9, missedFuelSavings: -70, actualSaving: 380, adherence: 79.2, planAdherence: 74.1, wastedRate: 7.1 },
   { truck: '#7834', cls: 'D', startDate: 'May 11', endDate: 'May 12', lane: 'Atlanta, GA → Dallas, TX', band: 'worst', status: 'paid', income: 2240, negotiatedRpm: 2.30, executedRpm: 2.05, effectiveRpm: 1.79, cost: 1500, optimalCost: 1200, totalMiles: 781, loadedMiles: 540, effectiveHours: 15.8, idleHours: 3.9, mpg: 5.4, missedFuelSavings: -310, actualSaving: 180, adherence: 63.4, planAdherence: 58.2, wastedRate: 11.2 },
   { truck: '#3390', cls: 'D', startDate: 'May 11', endDate: 'May 12', lane: 'Jacksonville, FL → Nashville, TN', band: 'worst', status: 'paid', income: 1360, negotiatedRpm: 2.42, executedRpm: 2.18, effectiveRpm: 1.95, cost: 900, optimalCost: 720, totalMiles: 476, loadedMiles: 330, effectiveHours: 9.9, idleHours: 2.6, mpg: 5.6, missedFuelSavings: -280, actualSaving: 150, adherence: 66.1, planAdherence: 60.5, wastedRate: 9.8 },
-  { truck: '#2210', cls: 'D', startDate: 'May 11', endDate: 'May 13', lane: 'Miami, FL → Houston, TX', band: 'worst', status: 'invoiced', income: 3410, negotiatedRpm: 2.33, executedRpm: 2.10, effectiveRpm: 1.88, cost: 2300, optimalCost: 1900, totalMiles: 1188, loadedMiles: 820, effectiveHours: 23.5, idleHours: 5.2, mpg: 5.5, missedFuelSavings: -260, actualSaving: 210, adherence: 68.9, planAdherence: 62.0, wastedRate: 8.9 },
+  { truck: '#2210', cls: 'D', startDate: 'May 11', endDate: 'May 13', lane: 'Miami, FL → Houston, TX', band: 'worst', status: 'invoiced', income: 3410, negotiatedRpm: 2.33, executedRpm: 2.10, effectiveRpm: 1.88, cost: 2300, optimalCost: 1900, totalMiles: 1188, loadedMiles: 820, effectiveHours: 23.5, idleHours: 5.2, mpg: 5.5, missedFuelSavings: -260, actualSaving: 210, adherence: 68.9, planAdherence: 62.0, wastedRate: 8.9, estimatedTime: true },
   { truck: '#1180', cls: 'A', startDate: 'May 10', endDate: 'May 11', lane: 'Los Angeles, CA → Phoenix, AZ', status: 'delivered', income: 1450, negotiatedRpm: 2.98, executedRpm: 2.85, effectiveRpm: 2.70, cost: 620, optimalCost: 580, totalMiles: 505, loadedMiles: 460, effectiveHours: 10.8, idleHours: 0.4, mpg: 6.4, missedFuelSavings: -28, actualSaving: 640, adherence: 93.0, planAdherence: 89.5, wastedRate: 4.0 },
   { truck: '#8823', cls: 'B', startDate: 'May 10', endDate: 'May 10', lane: 'Phoenix, AZ → Albuquerque, NM', status: 'invoiced', income: 780, negotiatedRpm: 2.80, executedRpm: 2.66, effectiveRpm: 2.50, cost: 340, optimalCost: 310, totalMiles: 260, loadedMiles: 230, effectiveHours: 5.5, idleHours: 0.6, mpg: 6.1, missedFuelSavings: -32, actualSaving: 470, adherence: 88.0, planAdherence: 84.0, wastedRate: 5.2 },
   { truck: '#6675', cls: 'A', startDate: 'May 9', endDate: 'May 10', lane: 'Denver, CO → Salt Lake City, UT', status: 'delivered', income: 1600, negotiatedRpm: 3.05, executedRpm: 2.92, effectiveRpm: 2.78, cost: 650, optimalCost: 610, totalMiles: 525, loadedMiles: 480, effectiveHours: 11.2, idleHours: 0.3, mpg: 6.6, missedFuelSavings: -25, actualSaving: 700, adherence: 94.5, planAdherence: 91.0, wastedRate: 3.6 },
