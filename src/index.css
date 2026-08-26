@@ -5521,47 +5521,6 @@ button {
 }
 .bench-section-sub { text-align: right; vertical-align: middle; }
 .bench-section-sub .bench-cost-amt { font-size: 15px; font-weight: 800; }
-/* Clickable metric rows */
-.bench-metric-row { cursor: pointer; transition: background 0.12s; }
-.bench-metric-row:hover { background: rgba(255, 255, 255, 0.025); }
-.bench-metric-row.open { background: rgba(255, 255, 255, 0.03); }
-.bench-attr-name { display: inline-flex; align-items: center; gap: 7px; }
-.bench-caret {
-  color: var(--text-muted);
-  flex: 0 0 auto;
-  transition: transform 0.15s;
-}
-.bench-metric-row.open .bench-caret { transform: rotate(90deg); color: var(--text-dim); }
-/* Expanded detail: recommendation + cost basis, side by side */
-.bench-detail-row td {
-  padding: 0 0 16px 0 !important;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
-}
-.bench-detail {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: 26px;
-  padding: 2px 18px 6px 21px;
-  text-align: left;
-}
-.bench-detail-block { display: flex; flex-direction: column; gap: 5px; }
-.bench-detail-h {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--blue);
-}
-.bench-detail-block:last-child .bench-detail-h { color: var(--text-muted); }
-.bench-detail-block p {
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--text-dim);
-}
-
 /* Trucks behind each column — revealed from a neutral pill, same dropdown
    pattern as the toolbar filters (no accent color, to match the dashboard). */
 .bench-trucks-wrap {

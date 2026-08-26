@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, BarChart3, ArrowUpRight, Truck, User, ChevronDown, Headset, ChevronRight } from 'lucide-react'
+import { X, BarChart3, ArrowUpRight, Truck, User, ChevronDown, Headset } from 'lucide-react'
 import {
   benchmarkMetrics,
   benchmarkOwners,
@@ -114,13 +114,6 @@ export default function MarketBenchmarkModal({
   bestTrucks?: string[]
 }) {
   const noun = dimension === 'drivers' ? 'driver' : 'truck'
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const toggle = (key: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
 
   // Header link → filter Full Data to the whole worst/best group.
   const goToGroup = (band: 'best' | 'worst') => {
@@ -148,8 +141,7 @@ export default function MarketBenchmarkModal({
         <div className="modal-body">
           <p className="cfm-sub">
             What it costs to trail the market leaders — by who owns it. Work the{' '}
-            <strong>Dispatcher</strong> rows first, then the <strong>Driver</strong> rows. Click a
-            metric to see how to reach the leader.
+            <strong>Dispatcher</strong> rows first, then the <strong>Driver</strong> rows.
           </p>
 
           <table className="bench-table bench-table-cost">
@@ -198,49 +190,22 @@ export default function MarketBenchmarkModal({
 
                     {benchmarkMetrics
                       .filter((m) => m.owner === sec.owner)
-                      .map((m) => {
-                        const open = expanded.has(m.key)
-                        return (
-                          <FragmentSection key={m.key}>
-                            <tr
-                              className={`bench-metric-row ${open ? 'open' : ''}`}
-                              onClick={() => toggle(m.key)}
-                            >
-                              <td className="bench-attr">
-                                <span className="bench-attr-name">
-                                  <ChevronRight size={14} className="bench-caret" />
-                                  <span className="bench-tip" data-tip={m.tip}>{m.attribute}</span>
-                                </span>
-                              </td>
-                              <td className="bench-val neg">{m.worst}</td>
-                              <td className="bench-val">{m.best}</td>
-                              <td className="bench-val lead">{m.leaders}</td>
-                              <td className="bench-cost-cell bench-cost-worst-col">
-                                <CostAmount n={m.costWorst} worst />
-                              </td>
-                              <td className="bench-cost-cell">
-                                <CostAmount n={m.costBest} />
-                              </td>
-                            </tr>
-                            {open && (
-                              <tr className="bench-detail-row">
-                                <td colSpan={6}>
-                                  <div className="bench-detail">
-                                    <div className="bench-detail-block">
-                                      <span className="bench-detail-h">How to become a market leader</span>
-                                      <p>{m.action}</p>
-                                    </div>
-                                    <div className="bench-detail-block">
-                                      <span className="bench-detail-h">How this cost is figured</span>
-                                      <p>{m.basis}</p>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </FragmentSection>
-                        )
-                      })}
+                      .map((m) => (
+                        <tr className="bench-metric-row" key={m.key}>
+                          <td className="bench-attr">
+                            <span className="bench-tip" data-tip={m.tip}>{m.attribute}</span>
+                          </td>
+                          <td className="bench-val neg">{m.worst}</td>
+                          <td className="bench-val">{m.best}</td>
+                          <td className="bench-val lead">{m.leaders}</td>
+                          <td className="bench-cost-cell bench-cost-worst-col">
+                            <CostAmount n={m.costWorst} worst />
+                          </td>
+                          <td className="bench-cost-cell">
+                            <CostAmount n={m.costBest} />
+                          </td>
+                        </tr>
+                      ))}
                   </FragmentSection>
                 )
               })}
