@@ -917,6 +917,9 @@ export interface Integration {
   type: 'eld' | 'tms'
   name: string
   mono: string
+  // Operator-assigned reference name for this integration (e.g. "Main fleet
+  // ELD"). Falls back to the provider name when left blank.
+  label?: string
 }
 
 // Full Data → Trips table. One row per completed trip. Values are numeric so the

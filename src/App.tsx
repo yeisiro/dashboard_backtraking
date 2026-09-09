@@ -123,10 +123,13 @@ export default function App() {
     })
   }
 
-  // Track a connected integration (dedupe by type+name).
-  const connectIntegration = (type: 'eld' | 'tms', name: string, mono: string) =>
+  // Track a connected integration (dedupe by type+name). `label` is the
+  // operator's reference name; defaults to the provider name when blank.
+  const connectIntegration = (type: 'eld' | 'tms', name: string, mono: string, label?: string) =>
     setIntegrations((prev) =>
-      prev.some((i) => i.type === type && i.name === name) ? prev : [...prev, { type, name, mono }],
+      prev.some((i) => i.type === type && i.name === name)
+        ? prev
+        : [...prev, { type, name, mono, label: label?.trim() || name }],
     )
   const removeIntegration = (type: 'eld' | 'tms', name: string) =>
     setIntegrations((prev) => prev.filter((i) => !(i.type === type && i.name === name)))

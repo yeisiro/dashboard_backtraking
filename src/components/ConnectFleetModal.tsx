@@ -45,7 +45,7 @@ interface Props {
   // background sync (App owns both). The modal then shows a live view to leave.
   onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey, extraDrivers?: FleetDriver[]) => void
   // Record a connected ELD/TMS so Manage → Integrations can list it.
-  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
+  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string, label?: string) => void
   // Live sync state fed back from App while the modal stays open.
   sync?: SyncState | null
 }
@@ -56,8 +56,10 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
   // ELD + TMS selection/credentials.
   const [eld, setEld] = useState<Provider | null>(null)
   const [eldValues, setEldValues] = useState<Record<string, string>>({})
+  const [eldLabel, setEldLabel] = useState('')
   const [tms, setTms] = useState<Provider | null>(null)
   const [tmsValues, setTmsValues] = useState<Record<string, string>>({})
+  const [tmsLabel, setTmsLabel] = useState('')
   const [tmsQuery, setTmsQuery] = useState('')
 
   // Cabins linking.
@@ -97,8 +99,8 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
   const [rangeOpen, setRangeOpen] = useState(false)
   const progress = sync?.progress ?? 0
 
-  const eldComplete = !!eld && eld.fields.every((f) => (eldValues[f.key] ?? '').trim())
-  const tmsComplete = !!tms && tms.fields.every((f) => (tmsValues[f.key] ?? '').trim())
+  const eldComplete = !!eld && eld.fields.every((f) => (eldValues[f.key] ?? '').trim()) && !!eldLabel.trim()
+  const tmsComplete = !!tms && tms.fields.every((f) => (tmsValues[f.key] ?? '').trim()) && !!tmsLabel.trim()
   const tmsFiltered = tmsList.filter((t) => t.name.toLowerCase().includes(tmsQuery.toLowerCase()))
   const cabinsFiltered = useMemo(
     () => CABINS.filter((c) => c.toLowerCase().includes(cabinQuery.toLowerCase())),
@@ -194,6 +196,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                   onClick={() => {
                     setEld(e)
                     setEldValues({})
+                    setEldLabel('')
                     setStep('eld-cred')
                   }}
                 >
@@ -227,11 +230,23 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                 <span className="cfm-oblig">Required</span>
               </div>
             ))}
+            <div className="field">
+              <label>Label integration</label>
+              <div className="field-input">
+                <input
+                  type="text"
+                  placeholder="Enter the label"
+                  value={eldLabel}
+                  onChange={(ev) => setEldLabel(ev.target.value)}
+                />
+              </div>
+              <span className="cfm-oblig">Required</span>
+            </div>
             <button
               className="cfm-primary"
               disabled={!eldComplete}
               onClick={() => {
-                onConnectIntegration?.('eld', eld.name, eld.mono)
+                onConnectIntegration?.('eld', eld.name, eld.mono, eldLabel)
                 setStep('tms')
               }}
             >
@@ -260,6 +275,7 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                   onClick={() => {
                     setTms(t)
                     setTmsValues({})
+                    setTmsLabel('')
                     setStep('tms-cred')
                   }}
                 >
@@ -300,11 +316,23 @@ export default function ConnectFleetModal({ onClose, onStartSync, onConnectInteg
                 )}
               </div>
             ))}
+            <div className="field">
+              <label>Label integration</label>
+              <div className="field-input">
+                <input
+                  type="text"
+                  placeholder="Enter the label"
+                  value={tmsLabel}
+                  onChange={(e) => setTmsLabel(e.target.value)}
+                />
+              </div>
+              <span className="cfm-oblig">Required</span>
+            </div>
             <button
               className="cfm-primary"
               disabled={!tmsComplete}
               onClick={() => {
-                onConnectIntegration?.('tms', tms.name, tms.mono)
+                onConnectIntegration?.('tms', tms.name, tms.mono, tmsLabel)
                 setStep('cabins')
               }}
             >

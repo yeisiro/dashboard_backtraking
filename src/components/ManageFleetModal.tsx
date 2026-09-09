@@ -85,7 +85,7 @@ interface Props {
   onRemoveCabin: (id: string) => void
   onAddDrivers: (ids: string[]) => void
   onRemoveIntegration: (type: 'eld' | 'tms', name: string) => void
-  onConnectIntegration: (type: 'eld' | 'tms', name: string, mono: string) => void
+  onConnectIntegration: (type: 'eld' | 'tms', name: string, mono: string, label?: string) => void
 }
 
 export default function ManageFleetModal({
@@ -158,12 +158,14 @@ export default function ManageFleetModal({
   const [intType, setIntType] = useState<'eld' | 'tms'>('eld')
   const [intProvider, setIntProvider] = useState<Provider | null>(null)
   const [intValues, setIntValues] = useState<Record<string, string>>({})
+  const [intLabel, setIntLabel] = useState('')
   const providers = intType === 'eld' ? ELD_PROVIDERS : TMS_PROVIDERS
   const connectedNames = new Set(integrations.map((i) => i.type + ':' + i.name))
-  const intComplete = !!intProvider && intProvider.fields.every((f) => (intValues[f.key] ?? '').trim())
+  const intComplete = !!intProvider && intProvider.fields.every((f) => (intValues[f.key] ?? '').trim()) && !!intLabel.trim()
   const resetAddIntegration = () => {
     setIntProvider(null)
     setIntValues({})
+    setIntLabel('')
   }
 
   // ─────────────────────── Add sub-views ───────────────────────
@@ -342,11 +344,23 @@ export default function ManageFleetModal({
                       )}
                     </div>
                   ))}
+                  <div className="field">
+                    <label>Label integration</label>
+                    <div className="field-input">
+                      <input
+                        type="text"
+                        placeholder="Enter the label"
+                        value={intLabel}
+                        onChange={(e) => setIntLabel(e.target.value)}
+                      />
+                    </div>
+                    <span className="cfm-oblig">Required</span>
+                  </div>
                   <button
                     className="cfm-primary"
                     disabled={!intComplete}
                     onClick={() => {
-                      onConnectIntegration(intType, intProvider.name, intProvider.mono)
+                      onConnectIntegration(intType, intProvider.name, intProvider.mono, intLabel)
                       resetAddIntegration()
                       setSub(null)
                     }}
@@ -403,8 +417,10 @@ export default function ManageFleetModal({
                   <div className="mf-int-row" key={i.type + i.name}>
                     <span className="cfm-tms-logo sm">{i.mono}</span>
                     <div className="mf-int-txt">
-                      <div className="mf-int-name">{i.name}</div>
-                      <div className="mf-int-sub">{i.type.toUpperCase()} · <span className="mf-int-ok">Synchronized</span></div>
+                      <div className="mf-int-name">{i.label ?? i.name}</div>
+                      <div className="mf-int-sub">
+                        {i.name} · {i.type.toUpperCase()} · <span className="mf-int-ok">Synchronized</span>
+                      </div>
                     </div>
                     <button className="mf-unlink" onClick={() => onRemoveIntegration(i.type, i.name)}>Unlink</button>
                   </div>
