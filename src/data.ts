@@ -972,7 +972,27 @@ export interface TripRow {
   // True when the ELD API failed to report exact driving hours for this trip,
   // so the value shown is a calculated estimate (flagged with an "Est." tag).
   estimatedTime?: boolean
+  // High-deadhead review: a load whose deadhead exceeds DH_APPROVAL_THRESHOLD is
+  // flagged "Pending approval" until the operator either approves it (with a
+  // reason) or splits part of the empty approach into an operative trip. These
+  // fields are mutated on the stateful trips in FullData.
+  dhApproved?: boolean
+  dhApprovalReason?: DhApprovalReason
+  dhApprovalNote?: string
 }
+
+// Deadhead above this (miles) trips the "Pending approval" review flag.
+export const DH_APPROVAL_THRESHOLD = 200
+
+// Why a big deadhead is legitimate — required when approving a flagged load.
+export const DH_APPROVAL_REASONS = [
+  'Customer-requested reposition',
+  'No backhaul available',
+  'Repositioning to a demand market',
+  'Maintenance / yard move',
+  'Other',
+] as const
+export type DhApprovalReason = (typeof DH_APPROVAL_REASONS)[number]
 
 interface TripBase {
   truck: string

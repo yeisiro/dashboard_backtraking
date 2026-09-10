@@ -2,9 +2,13 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
-  Split, Layers,
+  Split, Layers, AlertTriangle, ShieldCheck,
 } from 'lucide-react'
-import { tripRows, repositionRows, costSegments, deltaTone, deltaTrend, type TripRow, type RepositionRow, type Goal } from '../data'
+import {
+  tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
+  DH_APPROVAL_THRESHOLD, type DhApprovalReason,
+  type TripRow, type RepositionRow, type Goal,
+} from '../data'
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
@@ -12,6 +16,7 @@ import FuelSavings, { parseLane } from './FuelSavings'
 import OperativeGapDrawer from './OperativeGapDrawer'
 import MergedTripModal from './MergedTripModal'
 import AssignedTripsModal from './AssignedTripsModal'
+import SplitDeadheadModal from './SplitDeadheadModal'
 import Toast from './Toast'
 
 const SUBTABS = ['Trips', 'Fleet Analytics', 'Productivity', 'Fuel and Savings', 'Rewards'] as const
@@ -998,6 +1003,10 @@ function TripsTable({
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<TripRow | null>(null)
+  // The load whose deadhead is being adjusted in the focused split modal
+  // (opened from the high-DH badge in the table or the trip detail alert).
+  const [dhAdjust, setDhAdjust] = useState<TripRow | null>(null)
+  const splitSeq = useRef(0)
   const [selectedMove, setSelectedMove] = useState<RepositionRow | null>(null)
   const [query, setQuery] = useState('')
   // Also fold in empty repositioning moves (deadhead, no load) alongside trips.
@@ -1370,6 +1379,87 @@ function TripsTable({
     setOpToast(`Detached ${toDetach.length} operative trip${toDetach.length === 1 ? '' : 's'} from ${loadRef}`)
   }
 
+  // ── High-deadhead review ──
+  // A load whose deadhead exceeds the threshold and hasn't been approved is
+  // "pending approval" — the operator confirms it or splits part of the empty
+  // approach into an operative trip.
+  const isDhPending = (r: TripRow) =>
+    deadheadMiles(r) > DH_APPROVAL_THRESHOLD && !r.dhApproved
+  // Approve a flagged deadhead as legitimate, with its required reason.
+  const approveDh = (loadRef: string, reason: DhApprovalReason, note: string) => {
+    setTrips((prev) =>
+      prev.map((t) =>
+        t.loadRef === loadRef ? { ...t, dhApproved: true, dhApprovalReason: reason, dhApprovalNote: note.trim() || undefined } : t,
+      ),
+    )
+    setOpToast(`Approved the deadhead on ${loadRef}`)
+  }
+  // Undo an approval — the load goes back to pending review.
+  const reopenDh = (loadRef: string) => {
+    setTrips((prev) =>
+      prev.map((t) =>
+        t.loadRef === loadRef ? { ...t, dhApproved: false, dhApprovalReason: undefined, dhApprovalNote: undefined } : t,
+      ),
+    )
+    setOpToast(`Reopened the deadhead review on ${loadRef}`)
+  }
+  // Split the chosen part of a load's deadhead off into a standalone operative
+  // trip (leading into the load). The load is recomputed against optimal —
+  // miles, deadhead %, cost, leakage and profit all drop by the peeled portion.
+  // The new operative trip pins above the load and is reversible by assigning it
+  // back into the deadhead (the existing operative-trips flow).
+  const splitDh = (loadRef: string, opMiles: number, opCost: number, opLeak: number, label: string) => {
+    const load = trips.find((t) => t.loadRef === loadRef)
+    if (!load || opMiles <= 0) return
+    const [loadOrigin] = laneEnds(load.lane)
+    // Keep every operative trip for a load in ONE group: if the load already has
+    // operative legs (a seeded reposition gap, or a prior split), join that same
+    // gap; otherwise start a fresh split gap. seq stays contiguous so the group's
+    // Merge works across them.
+    const existingGapId = opLegs.find((l) => l.truck === load.truck)?.gapId
+    const gapId = existingGapId ?? `split-${loadRef}`
+    const inGap = opLegs.filter((l) => l.gapId === gapId)
+    const seq = (inGap.length ? Math.max(...inGap.map((l) => l.seq)) : 0) + 1
+    const leg: RepositionRow = {
+      reposition: true,
+      id: `split-${loadRef}-${(splitSeq.current += 1)}`,
+      gapId,
+      seq,
+      truck: load.truck,
+      driver: load.driver,
+      cls: load.cls,
+      startDate: load.startDate,
+      endDate: load.startDate,
+      lane: `${label} → ${loadOrigin}`,
+      reason: `Split from ${loadRef} deadhead — repositioning before pickup`,
+      totalMiles: opMiles,
+      effectiveHours: round1(load.totalMiles ? load.effectiveHours * (opMiles / load.totalMiles) : 0),
+      cost: opCost,
+      adherence: load.adherence,
+      leakage: opLeak,
+      nextLoadId: loadRef,
+      nextLoadLane: load.lane,
+    }
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.loadRef !== loadRef) return t
+        const totalMiles = t.totalMiles - opMiles
+        const newCost = t.cost - opCost
+        return {
+          ...t,
+          totalMiles,
+          cost: newCost,
+          profit: t.income - newCost,
+          totalExcessCost: Math.max(0, t.totalExcessCost - opLeak),
+          deadheadPct: totalMiles > 0 ? round1(((totalMiles - t.loadedMiles) / totalMiles) * 100) : 0,
+        }
+      }),
+    )
+    setOpLegs((prev) => [...prev, leg])
+    setDhAdjust(null)
+    setOpToast(`Split ${opMiles.toLocaleString()} mi off ${loadRef} into an operative trip`)
+  }
+
   // Cells for every column, rendered in whatever order columnOrder says.
   const renderCell = (key: ColId, r: TripRow) => {
     switch (key) {
@@ -1454,8 +1544,40 @@ function TripsTable({
         )
       case 'distance':
         return <td key={key} className="fd-dim">{miles(r.totalMiles)}</td>
-      case 'deadhead':
-        return <td key={key} className="fd-dim">{miles(deadheadMiles(r))}</td>
+      case 'deadhead': {
+        const pending = isDhPending(r)
+        return (
+          <td key={key} className="fd-dim">
+            {miles(deadheadMiles(r))}
+            {pending && (
+              <button
+                className="fd-dh-flag cf-tip"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDhAdjust(r)
+                }}
+                aria-label="Deadhead pending approval"
+                data-tip={`Pending approval — deadhead ${miles(deadheadMiles(r))} exceeds the ${DH_APPROVAL_THRESHOLD} mi review threshold. Confirm it's intended, or split it into an operative trip.`}
+              >
+                <AlertTriangle size={13} />
+              </button>
+            )}
+            {r.dhApproved && (
+              <button
+                className="fd-dh-approved cf-tip"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDhAdjust(r)
+                }}
+                aria-label="Deadhead approved"
+                data-tip={`Deadhead approved — ${r.dhApprovalReason ?? 'reason not set'}${r.dhApprovalNote ? ` · “${r.dhApprovalNote}”` : ''} · click to reopen or split`}
+              >
+                <ShieldCheck size={13} />
+              </button>
+            )}
+          </td>
+        )
+      }
       case 'income':
         return <td key={key}>{usd(r.income)}</td>
       case 'cost':
@@ -1847,7 +1969,32 @@ function TripsTable({
           {renderFooterRow(computeTotals(combined))}
         </table>
       </div>
-      {selected && <TripDetailModal trip={selected} onClose={() => setSelected(null)} />}
+      {selected && (() => {
+        // Read the live row so an adjustment reflects immediately.
+        const live = trips.find((t) => t.loadRef === selected.loadRef) ?? selected
+        return (
+          <TripDetailModal
+            trip={live}
+            onClose={() => setSelected(null)}
+            dhThreshold={DH_APPROVAL_THRESHOLD}
+            dhPending={isDhPending(live)}
+            onAdjustDh={() => { setSelected(null); setDhAdjust(live) }}
+          />
+        )
+      })()}
+      {dhAdjust && (() => {
+        const live = trips.find((t) => t.loadRef === dhAdjust.loadRef) ?? dhAdjust
+        return (
+          <SplitDeadheadModal
+            trip={live}
+            dhThreshold={DH_APPROVAL_THRESHOLD}
+            onClose={() => setDhAdjust(null)}
+            onSplit={(opMiles, opCost, opLeak, label) => splitDh(live.loadRef, opMiles, opCost, opLeak, label)}
+            onApprove={(reason, note) => { approveDh(live.loadRef, reason, note); setDhAdjust(null) }}
+            onReopen={() => { reopenDh(live.loadRef); setDhAdjust(null) }}
+          />
+        )
+      })()}
       {selectedMove && (
         <TripDetailModal trip={repoAsTrip(selectedMove)} repo onClose={() => setSelectedMove(null)} />
       )}

@@ -3645,6 +3645,34 @@ button {
   background: color-mix(in srgb, var(--yellow) 16%, transparent);
 }
 .fd-est.cf-tip::after { width: auto; white-space: nowrap; }
+/* High-deadhead review badges on the Deadhead cell — icon only, the wording
+   lives in the tooltip so the column stays narrow. */
+.fd-dh-flag,
+.fd-dh-approved {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 3px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.fd-dh-flag {
+  color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 15%, transparent);
+  border-color: color-mix(in srgb, var(--orange) 40%, transparent);
+}
+.fd-dh-flag:hover { background: color-mix(in srgb, var(--orange) 24%, transparent); }
+.fd-dh-approved {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 13%, transparent);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+}
+.fd-dh-approved:hover { background: color-mix(in srgb, var(--green) 20%, transparent); }
+.fd-dh-flag.cf-tip::after,
+.fd-dh-approved.cf-tip::after { width: 240px; white-space: normal; }
 .fd-strong { font-weight: 700; }
 .fd-neg { color: var(--red); }
 .fd-pos { color: var(--green); }
@@ -7233,7 +7261,9 @@ button {
   cursor: pointer;
   transition: background 0.13s, border-color 0.13s;
 }
-.ld-cat-opt:hover { background: var(--surface-3); border-color: #33DB9E; }
+.ld-cat-opt:hover { background: var(--surface-3); border-color: var(--green); }
+.ld-cat-opt.on { border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--surface-2)); }
+.ld-cat-opt.on .ld-cat-opt-icon { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
 .ld-cat-opt-icon {
   display: grid;
   place-items: center;
@@ -7241,9 +7271,85 @@ button {
   height: 30px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: rgba(124, 200, 207, 0.14);
-  color: #7CC8CF;
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  color: var(--teal);
 }
+
+/* Approve-picker confirm button (shared by the deadhead approve flow) */
+.ld-split-actions { display: flex; gap: 8px; margin-top: 2px; }
+.ld-split-go {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px; border-radius: 9px; border: none;
+  background: var(--green); color: var(--bg); font-size: 12px; font-weight: 800; cursor: pointer;
+}
+.ld-split-go:disabled { opacity: 0.45; cursor: default; }
+.ld-split-go:not(:disabled):hover { filter: brightness(1.08); }
+
+/* High-deadhead alert button in the trip-detail header */
+.ld-dh-alert {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 13px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--orange) 45%, var(--border-strong));
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
+  color: var(--orange); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.ld-dh-alert:hover { background: color-mix(in srgb, var(--orange) 22%, transparent); }
+
+/* ── Focused deadhead-split modal ── */
+.sd-modal { width: 760px; max-width: 94vw; }
+.sd-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+.sd-sub { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-dim); }
+.sd-approved {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--green) 12%, transparent); color: var(--green);
+  font-size: 12.5px; font-weight: 600;
+}
+.sd-approved span { display: inline-flex; align-items: center; gap: 7px; }
+.sd-reopen {
+  border: 1px solid var(--border-strong); background: transparent; color: var(--text-dim);
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; cursor: pointer;
+}
+.sd-reopen:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.sd-map {
+  position: relative;
+  height: 360px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.sd-map-canvas { width: 100%; height: 100%; display: block; }
+.sd-loading {
+  position: absolute; inset: 0; z-index: 4;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(3px);
+  color: var(--text); font-size: 14px; font-weight: 700;
+}
+.sd-loading svg { color: var(--teal); }
+.sd-loading-sub { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.sd-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.sd-foot-summary { font-size: 12.5px; color: var(--text-dim); }
+.sd-foot-summary b { font-variant-numeric: tabular-nums; color: var(--text); }
+.sd-foot-summary b.op { color: var(--green); }
+.sd-foot-summary b.kept { color: var(--red); }
+.sd-foot-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.sd-approve {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 15px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.sd-approve:hover:not(:disabled) { background: rgba(255,255,255,0.06); color: var(--text); }
+.sd-cut {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 18px; border-radius: 10px; border: none;
+  background: var(--green); color: var(--bg); font-size: 13px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--green) 40%, transparent);
+}
+.sd-cut:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.sd-cut:not(:disabled):hover { filter: brightness(1.08); }
+.sd-approve:disabled { opacity: 0.5; cursor: default; }
 
 @media (max-width: 1200px) {
   .ld-top {

@@ -670,12 +670,20 @@ export default function TripDetailModal({
   trip,
   onClose,
   repo = false,
+  dhThreshold = 200,
+  dhPending = false,
+  onAdjustDh,
 }: {
   trip: TripRow
   onClose: () => void
   // Operative-trip mode: the whole run is an empty (deadhead) move, so there's
   // no load, income, or pickup/delivery timing, and the cost is 100% deadhead.
   repo?: boolean
+  // High-deadhead review: when the load's deadhead is over threshold and still
+  // pending, an alert lets the operator jump to the focused adjust-deadhead modal.
+  dhThreshold?: number
+  dhPending?: boolean
+  onAdjustDh?: () => void
 }) {
   const [origin, dest] = splitLane(trip.lane)
   const [costExpanded, setCostExpanded] = useState(false)
@@ -1461,6 +1469,16 @@ export default function TripDetailModal({
             {repo ? 'Operative trip details' : 'Operation details'}
           </span>
           <div className="ld-head-actions">
+            {!repo && dhPending && onAdjustDh && (
+              <button
+                className="ld-dh-alert cf-tip"
+                onClick={onAdjustDh}
+                data-tip={`Deadhead ${dhMiles} mi exceeds the ${dhThreshold} mi threshold — review it`}
+              >
+                <AlertTriangle size={15} />
+                High deadhead
+              </button>
+            )}
             {!repo && (
               <button
                 className="ld-hist-btn"
