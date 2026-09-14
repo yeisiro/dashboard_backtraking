@@ -9,13 +9,15 @@ import { DH_APPROVAL_REASONS, type DhApprovalReason, type TripRow } from '../dat
 const money = (n: number) => '$' + Math.round(n).toLocaleString()
 const miles = (n: number) => `${Math.round(n).toLocaleString()} mi`
 
-const DH_STOP_PLACES = [
-  'I-10 Exit 812 · Baytown, TX',
-  'US-90 Truck Plaza · Lafayette, LA',
-  'I-45 Rest Area · Huntsville, TX',
-  'TA Travel Center · Mobile, AL',
-  'Pilot #442 · Gulfport, MS',
-  "Love's #318 · Slidell, LA",
+// Geographic stops along the empty approach — the operator needs the physical
+// location (street, city, ZIP, country), not a branded place name.
+const DH_STOP_SPOTS = [
+  { street: '4820 I-10 E Frontage Rd', city: 'Baytown, TX', zip: '77521' },
+  { street: '1200 NE Evangeline Thruway', city: 'Lafayette, LA', zip: '70501' },
+  { street: '255 State Hwy 75 N', city: 'Huntsville, TX', zip: '77320' },
+  { street: '5660 Rangeline Rd', city: 'Mobile, AL', zip: '36619' },
+  { street: '9350 Canal Rd', city: 'Gulfport, MS', zip: '39503' },
+  { street: '58881 Airport Rd', city: 'Slidell, LA', zip: '70460' },
 ]
 
 // A focused modal that does one thing: adjust a load's high deadhead by cutting
@@ -60,12 +62,15 @@ export default function SplitDeadheadModal({
       const hour12 = ((h + 11) % 12) + 1
       const time = `${hour12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
       const dwell = 10 + Math.floor(rand() * 40)
+      const spot = DH_STOP_SPOTS[(hashStr(`${trip.loadRef}-${i}`) + i) % DH_STOP_SPOTS.length]
       return {
         id: `s${i}`,
         label: `Stop ${i + 1}`,
         frac: f,
         pos: pointAtFraction(approach, f).pos,
-        address: DH_STOP_PLACES[(hashStr(`${trip.loadRef}-${i}`) + i) % DH_STOP_PLACES.length],
+        street: spot.street,
+        cityLine: `${spot.city} ${spot.zip} · United States`,
+        place: spot.city,
         time: `Arrived ${time} · ${dwell} min stop`,
         milesFromStart: Math.round(dhMiles * f),
       }
@@ -104,7 +109,7 @@ export default function SplitDeadheadModal({
   const doSplit = () => {
     if (!sel) return
     setBusy('split')
-    setTimeout(() => onSplit(opMiles, opCost, opLeak, sel.address.split(' · ')[0]), 900)
+    setTimeout(() => onSplit(opMiles, opCost, opLeak, sel.place), 900)
   }
   const doApprove = () => {
     if (!reason) return
@@ -170,10 +175,21 @@ export default function SplitDeadheadModal({
               {stops.map((s, i) => {
                 const on = selId === s.id
                 const show = on || hoverId === s.id
-                const cardLines = [s.label, s.address, `${s.time} · ${s.milesFromStart} mi in`]
+                // Location-first card: no branded place name — geographic address
+                // (street, city, ZIP, country), stop time, and miles from the start
+                // of the deadhead being cut.
+                const cardLines: { t: string; kind: 'head' | 'body' | 'muted' }[] = [
+                  { t: s.label, kind: 'head' },
+                  { t: s.street, kind: 'body' },
+                  { t: s.cityLine, kind: 'body' },
+                  { t: s.time, kind: 'muted' },
+                  { t: `${s.milesFromStart} mi from DH start`, kind: 'muted' },
+                ]
                 const fs = vbW * 0.017
-                const cw = Math.max(...cardLines.map((l) => l.length)) * 0.55 * fs + vbW * 0.03
-                const ch = fs * 3.4 + vbW * 0.03
+                const pad = vbW * 0.015
+                const lineH = fs * 1.25
+                const cw = Math.max(...cardLines.map((l) => l.t.length)) * 0.55 * fs + pad * 2
+                const ch = pad * 2 + lineH * cardLines.length
                 const R = r * (on ? 1.4 : 1.1)
                 // Available points are blue; the selected cut point is green.
                 const accent = on ? 'var(--green)' : 'var(--blue)'
@@ -196,9 +212,13 @@ export default function SplitDeadheadModal({
                     {show && (
                       <g transform={`translate(${s.pos[0] - cw / 2},${s.pos[1] - R - vbW * 0.016 - ch})`}>
                         <rect width={cw} height={ch} rx={vbW * 0.012} fill="var(--bg)" stroke={accent} strokeWidth={vbW * 0.0022} />
-                        <text x={vbW * 0.015} y={vbW * 0.026} fill={accent} fontSize={fs} fontWeight={700}>{cardLines[0]}</text>
-                        <text x={vbW * 0.015} y={vbW * 0.026 + fs * 1.2} fill="var(--text)" fontSize={fs}>{cardLines[1]}</text>
-                        <text x={vbW * 0.015} y={vbW * 0.026 + fs * 2.4} fill="var(--text-muted)" fontSize={fs}>{cardLines[2]}</text>
+                        {cardLines.map((l, li) => (
+                          <text key={li} x={pad} y={pad + fs + li * lineH} fontSize={fs}
+                            fontWeight={l.kind === 'head' ? 700 : 400}
+                            fill={l.kind === 'head' ? accent : l.kind === 'muted' ? 'var(--text-muted)' : 'var(--text)'}>
+                            {l.t}
+                          </text>
+                        ))}
                       </g>
                     )}
                   </g>
