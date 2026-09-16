@@ -1199,6 +1199,14 @@ export interface RepositionRow {
   // When this row is the product of merging several legs, the originals are kept
   // here so the merge can be undone (split back into its legs).
   mergedFrom?: RepositionRow[]
+  // When this operative trip was born by cutting a load's high deadhead, we keep
+  // the source load and the exact deltas that were peeled off it, so the split
+  // can be reattached (fully reversed) at any time — from the toast Undo or the
+  // row's Reattach action. Distinguishes split-born legs from seeded ones.
+  splitFrom?: string
+  splitMiles?: number
+  splitCost?: number
+  splitLeak?: number
 }
 
 // Dates chain backward so each gap ENDS exactly on the start date of the load

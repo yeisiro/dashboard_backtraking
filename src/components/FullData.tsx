@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
-  Split, Layers, AlertTriangle, ShieldCheck,
+  Split, Layers, AlertTriangle, ShieldCheck, Undo2,
 } from 'lucide-react'
 import {
   tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
@@ -1018,7 +1018,9 @@ function TripsTable({
   // assign a run to the neighbouring load's deadhead. Seeded from data.
   const [opLegs, setOpLegs] = useState<RepositionRow[]>(repositionRows)
   const [gapDrawer, setGapDrawer] = useState<string | null>(null) // gapId being managed
-  const [opToast, setOpToast] = useState<string | null>(null)
+  const [opToast, setOpToast] = useState<{ msg: string; undo?: () => void } | null>(null)
+  // Show a toast; pass `undo` to render an inline Undo (passive safety net).
+  const toast = (msg: string, undo?: () => void) => setOpToast({ msg, undo })
   // The merged operative trip whose management modal (view / separate legs) is open.
   const [mergeModal, setMergeModal] = useState<string | null>(null)
   // Operative legs assigned into a load's deadhead. Each record keeps the
@@ -1265,7 +1267,7 @@ function TripsTable({
     const merged = makeMergedRow(chosen)
     setOpLegs((prev) => [...prev.filter((l) => !ids.includes(l.id)), merged])
     setGapDrawer(null)
-    setOpToast(`Merged ${chosen.length} legs into one operative trip`)
+    toast(`Merged ${chosen.length} legs into one operative trip`)
   }
   // Separate a chosen subset of a merged trip's legs back out to standalone
   // operative legs; whatever remains stays merged (rebuilt) if ≥2 legs, becomes
@@ -1294,7 +1296,7 @@ function TripsTable({
     flush()
     setOpLegs((prev) => [...prev.filter((l) => l.id !== mergedId), ...toSeparate, ...rebuilt])
     setMergeModal(null)
-    setOpToast(
+    toast(
       remain.length === 0
         ? `Separated all ${toSeparate.length} legs`
         : `Separated ${toSeparate.length} leg${toSeparate.length === 1 ? '' : 's'} back out`,
@@ -1336,7 +1338,7 @@ function TripsTable({
       setAssignments((prev) => [...prev, { id: assignmentId, loadRef: target.loadRef, legs: chosen }])
     }
     setGapDrawer(null)
-    setOpToast(
+    toast(
       `Assigned ${chosen.length} leg${chosen.length === 1 ? '' : 's'} · ${miles.toLocaleString()} mi · ${usd(cost)} to ${target ? target.loadRef : 'the next load'} deadhead`,
     )
   }
@@ -1376,7 +1378,7 @@ function TripsTable({
     // Close the modal only when nothing remains assigned to this load.
     const remaining = forLoad.flatMap((a) => a.legs).filter((l) => !legIds.includes(l.id)).length
     if (remaining === 0) setAssignedModal(null)
-    setOpToast(`Detached ${toDetach.length} operative trip${toDetach.length === 1 ? '' : 's'} from ${loadRef}`)
+    toast(`Detached ${toDetach.length} operative trip${toDetach.length === 1 ? '' : 's'} from ${loadRef}`)
   }
 
   // ── High-deadhead review ──
@@ -1392,7 +1394,8 @@ function TripsTable({
         t.loadRef === loadRef ? { ...t, dhApproved: true, dhApprovalReason: reason, dhApprovalNote: note.trim() || undefined } : t,
       ),
     )
-    setOpToast(`Approved the deadhead on ${loadRef}`)
+    // Passive Undo in the toast, plus the durable "Reopen review" inside the modal.
+    toast(`Approved the deadhead on ${loadRef}`, () => reopenDh(loadRef))
   }
   // Undo an approval — the load goes back to pending review.
   const reopenDh = (loadRef: string) => {
@@ -1401,7 +1404,35 @@ function TripsTable({
         t.loadRef === loadRef ? { ...t, dhApproved: false, dhApprovalReason: undefined, dhApprovalNote: undefined } : t,
       ),
     )
-    setOpToast(`Reopened the deadhead review on ${loadRef}`)
+    toast(`Reopened the deadhead review on ${loadRef}`)
+  }
+  // Reverse a split: re-add the exact miles/cost/leakage the leg was peeled with
+  // back onto its source load and drop the leg. Used by the toast Undo and the
+  // per-row "Reattach" action, so a split is never a dead end.
+  const reattachSplit = (legId: string) => {
+    const leg = opLegs.find((l) => l.id === legId)
+    if (!leg?.splitFrom) return
+    const loadRef = leg.splitFrom
+    const opMiles = leg.splitMiles ?? leg.totalMiles
+    const opCost = leg.splitCost ?? leg.cost
+    const opLeak = leg.splitLeak ?? leg.leakage
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.loadRef !== loadRef) return t
+        const totalMiles = t.totalMiles + opMiles
+        const newCost = t.cost + opCost
+        return {
+          ...t,
+          totalMiles,
+          cost: newCost,
+          profit: t.income - newCost,
+          totalExcessCost: t.totalExcessCost + opLeak,
+          deadheadPct: totalMiles > 0 ? round1(((totalMiles - t.loadedMiles) / totalMiles) * 100) : 0,
+        }
+      }),
+    )
+    setOpLegs((prev) => prev.filter((l) => l.id !== legId))
+    toast(`Reattached ${opMiles.toLocaleString()} mi back into ${loadRef}'s deadhead`)
   }
   // Split the chosen part of a load's deadhead off into a standalone operative
   // trip (leading into the load). The load is recomputed against optimal —
@@ -1439,6 +1470,13 @@ function TripsTable({
       leakage: opLeak,
       nextLoadId: loadRef,
       nextLoadLane: load.lane,
+      // Mark this leg as split-born and remember the exact deltas peeled off the
+      // load, so it can be reattached (fully reversed) later, and shown as a
+      // "Split" trip rather than a plain operative one.
+      splitFrom: loadRef,
+      splitMiles: opMiles,
+      splitCost: opCost,
+      splitLeak: opLeak,
     }
     setTrips((prev) =>
       prev.map((t) => {
@@ -1457,7 +1495,7 @@ function TripsTable({
     )
     setOpLegs((prev) => [...prev, leg])
     setDhAdjust(null)
-    setOpToast(`Split ${opMiles.toLocaleString()} mi off ${loadRef} into an operative trip`)
+    toast(`Split ${opMiles.toLocaleString()} mi off ${loadRef} into an operative trip`, () => reattachSplit(leg.id))
   }
 
   // Cells for every column, rendered in whatever order columnOrder says.
@@ -1766,6 +1804,15 @@ function TripsTable({
             <tr key={r.id} className="fd-repo-row">
               {columnOrder.map((key) => renderRepositionCell(key, r))}
               <td>
+                {r.splitFrom && (
+                  <button
+                    className="fd-op-reattach cf-tip"
+                    onClick={() => reattachSplit(r.id)}
+                    data-tip={`Reattach these ${miles(r.splitMiles ?? r.totalMiles)} back into ${r.splitFrom}'s deadhead`}
+                  >
+                    <Undo2 size={12} /> Reattach
+                  </button>
+                )}
                 {r.mergedFrom && !isPureMerged && (
                   <button
                     className="fd-op-rowmerge cf-tip"
@@ -2037,7 +2084,13 @@ function TripsTable({
           />
         )
       })()}
-      {opToast && <Toast message={opToast} onDone={() => setOpToast(null)} />}
+      {opToast && (
+        <Toast
+          message={opToast.msg}
+          action={opToast.undo ? { label: 'Undo', onClick: opToast.undo } : undefined}
+          onDone={() => setOpToast(null)}
+        />
+      )}
     </>
   )
 }
