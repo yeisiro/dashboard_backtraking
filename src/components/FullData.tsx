@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
-  Split, Layers, AlertTriangle, ShieldCheck, Undo2, MapPin,
+  Split, Layers, AlertTriangle, ShieldCheck, Undo2, MapPin, DollarSign, Route,
 } from 'lucide-react'
 import {
   tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
@@ -775,6 +775,8 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
   const [delayModalOpen, setDelayModalOpen] = useState(false)
   const [evolutionModalOpen, setEvolutionModalOpen] = useState(false)
   const [timeModalOpen, setTimeModalOpen] = useState(false)
+  // Cost Distribution can be read in dollars or in the miles behind them.
+  const [costUnit, setCostUnit] = useState<'cost' | 'miles'>('cost')
   const { rangeDays, rangeEnd } = usePeriod()
 
   const totalLoads = rows.length
@@ -785,11 +787,18 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
   const profitability = totalIncome ? (totalProfit / totalIncome) * 100 : 0
 
   // Cost distribution: the shared cost-segment percentages (same story as the
-  // Operation Details donut), scaled to this fleet's total cost.
+  // Operation Details donut), scaled to this fleet's total cost — or to the
+  // fleet's total miles, when the user toggles the card to the Miles view.
+  const totalFleetMiles = rows.reduce((sum, r) => sum + r.totalMiles, 0)
   const costPieSegments: PieSegment[] = costSegments.map((s) => ({
     label: s.label,
     color: s.color,
     value: totalCost * (s.pct / 100),
+  }))
+  const milesPieSegments: PieSegment[] = costSegments.map((s) => ({
+    label: s.label,
+    color: s.color,
+    value: totalFleetMiles * (s.pct / 100),
   }))
 
   // Time distribution: real driving + idle hours per trip, plus whatever's
@@ -896,9 +905,26 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
         <section className="card pv-panel">
           <div className="card-head">
             <span className="eyebrow">Cost Distribution by Type</span>
+            <div className="mlc-mode" role="group" aria-label="View values as">
+              <button
+                className={`mlc-mode-btn ${costUnit === 'cost' ? 'active' : ''}`}
+                onClick={() => setCostUnit('cost')}
+              >
+                <DollarSign size={13} /> Cost
+              </button>
+              <button
+                className={`mlc-mode-btn ${costUnit === 'miles' ? 'active' : ''}`}
+                onClick={() => setCostUnit('miles')}
+              >
+                <Route size={13} /> Miles
+              </button>
+            </div>
           </div>
           <div className="pv-pie-wrap">
-            <PieChart segments={costPieSegments} formatValue={usd} />
+            <PieChart
+              segments={costUnit === 'cost' ? costPieSegments : milesPieSegments}
+              formatValue={costUnit === 'cost' ? usd : (v) => miles(Math.round(v))}
+            />
           </div>
         </section>
         <section className="card pv-panel">
