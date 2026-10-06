@@ -3884,6 +3884,39 @@ button {
   display: block;
   background: #131619;
 }
+/* Focus chip — a truck isolated on the map from the Live Operation list. */
+.mm-focus-chip {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--blue) 22%, rgba(18, 24, 27, 0.92));
+  border: 1px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mm-focus-chip b { font-weight: 800; }
+.mm-focus-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  cursor: pointer;
+}
+.mm-focus-chip button:hover { background: rgba(255, 255, 255, 0.24); }
+
 .market-map-legend {
   position: absolute;
   top: 10px;
@@ -6102,6 +6135,13 @@ button {
   border-top: 1px solid var(--border);
 }
 .trip .truck-id { font-weight: 700; font-size: 13px; width: 46px; }
+/* Rows are clickable to isolate the truck on the Fleet Monitor map. */
+.trip-clickable { cursor: pointer; transition: background 0.12s; }
+.trip-clickable:hover { background: rgba(255, 255, 255, 0.03); }
+.trip-clickable.focused {
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
 .class-badge {
   display: inline-flex;
   align-items: center;

@@ -7,7 +7,7 @@ import KpiCards from './components/KpiCards'
 import MoneyLeakage from './components/MoneyLeakage'
 import PotentialRecovery, { type FleetMode } from './components/PotentialRecovery'
 import LiveOperations from './components/LiveOperations'
-import MarketMap from './components/MarketMap'
+import MarketMap, { type MapFocus } from './components/MarketMap'
 import FullData, { type SubTab } from './components/FullData'
 import SyncBar from './components/SyncBar'
 import Toast from './components/Toast'
@@ -44,6 +44,8 @@ export default function App() {
   // Analysis dimension (V2 only): the whole dashboard reads either per truck or
   // per driver — the two filters never coexist, the user switches between them.
   const [analysisDim, setAnalysisDim] = useState<'trucks' | 'drivers'>('trucks')
+  // A truck clicked in Live Operation Monitoring, isolated on the Fleet map.
+  const [mapFocus, setMapFocus] = useState<MapFocus | null>(null)
   const [deadheadMode, setDeadheadMode] = useState<DeadheadMode>('in-range')
   const [fullDataSubTab, setFullDataSubTab] = useState<SubTab>('Trips')
   // Trips and Fleet Analytics always need each trip's untouched full
@@ -243,8 +245,17 @@ export default function App() {
                 {view === 'summary' && <MarketMap />}
                 {view === 'dashboard' && (
                   <div className="grid-live">
-                    <LiveOperations noData={noData} />
-                    <MarketMap fill dimension={analysisDim} />
+                    <LiveOperations
+                      noData={noData}
+                      onFocusTruck={setMapFocus}
+                      focusedId={mapFocus?.label ?? null}
+                    />
+                    <MarketMap
+                      fill
+                      dimension={analysisDim}
+                      focus={mapFocus}
+                      onClearFocus={() => setMapFocus(null)}
+                    />
                   </div>
                 )}
               </>

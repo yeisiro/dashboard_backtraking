@@ -47,6 +47,10 @@ type Truck = {
   lat: number
   lon: number
   class: keyof typeof CLASS_COLOR
+  // When the pin is placed via an external focus (clicking a row in Live
+  // Operation Monitoring), this overrides the label so the map reads with the
+  // clicked truck's id instead of this coordinate-provider's own id.
+  __label?: string
   // Unit detail — shown in the side panel when the pin is clicked.
   location: string
   eta: string
@@ -339,12 +343,20 @@ function formatAgo(ts: number, now: number) {
 // grouping loosens as the user zooms in (pins spread out, clusters split).
 const CLUSTER_PIXEL_RADIUS = 26
 
+export type MapFocus = { idx: number; label: string; cls: string; driver?: string }
+
 export default function MarketMap({
   fill = false,
   dimension = 'trucks',
+  focus = null,
+  onClearFocus,
 }: {
   fill?: boolean
   dimension?: 'trucks' | 'drivers'
+  // Externally-driven focus: isolate + zoom to one truck (e.g. clicked in the
+  // Live Operation Monitoring list), relabeled with that row's identity.
+  focus?: MapFocus | null
+  onClearFocus?: () => void
 }) {
   // In driver mode the same pins are labeled by the driver running that truck
   // (drivers inherit their truck's live position) instead of the truck id.
@@ -397,11 +409,24 @@ export default function MarketMap({
   const drawPinsRef = useRef<(k: number) => void>(() => {})
 
   const q = search.trim().toLowerCase()
-  // Map pins/clusters only respect the class legend — search no longer hides
-  // pins, it's just a lookup that jumps to a truck once one is picked.
+  // External focus borrows a map truck's coordinates but shows the clicked
+  // row's id/class/driver, so the isolated pin reads as that live truck.
+  const focusTruck = useMemo<Truck | null>(() => {
+    if (!focus) return null
+    const base = TRUCKS[focus.idx % TRUCKS.length]
+    return {
+      ...base,
+      id: focus.label,
+      class: (CLASS_COLOR[focus.cls] ? focus.cls : base.class) as keyof typeof CLASS_COLOR,
+      __label: focus.label,
+      driver: focus.driver ? { ...base.driver, name: focus.driver } : base.driver,
+    }
+  }, [focus])
+  // Map pins/clusters only respect the class legend — unless a focus is active,
+  // which isolates the map to just that one truck.
   const visibleTrucks = useMemo(
-    () => TRUCKS.filter((t) => !hiddenClasses.has(t.class)),
-    [hiddenClasses],
+    () => (focusTruck ? [focusTruck] : TRUCKS.filter((t) => !hiddenClasses.has(t.class))),
+    [hiddenClasses, focusTruck],
   )
   // Shows the full fleet by default; typing narrows the list down.
   const searchResults = useMemo(() => {
@@ -665,7 +690,7 @@ export default function MarketMap({
       .attr('stroke-width', 3)
       .style('paint-order', 'stroke')
       .style('pointer-events', 'none')
-      .text(byDriver ? shortDriver(t.driver.name) : t.id)
+      .text(t.__label ?? (byDriver ? shortDriver(t.driver.name) : t.id))
   }
 
   function drawClusterMarker(
@@ -719,6 +744,22 @@ export default function MarketMap({
     setSelected(t)
     setSearch('')
     setShowResults(false)
+  }
+
+  // When a focus arrives from the Live Operation Monitoring list, zoom to that
+  // (now isolated) truck. Keyed on the focus identity so re-selecting re-zooms.
+  const focusKey = focus ? `${focus.idx}:${focus.label}` : null
+  useEffect(() => {
+    if (!focusTruck) return
+    const p = projectionRef.current?.([focusTruck.lon, focusTruck.lat])
+    if (p) zoomToPixelPoints([p])
+    setSelected(null)
+    setShowResults(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey])
+  const clearFocus = () => {
+    onClearFocus?.()
+    resetZoom()
   }
 
   return (
@@ -846,6 +887,15 @@ export default function MarketMap({
             </button>
           ))}
         </div>
+
+        {focus && (
+          <div className="mm-focus-chip">
+            <TruckIcon size={13} /> Filtered to <b>{focus.label}</b>
+            <button type="button" onClick={clearFocus} aria-label="Clear truck filter">
+              <X size={13} />
+            </button>
+          </div>
+        )}
 
         {visibleTrucks.length === 0 && (
           <div className="mm-empty">All truck classes are hidden</div>

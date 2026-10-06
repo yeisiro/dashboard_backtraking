@@ -30,7 +30,18 @@ const TONE_COLOR: Record<'yellow' | 'orange' | 'red', string> = {
 type LiveTab = 'active' | 'inactive'
 type SortDir = 'desc' | 'asc'
 
-export default function LiveOperations({ noData = false }: { noData?: boolean }) {
+export type LiveFocus = { idx: number; label: string; cls: string; driver?: string }
+
+export default function LiveOperations({
+  noData = false,
+  onFocusTruck,
+  focusedId = null,
+}: {
+  noData?: boolean
+  // Click a truck row → isolate it on the Fleet Monitor map.
+  onFocusTruck?: (f: LiveFocus | null) => void
+  focusedId?: string | null
+}) {
   const [tab, setTab] = useState<LiveTab>('active')
   // Sort the inactive list by time-without-a-load; default longest-first.
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -97,7 +108,20 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
 
               <div className="live-list">
               {trips.map((t, i) => (
-                <div className="trip" key={i}>
+                <div
+                  className={`trip trip-clickable ${focusedId === t.id ? 'focused' : ''}`}
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={focusedId === t.id}
+                  onClick={() => onFocusTruck?.(focusedId === t.id ? null : { idx: i, label: t.id, cls: t.cls, driver: t.driver })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onFocusTruck?.(focusedId === t.id ? null : { idx: i, label: t.id, cls: t.cls, driver: t.driver })
+                    }
+                  }}
+                >
                   <span className="truck-id">{t.id}</span>
                   <span className={`class-badge ${t.cls.toLowerCase()}`}>
                     <Truck size={11} />
@@ -160,10 +184,23 @@ export default function LiveOperations({ noData = false }: { noData?: boolean })
               </div>
 
               <div className="live-list">
-                {sortedInactive.map((t) => {
+                {sortedInactive.map((t, i) => {
                   const tone = unassignedTone(t.unassignedDays)
                   return (
-                    <div className="trip" key={t.id}>
+                    <div
+                      className={`trip trip-clickable ${focusedId === t.id ? 'focused' : ''}`}
+                      key={t.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={focusedId === t.id}
+                      onClick={() => onFocusTruck?.(focusedId === t.id ? null : { idx: i, label: t.id, cls: t.cls })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onFocusTruck?.(focusedId === t.id ? null : { idx: i, label: t.id, cls: t.cls })
+                        }
+                      }}
+                    >
                       <span className="truck-id">{t.id}</span>
                       <span className={`class-badge ${t.cls.toLowerCase()}`}>
                         <Truck size={11} />
