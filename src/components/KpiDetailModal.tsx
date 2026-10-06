@@ -212,15 +212,15 @@ function Timeline({
   const [hover, setHover] = useState<number | null>(null)
   const pts = Math.max(2, days)
   const subColors = ['var(--blue)', 'var(--orange)']
-  // Primary line, an optional same-unit comparison line, and any nested
-  // sub-metrics (e.g. the rates inside Wasted Rate) overlaid as extra lines.
+  // Primary line (left axis), an optional same-unit comparison line, and any
+  // nested sub-metrics (right axis — they mix units with the primary, $ vs %).
   const lines = [
-    { label: metric.seriesLabel ?? metric.label, color: 'var(--green)', value: metric.value, sample: metric.value, s: resample(metric.series, pts) },
+    { label: metric.seriesLabel ?? metric.label, color: 'var(--green)', value: metric.value, sample: metric.value, axis: 'left' as const, s: resample(metric.series, pts) },
     ...(metric.compare
-      ? [{ label: metric.compare.label, color: 'var(--blue)', value: metric.compare.value, sample: metric.value, s: resample(metric.compare.series, pts) }]
+      ? [{ label: metric.compare.label, color: 'var(--blue)', value: metric.compare.value, sample: metric.value, axis: 'left' as const, s: resample(metric.compare.series, pts) }]
       : []),
     ...(metric.subMetrics ?? []).map((sm, i) => ({
-      label: sm.label, color: subColors[i % subColors.length], value: sm.value, sample: sm.value, s: resample(sm.series, pts),
+      label: sm.label, color: subColors[i % subColors.length], value: sm.value, sample: sm.value, axis: 'right' as const, s: resample(sm.series, pts),
     })),
   ]
   const primary = lines[0].s
@@ -230,23 +230,24 @@ function Timeline({
   const W = 1000
   const H = 200
   const padL = 40
-  const padR = 10
   const padT = 14
   const padB = 26
-  // Sub-metrics mix units with the primary (% vs $), so each line gets its own
-  // vertical scale (shape over shared axis); without them all lines share one.
-  const multiUnit = !!metric.subMetrics?.length
-  const all = lines.flatMap((l) => l.s)
-  const min = Math.min(...all)
-  const max = Math.max(...all)
-  const range = max - min || 1
-  const scales = lines.map((l) => (multiUnit ? { min: Math.min(...l.s), max: Math.max(...l.s) } : { min, max }))
+  // Sub-metrics ride a second (right) axis because they mix units with the
+  // primary; the right axis needs room for its own labels.
+  const dual = !!metric.subMetrics?.length
+  const padR = dual ? 46 : 10
+  const scaleOf = (ls: typeof lines) => {
+    const vals = ls.flatMap((l) => l.s)
+    return { min: Math.min(...vals), max: Math.max(...vals) }
+  }
+  const leftScale = scaleOf(lines.filter((l) => l.axis === 'left'))
+  const rightScale = dual ? scaleOf(lines.filter((l) => l.axis === 'right')) : leftScale
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
-  const yFor = (li: number, v: number) => {
-    const sc = scales[li]
+  const yOn = (sc: { min: number; max: number }, v: number) => {
     const r = sc.max - sc.min || 1
     return padT + (1 - (v - sc.min) / r) * (H - padT - padB)
   }
+  const yFor = (li: number, v: number) => yOn(lines[li].axis === 'right' ? rightScale : leftScale, v)
   const pathFor = (li: number) =>
     lines[li].s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${yFor(li, v).toFixed(1)}`).join(' ')
   const area = `${pathFor(0)} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
@@ -260,10 +261,11 @@ function Timeline({
   })
   // Thin the x-axis labels to ~10 across, so 60-day windows don't crowd.
   const labelStep = Math.max(1, Math.ceil(n / 10))
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({
-    y: padT + t * (H - padT - padB),
-    v: max - t * range,
-  }))
+  const axisTicks = (sc: { min: number; max: number }) =>
+    [0, 0.25, 0.5, 0.75, 1].map((t) => ({ y: padT + t * (H - padT - padB), v: sc.max - t * (sc.max - sc.min) }))
+  const leftTicks = axisTicks(leftScale)
+  const rightTicks = axisTicks(rightScale)
+  const rightSample = lines.find((l) => l.axis === 'right')?.sample ?? metric.value
 
   return (
     <div className="kd-chart-box">
@@ -297,16 +299,20 @@ function Timeline({
               <stop offset="100%" stopColor="var(--green)" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {ticks.map((t, i) => (
+          {leftTicks.map((t, i) => (
             <g key={i}>
               <line x1={padL} y1={t.y} x2={W - padR} y2={t.y} stroke="var(--border)" strokeWidth="1" />
-              {!multiUnit && (
-                <text className="kd-axis-label" x={padL - 8} y={t.y + 3} textAnchor="end">
-                  {fmtTick(t.v, metric.value)}
-                </text>
-              )}
+              <text className="kd-axis-label" x={padL - 8} y={t.y + 3} textAnchor="end">
+                {fmtTick(t.v, metric.value)}
+              </text>
             </g>
           ))}
+          {dual &&
+            rightTicks.map((t, i) => (
+              <text key={`r${i}`} className="kd-axis-label" x={W - padR + 8} y={t.y + 3} textAnchor="start">
+                {fmtTick(t.v, rightSample)}
+              </text>
+            ))}
           <path d={area} fill="url(#kdFill)" />
           {lines.map((l, li) => (
             <path
