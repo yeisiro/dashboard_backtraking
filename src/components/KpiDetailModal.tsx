@@ -2,14 +2,6 @@ import { useState } from 'react'
 import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { deltaTone, deltaTrend, type KpiCard, type DetailMetric, type Tone } from '../data'
 import { usePeriod, currentPeriodLabel } from '../PeriodContext'
-import Sparkline from './Sparkline'
-
-function sparkColor(tone: Tone) {
-  if (tone === 'green') return 'var(--green)'
-  if (tone === 'red') return 'var(--red)'
-  if (tone === 'orange' || tone === 'yellow') return 'var(--orange)'
-  return 'var(--text-dim)'
-}
 
 interface Props {
   card: KpiCard
@@ -144,7 +136,6 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
                         {m.subMetrics.map((s) => (
                           <span className="kd-sub-row" key={s.label}>
                             <span className="kd-sub-lbl">{s.label}</span>
-                            <Sparkline series={s.series} color={sparkColor(deltaTone(s.delta, s.goal))} width={48} height={16} />
                             <span className="kd-sub-val">{s.value}</span>
                             <span className={`kd-sub-delta ${toneClass(deltaTone(s.delta, s.goal))}`}>
                               <DeltaArrow trend={deltaTrend(s.delta)} />
@@ -220,12 +211,17 @@ function Timeline({
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const pts = Math.max(2, days)
-  // Primary line, plus an optional overlaid comparison line, sharing one y-axis.
+  const subColors = ['var(--blue)', 'var(--orange)']
+  // Primary line, an optional same-unit comparison line, and any nested
+  // sub-metrics (e.g. the rates inside Wasted Rate) overlaid as extra lines.
   const lines = [
-    { label: metric.seriesLabel ?? metric.label, color: 'var(--green)', value: metric.value, s: resample(metric.series, pts) },
+    { label: metric.seriesLabel ?? metric.label, color: 'var(--green)', value: metric.value, sample: metric.value, s: resample(metric.series, pts) },
     ...(metric.compare
-      ? [{ label: metric.compare.label, color: 'var(--blue)', value: metric.compare.value, s: resample(metric.compare.series, pts) }]
+      ? [{ label: metric.compare.label, color: 'var(--blue)', value: metric.compare.value, sample: metric.value, s: resample(metric.compare.series, pts) }]
       : []),
+    ...(metric.subMetrics ?? []).map((sm, i) => ({
+      label: sm.label, color: subColors[i % subColors.length], value: sm.value, sample: sm.value, s: resample(sm.series, pts),
+    })),
   ]
   const primary = lines[0].s
   const n = primary.length
@@ -237,15 +233,23 @@ function Timeline({
   const padR = 10
   const padT = 14
   const padB = 26
+  // Sub-metrics mix units with the primary (% vs $), so each line gets its own
+  // vertical scale (shape over shared axis); without them all lines share one.
+  const multiUnit = !!metric.subMetrics?.length
   const all = lines.flatMap((l) => l.s)
   const min = Math.min(...all)
   const max = Math.max(...all)
   const range = max - min || 1
+  const scales = lines.map((l) => (multiUnit ? { min: Math.min(...l.s), max: Math.max(...l.s) } : { min, max }))
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
-  const y = (v: number) => padT + (1 - (v - min) / range) * (H - padT - padB)
-  const path = (s: number[]) =>
-    s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
-  const area = `${path(primary)} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
+  const yFor = (li: number, v: number) => {
+    const sc = scales[li]
+    const r = sc.max - sc.min || 1
+    return padT + (1 - (v - sc.min) / r) * (H - padT - padB)
+  }
+  const pathFor = (li: number) =>
+    lines[li].s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${yFor(li, v).toFixed(1)}`).join(' ')
+  const area = `${pathFor(0)} L ${x(n - 1).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
 
   const fmtDate = (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
   // Axis labels: dates ending on the selected date, counting back one per day.
@@ -296,16 +300,18 @@ function Timeline({
           {ticks.map((t, i) => (
             <g key={i}>
               <line x1={padL} y1={t.y} x2={W - padR} y2={t.y} stroke="var(--border)" strokeWidth="1" />
-              <text className="kd-axis-label" x={padL - 8} y={t.y + 3} textAnchor="end">
-                {fmtTick(t.v, metric.value)}
-              </text>
+              {!multiUnit && (
+                <text className="kd-axis-label" x={padL - 8} y={t.y + 3} textAnchor="end">
+                  {fmtTick(t.v, metric.value)}
+                </text>
+              )}
             </g>
           ))}
           <path d={area} fill="url(#kdFill)" />
           {lines.map((l, li) => (
             <path
               key={li}
-              d={path(l.s)}
+              d={pathFor(li)}
               fill="none"
               stroke={l.color}
               strokeWidth="2.5"
@@ -318,7 +324,7 @@ function Timeline({
             <line x1={x(hover)} y1={padT} x2={x(hover)} y2={H - padB} stroke="var(--green)" strokeWidth="1" strokeOpacity="0.4" />
           )}
           {lines.map((l, li) => (
-            <circle key={li} cx={x(n - 1)} cy={y(l.s[n - 1])} r="4.5" fill={l.color} stroke="var(--bg)" strokeWidth="2" />
+            <circle key={li} cx={x(n - 1)} cy={yFor(li, l.s[n - 1])} r="4.5" fill={l.color} stroke="var(--bg)" strokeWidth="2" />
           ))}
           {labels.map((lb, i) =>
             i % labelStep === 0 || i === n - 1 ? (
@@ -341,7 +347,7 @@ function Timeline({
             <div
               key={i}
               className={`kd-dot ${hover === i ? 'on' : ''}`}
-              style={{ left: `${(x(i) / W) * 100}%`, top: `${(y(v) / H) * 100}%` }}
+              style={{ left: `${(x(i) / W) * 100}%`, top: `${(yFor(0, v) / H) * 100}%` }}
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
             />
@@ -350,7 +356,7 @@ function Timeline({
         {hover !== null && (
           <div
             className="kd-tip"
-            style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(primary[hover]) / H) * 100}%` }}
+            style={{ left: `${(x(hover) / W) * 100}%`, top: `${(yFor(0, primary[hover]) / H) * 100}%` }}
           >
             <span className="kd-tip-label">{labels[hover]}</span>
             {lines.length === 1 ? (
@@ -360,7 +366,7 @@ function Timeline({
                 <span className="kd-tip-row" key={l.label}>
                   <i style={{ background: l.color }} />
                   <span className="kd-tip-name">{l.label}</span>
-                  <strong className="kd-tip-value">{fmtTick(l.s[hover], metric.value)}</strong>
+                  <strong className="kd-tip-value">{fmtTick(l.s[hover], l.sample)}</strong>
                 </span>
               ))
             )}

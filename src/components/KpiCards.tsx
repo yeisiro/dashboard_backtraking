@@ -11,7 +11,6 @@ import {
 import { usePeriod } from '../PeriodContext'
 import KpiDetailModal from './KpiDetailModal'
 import EmptyState from './EmptyState'
-import Sparkline from './Sparkline'
 
 export default function KpiCards({
   noData = false,
@@ -141,7 +140,6 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
           {m.subMetrics.map((s) => (
             <div className="kpi-sub-row" key={s.label}>
               <span className="kpi-sub-lbl">{s.label}</span>
-              <Sparkline series={s.series} color={sparkColor(deltaTone(s.delta, s.goal))} />
               <span className="kpi-sub-val">{s.value}</span>
               <span className={`kpi-sub-delta ${toneClass(deltaTone(s.delta, s.goal))}`}>
                 <DeltaArrow trend={deltaTrend(s.delta)} size={10} />
@@ -153,13 +151,6 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
       )}
     </>
   )
-}
-
-function sparkColor(tone: Tone) {
-  if (tone === 'green') return 'var(--green)'
-  if (tone === 'red') return 'var(--red)'
-  if (tone === 'orange' || tone === 'yellow') return 'var(--orange)'
-  return 'var(--text-dim)'
 }
 
 function toneClass(tone: Tone) {
