@@ -44,6 +44,10 @@ export interface KpiMetric {
   // The gross totals behind a ratio metric (Margin): Income (green) and Costs
   // (red) shown under the value on both the KPI card and its detail chip.
   flow?: { income: string; costs: string; profit: string }
+  // Extra context values shown under the main metric on the Overview card
+  // (neutral), e.g. the rate metrics behind Efficiency. Each also lives as its
+  // own selectable metric in the detail modal.
+  extras?: { label: string; value: string }[]
 }
 
 export interface DetailMetric {
@@ -120,10 +124,16 @@ export const kpiCards: KpiCard[] = [
         footDelta: '-0.2',
         goal: 'low',
         tip: 'The revenue you should have earned but lost to inefficiency — empty miles, idling, detours and fuel overpay — as a share of expected revenue. Lower is better.',
+        extras: [
+          { label: 'Negotiated rate per mile', value: '$1.08' },
+          { label: 'RPM total', value: '$0.78' },
+        ],
       },
     ],
     details: [
       { label: 'Wasted rate', value: '5.45%', delta: '-0.2', goal: 'low', hint: 'Share of expected revenue lost to inefficiency', series: ts(5.45, 1) },
+      { label: 'Negotiated rate per mile', value: '$1.08', unit: '/mi', delta: '+0.02', goal: 'high', hint: 'Negotiated revenue per mile billed on the load', series: ts(1.08, 0) },
+      { label: 'RPM total', value: '$0.78', unit: '/mi', delta: '-0.01', goal: 'high', hint: 'Revenue per mile across all miles driven, loaded and empty', series: ts(0.78, 2) },
       { label: 'Deadhead %', value: '19.4%', delta: '-0.6', goal: 'low', hint: 'Share of miles driven empty', series: ts(19.4, 1) },
       { label: 'Idle %', value: '12.1%', delta: '-0.3', goal: 'low', hint: 'Share of engine hours spent idling', series: ts(12.1, 1) },
       { label: 'MPG', value: '6.18', unit: 'mpg', delta: '+0.12', goal: 'high', hint: 'Miles per gallon, fleet average', series: ts(6.18, 0) },

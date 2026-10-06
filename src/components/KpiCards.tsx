@@ -135,6 +135,16 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
           </span>
         </div>
       )}
+      {m.extras && (
+        <div className="kpi-flow">
+          {m.extras.map((e) => (
+            <span className="kpi-flow-item" key={e.label}>
+              <span className="kpi-flow-lbl">{e.label}</span>
+              <span>{e.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </>
   )
 }
