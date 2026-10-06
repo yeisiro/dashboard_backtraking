@@ -2,6 +2,14 @@ import { useState } from 'react'
 import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { deltaTone, deltaTrend, type KpiCard, type DetailMetric, type Tone } from '../data'
 import { usePeriod, currentPeriodLabel } from '../PeriodContext'
+import Sparkline from './Sparkline'
+
+function sparkColor(tone: Tone) {
+  if (tone === 'green') return 'var(--green)'
+  if (tone === 'red') return 'var(--red)'
+  if (tone === 'orange' || tone === 'yellow') return 'var(--orange)'
+  return 'var(--text-dim)'
+}
 
 interface Props {
   card: KpiCard
@@ -129,6 +137,21 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
                         <span className="kd-flow-item neg">
                           <span className="kd-flow-lbl">Costs</span> {m.flow.costs}
                         </span>
+                      </span>
+                    )}
+                    {m.subMetrics && (
+                      <span className="kd-sub">
+                        {m.subMetrics.map((s) => (
+                          <span className="kd-sub-row" key={s.label}>
+                            <span className="kd-sub-lbl">{s.label}</span>
+                            <Sparkline series={s.series} color={sparkColor(deltaTone(s.delta, s.goal))} width={48} height={16} />
+                            <span className="kd-sub-val">{s.value}</span>
+                            <span className={`kd-sub-delta ${toneClass(deltaTone(s.delta, s.goal))}`}>
+                              <DeltaArrow trend={deltaTrend(s.delta)} />
+                              {s.delta}
+                            </span>
+                          </span>
+                        ))}
                       </span>
                     )}
                   </>

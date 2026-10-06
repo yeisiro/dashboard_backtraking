@@ -1343,6 +1343,33 @@ button {
 .kd-flow-item.pos { color: var(--green); }
 .kd-flow-item.neg { color: var(--red); }
 .kd-flow-lbl { color: var(--text-muted); font-weight: 500; }
+
+/* Nested context metrics inside a subcard (e.g. rates inside Wasted Rate),
+   each with a mini trendline + change value. */
+.kd-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.kd-sub-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.kd-sub-lbl { font-size: 11.5px; color: var(--text-muted); font-weight: 500; text-align: left; }
+.kd-sub-val { font-size: 12.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.kd-sub-delta {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.kd-sub-delta.pos { color: var(--green); }
+.kd-sub-delta.neg { color: var(--red); }
+.kd-sub-delta.warn { color: var(--orange); }
+.spark { display: block; flex-shrink: 0; }
 .kd-chart-box {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -2794,6 +2821,32 @@ button {
 .kpi-flow-item.pos { color: var(--green); }
 .kpi-flow-item.neg { color: var(--red); }
 .kpi-flow-lbl { color: var(--text-muted); font-weight: 500; }
+
+/* Nested context metrics under a KPI's main value on the Overview card, each
+   with a mini trendline + change value (e.g. the rates under Wasted Rate). */
+.kpi-sub {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.kpi-sub-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.kpi-sub-lbl { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.kpi-sub-val { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.kpi-sub-delta {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.kpi-sub-delta.pos { color: var(--green); }
+.kpi-sub-delta.neg { color: var(--red); }
+.kpi-sub-delta.warn { color: var(--orange); }
 
 /* ---------- two-column grids ---------- */
 .grid-2 {
