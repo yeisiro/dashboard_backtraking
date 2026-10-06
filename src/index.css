@@ -3228,6 +3228,37 @@ button {
   background: var(--surface-3);
 }
 .fd-repo-toggle svg { opacity: 0.8; }
+
+/* My Loads entry button (backlog of loads missing real stops) + count badge. */
+.fd-myloads {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--blue) 40%, var(--border-strong));
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  color: var(--blue);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fd-myloads:hover { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+.fd-myloads + .fd-repo-toggle { margin-left: 10px; }
+.fd-myloads-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+}
 .fd-repo-switch {
   width: 30px;
   height: 17px;
@@ -7347,6 +7378,31 @@ button {
 }
 .sd-loading svg { color: var(--teal); }
 .sd-loading-sub { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+/* Proactive suggestion banner (above the map): a My Loads load with no real
+   stops falls in this deadhead's interval — place it on the trail. */
+.sd-suggest {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--border-strong));
+  border-radius: 12px; padding: 10px 13px;
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+}
+.sd-suggest.active { border-color: color-mix(in srgb, var(--green) 50%, var(--border-strong)); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.sd-suggest-icon { flex-shrink: 0; color: var(--blue); }
+.sd-suggest.active .sd-suggest-icon { color: var(--green); }
+.sd-suggest-text { flex: 1; min-width: 180px; font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+.sd-suggest-text b { color: var(--text); }
+.sd-suggest-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.sd-suggest-go {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 6px 12px; border-radius: 9px; border: none;
+  background: var(--blue); color: var(--bg); font-size: 12px; font-weight: 800;
+}
+.sd-suggest-go:hover { filter: brightness(1.08); }
+.sd-suggest-cancel {
+  padding: 6px 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: transparent; color: var(--text-dim); font-size: 12px; font-weight: 700;
+}
+.sd-suggest-cancel:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 .sd-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .sd-foot-summary { font-size: 12.5px; color: var(--text-dim); }
 .sd-foot-summary b { font-variant-numeric: tabular-nums; color: var(--text); }
@@ -7368,6 +7424,97 @@ button {
 .sd-cut:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 .sd-cut:not(:disabled):hover { filter: brightness(1.08); }
 .sd-approve:disabled { opacity: 0.5; cursor: default; }
+
+/* ── My Loads · Assign real stops modal ── */
+.ml-modal { width: 1040px; max-width: 96vw; }
+.ml-body { display: grid; grid-template-columns: 320px 1fr; min-height: 540px; }
+.ml-list {
+  border-right: 1px solid var(--border);
+  padding: 16px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; max-height: 620px;
+}
+.ml-list-head { font-size: 13px; font-weight: 800; color: var(--text); }
+.ml-list-sub { margin: 0 0 4px; font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+.ml-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 10px; border-radius: 10px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.ml-row:hover { background: var(--surface-3); }
+.ml-row.sel { border-color: color-mix(in srgb, var(--blue) 55%, transparent); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.ml-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ml-row-ref { font-size: 12.5px; font-weight: 800; color: var(--text); }
+.ml-row-lane { font-size: 11.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-row-meta { font-size: 11px; color: var(--text-muted); }
+.ml-row-arrow { color: var(--text-muted); flex-shrink: 0; }
+.ml-miss {
+  flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--orange) 16%, transparent); color: var(--orange);
+}
+.ml-miss-both { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+.ml-recent-head { margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
+.ml-recent-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--green) 8%, transparent); border: 1px solid color-mix(in srgb, var(--green) 22%, transparent);
+}
+.ml-undo {
+  margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: transparent; color: var(--text-dim);
+}
+.ml-undo:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+.ml-empty { font-size: 12.5px; color: var(--text-muted); padding: 20px 6px; line-height: 1.5; }
+
+.ml-pane { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ml-pane-empty { align-items: center; justify-content: center; color: var(--text-muted); gap: 10px; font-size: 13px; }
+.ml-pane-head { display: flex; flex-direction: column; gap: 3px; }
+.ml-pane-ref { font-size: 13.5px; font-weight: 800; color: var(--text); }
+.ml-pane-prompt { font-size: 12px; color: var(--blue); font-weight: 600; }
+.ml-range { display: flex; align-items: center; gap: 10px; }
+.ml-range-lbl { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ml-range-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-dim);
+  font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 8px; cursor: pointer;
+}
+.ml-range-btn:hover { color: var(--text); background: var(--surface-3); }
+.ml-map {
+  position: relative; height: 330px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--bg); cursor: crosshair;
+}
+.ml-stops { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ml-card {
+  border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; background: var(--surface-2);
+}
+.ml-card.set { background: var(--surface-3); }
+.ml-card-top { display: flex; align-items: center; gap: 7px; }
+.ml-card-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ml-card-label { font-size: 12px; font-weight: 800; color: var(--text); }
+.ml-card-detected {
+  font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green);
+}
+.ml-card-edit {
+  margin-left: auto; font-size: 11px; font-weight: 700; color: var(--blue);
+  background: transparent; border: none; cursor: pointer; padding: 0;
+}
+.ml-card-body { margin-top: 6px; display: flex; flex-direction: column; gap: 1px; }
+.ml-card-street { font-size: 12.5px; color: var(--text); }
+.ml-card-city { font-size: 11.5px; color: var(--text-dim); }
+.ml-card-time { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ml-card-empty { margin-top: 6px; font-size: 11.5px; color: var(--text-muted); }
+.ml-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 2px; }
+.ml-foot-summary { font-size: 12.5px; color: var(--text-dim); }
+.ml-foot-summary b { font-variant-numeric: tabular-nums; color: var(--text); }
+.ml-foot-summary b.op { color: var(--green); }
+.ml-foot-summary b.kept { color: var(--red); }
+.ml-foot-summary b.next { color: var(--orange); }
+.ml-foot-actions { display: flex; gap: 10px; flex-shrink: 0; }
+@media (max-width: 900px) {
+  .ml-body { grid-template-columns: 1fr; }
+  .ml-list { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+}
 
 @media (max-width: 1200px) {
   .ld-top {

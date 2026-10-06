@@ -2,13 +2,14 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
-  Split, Layers, AlertTriangle, ShieldCheck, Undo2,
+  Split, Layers, AlertTriangle, ShieldCheck, Undo2, MapPin,
 } from 'lucide-react'
 import {
   tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
-  DH_APPROVAL_THRESHOLD, type DhApprovalReason,
-  type TripRow, type RepositionRow, type Goal,
+  DH_APPROVAL_THRESHOLD, needsRealStops, makeStopPoint, type DhApprovalReason,
+  type TripRow, type RepositionRow, type Goal, type StopPoint,
 } from '../data'
+import MyLoadsModal, { type AssignMiles } from './MyLoadsModal'
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
@@ -1018,6 +1019,12 @@ function TripsTable({
   // assign a run to the neighbouring load's deadhead. Seeded from data.
   const [opLegs, setOpLegs] = useState<RepositionRow[]>(repositionRows)
   const [gapDrawer, setGapDrawer] = useState<string | null>(null) // gapId being managed
+  // My Loads: the backlog modal + the loadRefs completed this session (kept so
+  // the "Recently completed" list can revert them). preAssignRef snapshots the
+  // rows an assignment touched, so a revert restores them exactly.
+  const [myLoadsOpen, setMyLoadsOpen] = useState(false)
+  const [recentCompleted, setRecentCompleted] = useState<string[]>([])
+  const preAssignRef = useRef<Record<string, TripRow[]>>({})
   const [opToast, setOpToast] = useState<{ msg: string; undo?: () => void } | null>(null)
   // Show a toast; pass `undo` to render an inline Undo (passive safety net).
   const toast = (msg: string, undo?: () => void) => setOpToast({ msg, undo })
@@ -1498,6 +1505,133 @@ function TripsTable({
     toast(`Split ${opMiles.toLocaleString()} mi off ${loadRef} into an operative trip`, () => reattachSplit(leg.id))
   }
 
+  // ── My Loads: assign real stops by hand ──────────────────────────────────
+  // The backlog = terminal loads missing a real stop AND whose pickup date is
+  // inside the active date window the user selected in the Toolbar. The mock
+  // trip dates are re-anchored so the newest sits at today, then spread back by
+  // their day offsets — so the data reads as recent and the Date filter scopes
+  // it (narrow the window and the older loads drop out of the backlog).
+  const { rangeDays, rangeEnd } = usePeriod()
+  const startOfDayLocal = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const newestTripVal = trips.reduce((m, t) => Math.max(m, dateSortValue(t.startDate)), 0)
+  const dataAnchor = startOfDayLocal(new Date())
+  const pickupDateOf = (t: TripRow) => {
+    const d = new Date(dataAnchor)
+    d.setDate(d.getDate() - (newestTripVal - dateSortValue(t.startDate)))
+    return d
+  }
+  const winEnd = startOfDayLocal(rangeEnd)
+  const winStart = new Date(winEnd)
+  winStart.setDate(winStart.getDate() - (rangeDays - 1))
+  const inActiveWindow = (t: TripRow) => {
+    const d = pickupDateOf(t)
+    return d >= winStart && d <= winEnd
+  }
+  const backlog = trips.filter((t) => needsRealStops(t) && inActiveWindow(t))
+  const recentLoads = recentCompleted
+    .map((ref) => trips.find((t) => t.loadRef === ref))
+    .filter((t): t is TripRow => !!t)
+  // Candidate loads for a DH's assign banner: same truck, still unassigned, and
+  // with a pickup date inside this deadhead's own interval (the week leading up
+  // to the current load's pickup — the empty approach we're looking at).
+  const dhCandidateLoads = (live: TripRow) =>
+    trips.filter((t) => {
+      if (t.truck !== live.truck || t.loadRef === live.loadRef || !needsRealStops(t)) return false
+      const daysBefore = Math.round((pickupDateOf(live).getTime() - pickupDateOf(t).getTime()) / 86400000)
+      return daysBefore >= 0 && daysBefore <= 7
+    })
+
+  // Set a load's real pickup/drop off. When both are present the loaded leg is
+  // pickup→dropoff, the pre-pickup trail becomes this load's deadhead, and the
+  // post-dropoff trail becomes the NEXT load's deadhead (backtracking). The
+  // touched rows are snapshotted so the assignment can be reverted exactly.
+  const assignRealStops = (loadRef: string, pickup?: StopPoint, dropoff?: StopPoint, m?: AssignMiles) => {
+    const load = trips.find((t) => t.loadRef === loadRef)
+    if (!load) return
+    const nextLoad =
+      m && dropoff
+        ? trips
+            .filter((t) => t.truck === load.truck && t.loadRef !== loadRef && dateSortValue(t.startDate) > dateSortValue(load.startDate))
+            .sort((a, b) => dateSortValue(a.startDate) - dateSortValue(b.startDate))[0]
+        : undefined
+    preAssignRef.current[loadRef] = [load, ...(nextLoad ? [nextLoad] : [])].map((t) => ({ ...t }))
+
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.loadRef === loadRef) {
+          const base = { ...t, realPickup: pickup, realDropoff: dropoff }
+          if (!m) return base
+          const totalMiles = m.thisDH + m.loaded
+          const dh = totalMiles > 0 ? round1((m.thisDH / totalMiles) * 100) : 0
+          return { ...base, loadedMiles: m.loaded, totalMiles, deadheadPct: dh, dhMilesPct: dh }
+        }
+        if (m && nextLoad && t.loadRef === nextLoad.loadRef) {
+          const totalMiles = t.totalMiles + m.nextDH
+          return {
+            ...t,
+            totalMiles,
+            deadheadPct: totalMiles > 0 ? round1(((totalMiles - t.loadedMiles) / totalMiles) * 100) : 0,
+          }
+        }
+        return t
+      }),
+    )
+    const complete = !!pickup && !!dropoff
+    if (complete) setRecentCompleted((prev) => (prev.includes(loadRef) ? prev : [loadRef, ...prev]))
+    toast(
+      complete ? `Real stops assigned to ${loadRef}` : `Saved a real stop on ${loadRef}`,
+      () => clearRealStops(loadRef),
+    )
+  }
+
+  // From the DH modal: part of a load's empty approach was really another
+  // backlog load's haul. Assign that stretch as the target's real stops (so it
+  // leaves the backlog) and remove those miles from the current load's deadhead.
+  const assignDhStretch = (
+    currentRef: string,
+    targetRef: string,
+    pickup: { place: string; frac: number },
+    dropoff: { place: string; frac: number },
+    stretchMiles: number,
+  ) => {
+    const target = trips.find((t) => t.loadRef === targetRef)
+    const current = trips.find((t) => t.loadRef === currentRef)
+    if (!target || !current) return
+    const pu = makeStopPoint(pickup.place, target.startDate, 8, pickup.frac, `${targetRef}-dhpu`)
+    const dropo = makeStopPoint(dropoff.place, target.startDate, 16, dropoff.frac, `${targetRef}-dhdo`)
+    preAssignRef.current[targetRef] = [target, current].map((t) => ({ ...t }))
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.loadRef === targetRef) {
+          const totalMiles = Math.max(t.totalMiles, stretchMiles)
+          const dh = totalMiles > 0 ? round1(((totalMiles - stretchMiles) / totalMiles) * 100) : 0
+          return { ...t, realPickup: pu, realDropoff: dropo, loadedMiles: stretchMiles, totalMiles, deadheadPct: dh, dhMilesPct: dh }
+        }
+        if (t.loadRef === currentRef) {
+          const totalMiles = Math.max(t.loadedMiles, t.totalMiles - stretchMiles)
+          return { ...t, totalMiles, deadheadPct: totalMiles > 0 ? round1(((totalMiles - t.loadedMiles) / totalMiles) * 100) : 0 }
+        }
+        return t
+      }),
+    )
+    setRecentCompleted((prev) => (prev.includes(targetRef) ? prev : [targetRef, ...prev]))
+    setDhAdjust(null)
+    toast(`Assigned ${stretchMiles.toLocaleString()} mi to ${targetRef} · removed from ${currentRef}'s deadhead`, () =>
+      clearRealStops(targetRef),
+    )
+  }
+
+  // Revert an assignment: restore the exact snapshot (or just clear the stops).
+  const clearRealStops = (loadRef: string) => {
+    const snap = preAssignRef.current[loadRef]
+    setTrips((prev) =>
+      prev.map((t) => (snap ? snap.find((s) => s.loadRef === t.loadRef) ?? t : t.loadRef === loadRef ? { ...t, realPickup: undefined, realDropoff: undefined } : t)),
+    )
+    delete preAssignRef.current[loadRef]
+    setRecentCompleted((prev) => prev.filter((r) => r !== loadRef))
+    toast(`Reverted real stops on ${loadRef}`)
+  }
+
   // Cells for every column, rendered in whatever order columnOrder says.
   const renderCell = (key: ColId, r: TripRow) => {
     switch (key) {
@@ -1973,6 +2107,15 @@ function TripsTable({
           </div>
         )}
         <button
+          className="fd-myloads cf-tip"
+          onClick={() => setMyLoadsOpen(true)}
+          data-tip="Loads whose real pickup / drop off weren't auto-detected — assign them by hand to complete the timeline"
+        >
+          <MapPin size={14} />
+          My Loads
+          {backlog.length > 0 && <span className="fd-myloads-badge">{backlog.length}</span>}
+        </button>
+        <button
           className={`fd-repo-toggle cf-tip ${showReposition ? 'on' : ''}`}
           role="switch"
           aria-checked={showReposition}
@@ -2039,9 +2182,22 @@ function TripsTable({
             onSplit={(opMiles, opCost, opLeak, label) => splitDh(live.loadRef, opMiles, opCost, opLeak, label)}
             onApprove={(reason, note) => { approveDh(live.loadRef, reason, note); setDhAdjust(null) }}
             onReopen={() => { reopenDh(live.loadRef); setDhAdjust(null) }}
+            candidateLoads={dhCandidateLoads(live)}
+            onAssignToLoad={(targetRef, pickup, dropoff, stretchMiles) =>
+              assignDhStretch(live.loadRef, targetRef, pickup, dropoff, stretchMiles)
+            }
           />
         )
       })()}
+      {myLoadsOpen && (
+        <MyLoadsModal
+          backlog={backlog}
+          recent={recentLoads}
+          onAssign={assignRealStops}
+          onClear={clearRealStops}
+          onClose={() => setMyLoadsOpen(false)}
+        />
+      )}
       {selectedMove && (
         <TripDetailModal trip={repoAsTrip(selectedMove)} repo onClose={() => setSelectedMove(null)} />
       )}

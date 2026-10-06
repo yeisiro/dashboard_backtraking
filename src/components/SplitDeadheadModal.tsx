@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Scissors, ShieldCheck, Check, Flag, Truck, RefreshCw } from 'lucide-react'
+import { X, Scissors, ShieldCheck, Check, Flag, Truck, RefreshCw, MapPin } from 'lucide-react'
 import {
   projectCity, splitLane, hashStr, seededRandom, buildRoutePoints, pointAtFraction,
   NATION_PATH, STATE_MESH_PATH,
@@ -30,6 +30,8 @@ export default function SplitDeadheadModal({
   onSplit,
   onApprove,
   onReopen,
+  candidateLoads = [],
+  onAssignToLoad,
 }: {
   trip: TripRow
   dhThreshold: number
@@ -37,6 +39,15 @@ export default function SplitDeadheadModal({
   onSplit: (opMiles: number, opCost: number, opLeak: number, label: string) => void
   onApprove: (reason: DhApprovalReason, note: string) => void
   onReopen?: () => void
+  // My Loads without real stops on this truck whose date overlaps the DH — the
+  // operator can say part of this "empty" approach was actually that load.
+  candidateLoads?: TripRow[]
+  onAssignToLoad?: (
+    targetRef: string,
+    pickup: { place: string; frac: number },
+    dropoff: { place: string; frac: number },
+    stretchMiles: number,
+  ) => void
 }) {
   const dhMiles = Math.round(trip.totalMiles - trip.loadedMiles)
   const [pickup] = splitLane(trip.lane)
@@ -81,7 +92,27 @@ export default function SplitDeadheadModal({
   const [approving, setApproving] = useState(false)
   const [reason, setReason] = useState<DhApprovalReason | null>(null)
   const [note, setNote] = useState('')
-  const [busy, setBusy] = useState<'split' | 'approve' | null>(null)
+  const [busy, setBusy] = useState<'split' | 'approve' | 'assign' | null>(null)
+
+  // Assign-to-load mode: pick a candidate load, then two stops that bound the
+  // stretch of this "empty" approach that was really that load's haul.
+  const [assignTo, setAssignTo] = useState<string | null>(null)
+  const [aPickId, setAPickId] = useState<string | null>(null)
+  const [aDropId, setADropId] = useState<string | null>(null)
+  const aPick = stops.find((s) => s.id === aPickId) ?? null
+  const aDrop = stops.find((s) => s.id === aDropId) ?? null
+  const stretchMiles = aPick && aDrop ? Math.round(dhMiles * Math.abs(aDrop.frac - aPick.frac)) : 0
+  const pickAssignStop = (s: (typeof stops)[number]) => {
+    if (!aPickId) { setAPickId(s.id); return }
+    if (!aDropId) {
+      if (s.id === aPickId) return
+      const pf = stops.find((x) => x.id === aPickId)!.frac
+      if (s.frac < pf) { setADropId(aPickId); setAPickId(s.id) } else setADropId(s.id)
+      return
+    }
+    setAPickId(s.id); setADropId(null)
+  }
+  const exitAssign = () => { setAssignTo(null); setAPickId(null); setADropId(null) }
 
   const sel = stops.find((s) => s.id === selId) ?? null
   const opMiles = sel ? sel.milesFromStart : 0
@@ -116,6 +147,14 @@ export default function SplitDeadheadModal({
     setBusy('approve')
     setTimeout(() => onApprove(reason, note), 900)
   }
+  const doAssign = () => {
+    if (!assignTo || !aPick || !aDrop) return
+    setBusy('assign')
+    setTimeout(
+      () => onAssignToLoad?.(assignTo, { place: aPick.place, frac: aPick.frac }, { place: aDrop.place, frac: aDrop.frac }, stretchMiles),
+      900,
+    )
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -141,6 +180,47 @@ export default function SplitDeadheadModal({
             where and when the truck stopped, then cut the deadhead there — everything before the cut
             becomes an operative trip.
           </p>
+
+          {/* Proactive suggestion: a My Loads load with no real stops falls in
+              this deadhead's interval — maybe this "empty" stretch was that load.
+              The operator can place it on the polyline instead of cutting a DH. */}
+          {candidateLoads.length > 0 && (
+            <div className={`sd-suggest ${assignTo ? 'active' : ''}`}>
+              <MapPin size={15} className="sd-suggest-icon" />
+              {assignTo ? (
+                <span className="sd-suggest-text">
+                  {!aPick
+                    ? <>Tap the <b>real pickup</b> of <b>{assignTo}</b> on the trail.</>
+                    : !aDrop
+                      ? <>Now tap the <b>real drop off</b> of <b>{assignTo}</b> (after the pickup).</>
+                      : <><b>{miles(stretchMiles)}</b> of <b>{assignTo}</b> — assign it to take these miles out of the deadhead.</>}
+                </span>
+              ) : candidateLoads.length === 1 ? (
+                <span className="sd-suggest-text">
+                  <b>{candidateLoads[0].loadRef}</b> ({candidateLoads[0].lane}) has no real stops in this interval — this stretch may be that load.
+                </span>
+              ) : (
+                <span className="sd-suggest-text">
+                  {candidateLoads.length} loads on {trip.truck} have no real stops in this interval — place one on the trail.
+                </span>
+              )}
+              <div className="sd-suggest-actions">
+                {assignTo ? (
+                  <button className="sd-suggest-cancel" onClick={exitAssign}>Cancel</button>
+                ) : (
+                  candidateLoads.map((c) => (
+                    <button
+                      key={c.loadRef}
+                      className="sd-suggest-go"
+                      onClick={() => { setSelId(null); setAssignTo(c.loadRef); setAPickId(null); setADropId(null) }}
+                    >
+                      Locate {c.loadRef}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="sd-map">
             <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="sd-map-canvas" preserveAspectRatio="xMidYMid slice">
@@ -173,7 +253,9 @@ export default function SplitDeadheadModal({
               {/* Detected stops — all always visible as numbered points so it's
                   clear there are options; the picked one turns teal with scissors. */}
               {stops.map((s, i) => {
-                const on = selId === s.id
+                const isPick = !!assignTo && aPickId === s.id
+                const isDrop = !!assignTo && aDropId === s.id
+                const on = assignTo ? isPick || isDrop : selId === s.id
                 const show = on || hoverId === s.id
                 // Location-first card: no branded place name — geographic address
                 // (street, city, ZIP, country), stop time, and miles from the start
@@ -191,20 +273,24 @@ export default function SplitDeadheadModal({
                 const cw = Math.max(...cardLines.map((l) => l.t.length)) * 0.55 * fs + pad * 2
                 const ch = pad * 2 + lineH * cardLines.length
                 const R = r * (on ? 1.4 : 1.1)
-                // Available points are blue; the selected cut point is green.
-                const accent = on ? 'var(--green)' : 'var(--blue)'
+                // Cut mode: available points blue, picked cut point green. Assign
+                // mode: pickup green, drop off red, others blue.
+                const accent = assignTo ? (isDrop ? 'var(--red)' : 'var(--green)') : on ? 'var(--green)' : 'var(--blue)'
                 return (
                   <g key={s.id} style={{ cursor: 'pointer' }}
                     onMouseEnter={() => setHoverId(s.id)} onMouseLeave={() => setHoverId(null)}
-                    onClick={(e) => { e.stopPropagation(); setSelId(s.id) }}>
+                    onClick={(e) => { e.stopPropagation(); assignTo ? pickAssignStop(s) : setSelId(s.id) }}>
                     {/* Soft halo so the point pops off the dark map. */}
                     <circle cx={s.pos[0]} cy={s.pos[1]} r={R * 1.55} fill={accent} opacity={on ? 0.3 : 0.16} />
                     <circle cx={s.pos[0]} cy={s.pos[1]} r={R}
-                      fill={on ? 'var(--green)' : 'var(--surface-3)'} stroke={accent} strokeWidth={vbW * 0.006} />
-                    {on ? (
+                      fill={on ? accent : 'var(--surface-3)'} stroke={accent} strokeWidth={vbW * 0.006} />
+                    {on && !assignTo ? (
                       <g transform={`translate(${s.pos[0] - R * 0.62},${s.pos[1] - R * 0.62})`}>
                         <Scissors size={R * 1.24} color="var(--bg)" strokeWidth={2.6} />
                       </g>
+                    ) : on && assignTo ? (
+                      <text x={s.pos[0]} y={s.pos[1]} dominantBaseline="central" textAnchor="middle"
+                        fill="var(--bg)" fontSize={R * 1.0} fontWeight={800}>{isDrop ? 'D' : 'P'}</text>
                     ) : (
                       <text x={s.pos[0]} y={s.pos[1]} dominantBaseline="central" textAnchor="middle"
                         fill="var(--blue)" fontSize={R * 1.15} fontWeight={800}>{i + 1}</text>
@@ -229,31 +315,54 @@ export default function SplitDeadheadModal({
             {busy && (
               <div className="sd-loading">
                 <RefreshCw size={22} className="refresh-spin" />
-                <span>{busy === 'split' ? 'Splitting the deadhead…' : 'Approving…'}</span>
+                <span>{busy === 'split' ? 'Splitting the deadhead…' : busy === 'assign' ? 'Assigning to the load…' : 'Approving…'}</span>
                 <span className="sd-loading-sub">Recomputing the load and syncing trips</span>
               </div>
             )}
           </div>
 
           <div className="sd-foot">
-            <div className="sd-foot-summary">
-              {sel ? (
-                <span>
-                  Cut at <b>{sel.label}</b> → <b className="op">{miles(opMiles)}</b> operative trip · {' '}
-                  <b className="kept">{miles(keptDh)}</b> stays with the load ({newDhPct}% DH) · saves {money(opCost)} off the load
-                </span>
-              ) : (
-                <span className="fd-dim">Pick a stop on the map to cut the deadhead, or approve it as-is.</span>
-              )}
-            </div>
-            <div className="sd-foot-actions">
-              <button className="sd-approve" onClick={() => setApproving(true)} disabled={!!busy}>
-                <ShieldCheck size={14} /> Approve as-is
-              </button>
-              <button className="sd-cut" disabled={!sel || !!busy} onClick={doSplit}>
-                <Check size={15} strokeWidth={3} /> Save changes
-              </button>
-            </div>
+            {assignTo ? (
+              <>
+                <div className="sd-foot-summary">
+                  {aPick && aDrop ? (
+                    <span>
+                      Assign <b className="op">{miles(stretchMiles)}</b> to <b>{assignTo}</b> · removed from{' '}
+                      {trip.loadRef}'s deadhead
+                    </span>
+                  ) : (
+                    <span className="fd-dim">Mark the pickup and drop off of {assignTo} on the trail.</span>
+                  )}
+                </div>
+                <div className="sd-foot-actions">
+                  <button className="sd-approve" onClick={exitAssign} disabled={!!busy}>Cancel</button>
+                  <button className="sd-cut" disabled={!aPick || !aDrop || !!busy} onClick={doAssign}>
+                    <Check size={15} strokeWidth={3} /> Assign to {assignTo}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="sd-foot-summary">
+                  {sel ? (
+                    <span>
+                      Cut at <b>{sel.label}</b> → <b className="op">{miles(opMiles)}</b> operative trip · {' '}
+                      <b className="kept">{miles(keptDh)}</b> stays with the load ({newDhPct}% DH) · saves {money(opCost)} off the load
+                    </span>
+                  ) : (
+                    <span className="fd-dim">Pick a stop on the map to cut the deadhead, or approve it as-is.</span>
+                  )}
+                </div>
+                <div className="sd-foot-actions">
+                  <button className="sd-approve" onClick={() => setApproving(true)} disabled={!!busy}>
+                    <ShieldCheck size={14} /> Approve as-is
+                  </button>
+                  <button className="sd-cut" disabled={!sel || !!busy} onClick={doSplit}>
+                    <Check size={15} strokeWidth={3} /> Save changes
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -979,6 +979,25 @@ export interface TripRow {
   dhApproved?: boolean
   dhApprovalReason?: DhApprovalReason
   dhApprovalNote?: string
+  // Real stops detected from the ELD/GPS trail. When auto-detection fails for a
+  // terminal load (delivered/invoiced/paid), one or both are undefined and the
+  // load lands in the My Loads backlog so the operator can assign them by hand.
+  // Once both are set the load's loaded miles span realPickup → realDropoff;
+  // the trail before the pickup is this load's deadhead and the trail after the
+  // dropoff is the NEXT load's deadhead (backtracking). frac is the point's
+  // position (0..1) along the detected approach polyline.
+  realPickup?: StopPoint
+  realDropoff?: StopPoint
+}
+
+// A detected (or manually assigned) stop along the GPS trail.
+export interface StopPoint {
+  street: string
+  city: string
+  zip: string
+  country: string
+  time: string // human-readable timestamp, e.g. "May 11 · 9:15 AM"
+  frac: number // position along the approach polyline (0..1)
 }
 
 // Deadhead above this (miles) trips the "Pending approval" review flag.
@@ -993,6 +1012,56 @@ export const DH_APPROVAL_REASONS = [
   'Other',
 ] as const
 export type DhApprovalReason = (typeof DH_APPROVAL_REASONS)[number]
+
+// ── Real stops (My Loads backlog) ────────────────────────────────────────────
+// Most loads come with both real stops detected. A handful seed the backlog:
+// their auto-detection "failed", so one or both stops are cleared and the
+// operator assigns them by hand (keyed by loadRef).
+export const SEED_MISSING_REAL_STOPS: Record<string, 'pickup' | 'dropoff' | 'both'> = {
+  L40012003: 'both',
+  L40012006: 'dropoff',
+  L40012009: 'both',
+  L40012012: 'pickup',
+  L40012016: 'dropoff',
+  L40012032: 'both', // #2210's prior load — candidate for L40012009's DH flow
+}
+
+const STOP_STREETS = [
+  '4820 I-10 E Frontage Rd', '1200 NE Evangeline Thruway', '255 State Hwy 75 N',
+  '5660 Rangeline Rd', '9350 Canal Rd', '58881 Airport Rd', '700 Terminal Dr', '4100 Industrial Blvd',
+]
+function hashStopSeed(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h
+}
+// Build a detected StopPoint for a city label, seeded so it's stable per load.
+export function makeStopPoint(cityLabel: string, date: string, hour: number, frac: number, seedKey: string): StopPoint {
+  const h = hashStopSeed(seedKey)
+  const hr12 = ((hour + 11) % 12) + 1
+  const mm = h % 60
+  const time = `${date} · ${hr12}:${String(mm).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
+  return {
+    street: STOP_STREETS[h % STOP_STREETS.length],
+    city: cityLabel,
+    zip: String(10000 + (h % 89999)),
+    country: 'United States',
+    time,
+    frac,
+  }
+}
+// A terminal load missing one/both real stops belongs in the My Loads backlog.
+export function needsRealStops(t: TripRow): boolean {
+  const terminal = t.status === 'delivered' || t.status === 'invoiced' || t.status === 'paid'
+  return terminal && (!t.realPickup || !t.realDropoff)
+}
+// Which stop(s) a backlog load is missing — drives what the assign modal asks for.
+export function missingRealStops(t: TripRow): 'pickup' | 'dropoff' | 'both' | null {
+  if (!t.realPickup && !t.realDropoff) return 'both'
+  if (!t.realPickup) return 'pickup'
+  if (!t.realDropoff) return 'dropoff'
+  return null
+}
 
 interface TripBase {
   truck: string
@@ -1027,11 +1096,24 @@ function buildTrip(b: TripBase, index: number): TripRow {
   const dhPct = round1(((b.totalMiles - b.loadedMiles) / b.totalMiles) * 100)
   const totalCost = Math.round(b.cost * 1.08)
   const totalExcessCost = totalCost - b.optimalCost
+  const loadRef = 'L' + (40012001 + index)
+  // Real stops: detected for most loads (from the lane endpoints), but cleared
+  // for the seeded backlog loads so My Loads has something to resolve.
+  const [origin, dest] = b.lane.split(' → ')
+  const missing = SEED_MISSING_REAL_STOPS[loadRef]
+  const realPickup =
+    missing === 'pickup' || missing === 'both'
+      ? undefined
+      : makeStopPoint(origin ?? b.lane, b.startDate, 7, 0.35, `${loadRef}-pu`)
+  const realDropoff =
+    missing === 'dropoff' || missing === 'both'
+      ? undefined
+      : makeStopPoint(dest ?? b.lane, b.endDate, 15, 0.95, `${loadRef}-do`)
   return {
     ...b,
     score: 0, // filled in by computeScores once the full set is known
     driver: driverForIndex(index),
-    loadRef: 'L' + (40012001 + index),
+    loadRef,
     status: b.status ?? 'delivered',
     profit: b.income - b.cost,
     wastedRpmPct: round1(((b.negotiatedRpm - b.effectiveRpm) / b.negotiatedRpm) * 100),
@@ -1041,6 +1123,8 @@ function buildTrip(b: TripBase, index: number): TripRow {
     dhMilesPct: dhPct,
     deadheadPct: dhPct,
     idlePct: round1((b.idleHours / (b.effectiveHours + b.idleHours)) * 100),
+    realPickup,
+    realDropoff,
   }
 }
 
@@ -1120,6 +1204,10 @@ const TRIP_BASE: TripBase[] = [
   { truck: '#5544', cls: 'D', startDate: 'May 15', endDate: 'May 16', lane: 'Billings, MT → Cheyenne, WY', band: 'worst', status: 'paid', income: 480, negotiatedRpm: 2.10, executedRpm: 1.82, effectiveRpm: 1.55, cost: 620, optimalCost: 520, totalMiles: 470, loadedMiles: 260, effectiveHours: 10.5, idleHours: 3.8, mpg: 5.1, missedFuelSavings: -195, actualSaving: 60, adherence: 52.0, planAdherence: 46.5, wastedRate: 13.4 },
   { truck: '#6289', cls: 'D', startDate: 'May 15', endDate: 'May 15', lane: 'Portland, ME → Manchester, NH', band: 'worst', status: 'invoiced', income: 350, negotiatedRpm: 2.05, executedRpm: 1.78, effectiveRpm: 1.50, cost: 430, optimalCost: 380, totalMiles: 340, loadedMiles: 175, effectiveHours: 7.6, idleHours: 2.9, mpg: 5.0, missedFuelSavings: -140, actualSaving: 45, adherence: 50.5, planAdherence: 45.0, wastedRate: 14.2 },
   { truck: '#7788', cls: 'C', startDate: 'May 14', endDate: 'May 15', lane: 'Burlington, VT → Albany, NY', band: 'worst', status: 'paid', income: 500, negotiatedRpm: 2.20, executedRpm: 1.95, effectiveRpm: 1.68, cost: 560, optimalCost: 500, totalMiles: 300, loadedMiles: 170, effectiveHours: 6.4, idleHours: 2.2, mpg: 5.3, missedFuelSavings: -100, actualSaving: 65, adherence: 55.8, planAdherence: 50.2, wastedRate: 11.8 },
+  // #2210's prior load (same truck as L40012009) — seeded into the My Loads
+  // backlog so the DH flow on L40012009 can offer to assign part of its empty
+  // approach to this load.
+  { truck: '#2210', cls: 'D', startDate: 'May 9', endDate: 'May 10', lane: 'Jacksonville, FL → Miami, FL', status: 'delivered', income: 1150, negotiatedRpm: 2.40, executedRpm: 2.20, effectiveRpm: 2.00, cost: 620, optimalCost: 560, totalMiles: 360, loadedMiles: 330, effectiveHours: 7.2, idleHours: 1.1, mpg: 5.6, missedFuelSavings: -40, actualSaving: 120, adherence: 86.0, planAdherence: 82.0, wastedRate: 5.0 },
 ]
 
 export const tripRows: TripRow[] = computeScores(TRIP_BASE.map((b, i) => buildTrip(b, i)))
