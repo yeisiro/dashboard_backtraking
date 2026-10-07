@@ -1557,6 +1557,27 @@ function TripsTable({
   const recentLoads = recentCompleted
     .map((ref) => trips.find((t) => t.loadRef === ref))
     .filter((t): t is TripRow => !!t)
+  // The window a load's real stops may live in — bounded by the previous load's
+  // real drop off and the next load's real pickup (same truck), so a manually
+  // assigned stop can never overlap an adjacent load's. Falls back to the load's
+  // own day span when there's no neighbour on that side.
+  const dayDate = (s: string) => {
+    const [mon, d] = s.split(' ')
+    return new Date(2026, MONTH_INDEX[mon] ?? 0, Number(d) || 1)
+  }
+  const boundsFor = (load: TripRow): { start: Date; end: Date } => {
+    const same = trips.filter((t) => t.truck === load.truck && t.loadRef !== load.loadRef)
+    const prev = same
+      .filter((t) => dateSortValue(t.startDate) < dateSortValue(load.startDate))
+      .sort((a, b) => dateSortValue(b.startDate) - dateSortValue(a.startDate))[0]
+    const next = same
+      .filter((t) => dateSortValue(t.startDate) > dateSortValue(load.startDate))
+      .sort((a, b) => dateSortValue(a.startDate) - dateSortValue(b.startDate))[0]
+    const start = prev ? new Date(dayDate(prev.endDate).getTime() + 18 * 3600000) : dayDate(load.startDate)
+    let end = next ? new Date(dayDate(next.startDate).getTime() + 6 * 3600000) : new Date(dayDate(load.endDate).getTime() + 48 * 3600000)
+    if (end.getTime() - start.getTime() < 6 * 3600000) end = new Date(start.getTime() + 24 * 3600000)
+    return { start, end }
+  }
   // Candidate loads for a DH's assign banner: same truck, still unassigned, and
   // with a pickup date inside this deadhead's own interval (the week leading up
   // to the current load's pickup — the empty approach we're looking at).
@@ -2219,6 +2240,7 @@ function TripsTable({
         <MyLoadsModal
           backlog={backlog}
           recent={recentLoads}
+          boundsFor={boundsFor}
           onAssign={assignRealStops}
           onClear={clearRealStops}
           onClose={() => setMyLoadsOpen(false)}

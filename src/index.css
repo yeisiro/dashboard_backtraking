@@ -7565,23 +7565,39 @@ button {
 .ml-pane-prompt { font-size: 12px; color: var(--blue); font-weight: 600; }
 .ml-range { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ml-range-lbl { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-/* Manual start/end datetime pickers that bound the visible trail window. */
-.ml-range-field { display: inline-flex; align-items: center; gap: 7px; }
-.ml-range-lbl2 { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text-muted); }
 .ml-range-arrow { color: var(--text-muted); }
-.ml-range-field input[type="datetime-local"] {
-  color-scheme: dark;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 9px;
-  border-radius: 8px;
-  font-variant-numeric: tabular-nums;
+
+/* Compact trail date+time picker (1-month calendar popover). */
+.tdp-wrap { position: relative; }
+.tdp-trigger {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+  font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 9px; cursor: pointer;
 }
-.ml-range-field input[type="datetime-local"]:hover { background: var(--surface-3); }
-.ml-range-field input[type="datetime-local"]:focus { outline: none; border-color: color-mix(in srgb, var(--blue) 55%, var(--border-strong)); }
+.tdp-trigger:hover { background: var(--surface-3); }
+.tdp-trigger svg { color: var(--text-muted); }
+.tdp-lbl { font-size: 10.5px; font-weight: 800; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text-muted); }
+.tdp-trigger b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tdp-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  background: var(--surface-1, #141a1f); border: 1px solid var(--border-strong);
+  border-radius: 12px; padding: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  width: 260px;
+}
+.tdp-menu .df-cal { width: 100%; }
+.tdp-menu .df-day { font-size: 12px; }
+.df-day-off { opacity: 0.25; cursor: default; pointer-events: none; }
+.tdp-time {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.tdp-time span { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text-muted); }
+.tdp-time input[type="time"] {
+  color-scheme: dark;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+  font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 8px; font-variant-numeric: tabular-nums;
+}
+.tdp-time input[type="time"]:focus { outline: none; border-color: color-mix(in srgb, var(--blue) 55%, var(--border-strong)); }
 .ml-map {
   position: relative; height: 330px; border-radius: 14px; overflow: hidden;
   border: 1px solid var(--border); background: var(--bg); cursor: crosshair;

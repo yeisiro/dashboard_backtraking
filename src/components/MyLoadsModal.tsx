@@ -5,13 +5,9 @@ import {
   NATION_PATH, STATE_MESH_PATH,
 } from '../lib/mapGeo'
 import { makeStopPoint, missingRealStops, type StopPoint, type TripRow } from '../data'
+import TrailDatePicker from './TrailDatePicker'
 
 const miles = (n: number) => `${Math.round(n).toLocaleString()} mi`
-
-// Full GPS trail spans ~36h; the loaded leg sits in the middle third, with an
-// empty approach before and an empty departure after (backtracking).
-const TRAIL_MIN = 36 * 60
-const BASE_CLOCK_MIN = 2 * 60 // trail starts at ~2:00 AM of the pickup day
 
 // Density of the resampled trail — enough points to click anywhere on it.
 const TR_N = 60
@@ -25,12 +21,16 @@ export interface AssignMiles {
 export default function MyLoadsModal({
   backlog,
   recent,
+  boundsFor,
   onAssign,
   onClear,
   onClose,
 }: {
   backlog: TripRow[]
   recent: TripRow[]
+  // The trail window a load's real stops can live in: bounded by the previous
+  // load's real drop off and the next load's real pickup (no overlap).
+  boundsFor: (load: TripRow) => { start: Date; end: Date }
   onAssign: (loadRef: string, pickup: StopPoint | undefined, dropoff: StopPoint | undefined, m?: AssignMiles) => void
   onClear: (loadRef: string) => void
   onClose: () => void
@@ -106,7 +106,7 @@ export default function MyLoadsModal({
 
           {/* ── Right: map / assign ── */}
           {load ? (
-            <AssignPane key={load.loadRef} load={load} onAssign={onAssign} onClose={onClose} />
+            <AssignPane key={load.loadRef} load={load} bounds={boundsFor(load)} onAssign={onAssign} onClose={onClose} />
           ) : (
             <div className="ml-pane ml-pane-empty">
               <MapPin size={28} />
@@ -122,10 +122,12 @@ export default function MyLoadsModal({
 // ── The map/assign pane for one load ─────────────────────────────────────────
 function AssignPane({
   load,
+  bounds,
   onAssign,
   onClose,
 }: {
   load: TripRow
+  bounds: { start: Date; end: Date }
   onAssign: (loadRef: string, pickup: StopPoint | undefined, dropoff: StopPoint | undefined, m?: AssignMiles) => void
   onClose: () => void
 }) {
@@ -161,31 +163,18 @@ function AssignPane({
   // Mock total miles across the whole visible trail.
   const TRAIL_MILES = Math.round(Math.max(load.totalMiles, load.loadedMiles) * 1.4)
 
-  // Visible window (frac) into the trail. The user sets its start/end dates
-  // with the pickers below; the polyline + stops shown are that slice. The
-  // trail's abstract time is mapped to real dates so the pickers can address it.
+  // Visible window (frac) into the trail. The user sets its start/end with the
+  // date+time pickers below. The whole trail is bounded by the previous load's
+  // real drop off and the next load's real pickup (bounds.start / bounds.end),
+  // so any real stop assigned here can never overlap an adjacent load's.
   const [vis, setVis] = useState<[number, number]>([0.18, 0.82])
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const [monLbl, dayLbl] = load.startDate.split(' ')
-  const trailStart = new Date(2026, Math.max(0, MONTHS.indexOf(monLbl)), Number(dayLbl) || 1, 0, BASE_CLOCK_MIN)
-  const trailEnd = new Date(trailStart.getTime() + TRAIL_MIN * 60000)
-  const dateAt = (frac: number) => new Date(trailStart.getTime() + frac * TRAIL_MIN * 60000)
-  const fracOfDate = (d: Date) =>
-    Math.min(1, Math.max(0, (d.getTime() - trailStart.getTime()) / (TRAIL_MIN * 60000)))
+  const SPAN = Math.max(1, bounds.end.getTime() - bounds.start.getTime())
+  const dateAt = (frac: number) => new Date(bounds.start.getTime() + frac * SPAN)
+  const fracOfDate = (d: Date) => Math.min(1, Math.max(0, (d.getTime() - bounds.start.getTime()) / SPAN))
   const pad2 = (n: number) => String(n).padStart(2, '0')
-  const toInput = (d: Date) =>
-    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
   const MIN_GAP = 0.06 // keep a readable window: start/end can't collapse
-  const setStart = (str: string) => {
-    if (!str) return
-    const f = Math.min(fracOfDate(new Date(str)), vis[1] - MIN_GAP)
-    setVis([Math.max(0, f), vis[1]])
-  }
-  const setEnd = (str: string) => {
-    if (!str) return
-    const f = Math.max(fracOfDate(new Date(str)), vis[0] + MIN_GAP)
-    setVis([vis[0], Math.min(1, f)])
-  }
+  const setStart = (d: Date) => setVis(([, b]) => [Math.max(0, Math.min(fracOfDate(d), b - MIN_GAP)), b])
+  const setEnd = (d: Date) => setVis(([a]) => [a, Math.min(1, Math.max(fracOfDate(d), a + MIN_GAP))])
 
   // Detected candidate dwell stops along the trail (positions resolved via ptAt).
   const stops = useMemo(() => [0.22, 0.34, 0.5, 0.66, 0.78].map((f, i) => ({ id: `d${i}`, frac: f })), [])
@@ -204,13 +193,9 @@ function AssignPane({
     !pickupLocked && pickup === null ? 'pickup' : !dropoffLocked && dropoff === null ? 'dropoff' : null
 
   const timeAt = (frac: number) => {
-    const total = Math.round(frac * TRAIL_MIN) + BASE_CLOCK_MIN
-    const dayOff = Math.floor(total / 1440)
-    const mins = total % 1440
-    const h = Math.floor(mins / 60)
-    const m = mins % 60
-    const h12 = ((h + 11) % 12) + 1
-    return `${load.startDate}${dayOff ? ` +${dayOff}d` : ''} · ${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+    const d = dateAt(frac)
+    const h12 = ((d.getHours() + 11) % 12) + 1
+    return `${d.toLocaleString('en-US', { month: 'short', day: 'numeric' })} · ${h12}:${pad2(d.getMinutes())} ${d.getHours() < 12 ? 'AM' : 'PM'}`
   }
   const stopAt = (frac: number, kind: 'pickup' | 'dropoff'): StopPoint => {
     const city = frac < 0.5 ? origin : dest
@@ -282,27 +267,9 @@ function AssignPane({
       </div>
 
       <div className="ml-range">
-        <label className="ml-range-field">
-          <span className="ml-range-lbl2">From</span>
-          <input
-            type="datetime-local"
-            value={toInput(dateAt(vis[0]))}
-            min={toInput(trailStart)}
-            max={toInput(trailEnd)}
-            onChange={(e) => setStart(e.target.value)}
-          />
-        </label>
+        <TrailDatePicker label="From" value={dateAt(vis[0])} min={bounds.start} max={dateAt(vis[1] - MIN_GAP)} onChange={setStart} />
         <span className="ml-range-arrow">→</span>
-        <label className="ml-range-field">
-          <span className="ml-range-lbl2">To</span>
-          <input
-            type="datetime-local"
-            value={toInput(dateAt(vis[1]))}
-            min={toInput(trailStart)}
-            max={toInput(trailEnd)}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </label>
+        <TrailDatePicker label="To" value={dateAt(vis[1])} min={dateAt(vis[0] + MIN_GAP)} max={bounds.end} onChange={setEnd} />
       </div>
 
       <div className="ml-map">
