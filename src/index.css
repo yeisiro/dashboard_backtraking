@@ -7563,14 +7563,25 @@ button {
 .ml-pane-head { display: flex; flex-direction: column; gap: 3px; }
 .ml-pane-ref { font-size: 13.5px; font-weight: 800; color: var(--text); }
 .ml-pane-prompt { font-size: 12px; color: var(--blue); font-weight: 600; }
-.ml-range { display: flex; align-items: center; gap: 10px; }
+.ml-range { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ml-range-lbl { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.ml-range-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-dim);
-  font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 8px; cursor: pointer;
+/* Manual start/end datetime pickers that bound the visible trail window. */
+.ml-range-field { display: inline-flex; align-items: center; gap: 7px; }
+.ml-range-lbl2 { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text-muted); }
+.ml-range-arrow { color: var(--text-muted); }
+.ml-range-field input[type="datetime-local"] {
+  color-scheme: dark;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
 }
-.ml-range-btn:hover { color: var(--text); background: var(--surface-3); }
+.ml-range-field input[type="datetime-local"]:hover { background: var(--surface-3); }
+.ml-range-field input[type="datetime-local"]:focus { outline: none; border-color: color-mix(in srgb, var(--blue) 55%, var(--border-strong)); }
 .ml-map {
   position: relative; height: 330px; border-radius: 14px; overflow: hidden;
   border: 1px solid var(--border); background: var(--bg); cursor: crosshair;

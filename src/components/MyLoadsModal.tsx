@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { X, MapPin, Flag, Check, RefreshCw, Undo2, Minus, Plus, ChevronRight, RotateCcw } from 'lucide-react'
+import { X, MapPin, Flag, Check, RefreshCw, Undo2, ChevronRight, RotateCcw } from 'lucide-react'
 import {
   projectCity, splitLane, hashStr, seededRandom, buildRoutePoints, pointAtFraction,
   NATION_PATH, STATE_MESH_PATH,
@@ -161,11 +161,31 @@ function AssignPane({
   // Mock total miles across the whole visible trail.
   const TRAIL_MILES = Math.round(Math.max(load.totalMiles, load.loadedMiles) * 1.4)
 
-  // Visible window (frac). Starts around the loaded leg ± buffer; the stepper
-  // widens it to reveal more trail to assign from.
+  // Visible window (frac) into the trail. The user sets its start/end dates
+  // with the pickers below; the polyline + stops shown are that slice. The
+  // trail's abstract time is mapped to real dates so the pickers can address it.
   const [vis, setVis] = useState<[number, number]>([0.18, 0.82])
-  const widen = () => setVis(([a, b]) => [Math.max(0, a - 0.12), Math.min(1, b + 0.12)])
-  const narrow = () => setVis(([a, b]) => [Math.min(0.3, a + 0.12), Math.max(0.7, b - 0.12)])
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const [monLbl, dayLbl] = load.startDate.split(' ')
+  const trailStart = new Date(2026, Math.max(0, MONTHS.indexOf(monLbl)), Number(dayLbl) || 1, 0, BASE_CLOCK_MIN)
+  const trailEnd = new Date(trailStart.getTime() + TRAIL_MIN * 60000)
+  const dateAt = (frac: number) => new Date(trailStart.getTime() + frac * TRAIL_MIN * 60000)
+  const fracOfDate = (d: Date) =>
+    Math.min(1, Math.max(0, (d.getTime() - trailStart.getTime()) / (TRAIL_MIN * 60000)))
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const toInput = (d: Date) =>
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  const MIN_GAP = 0.06 // keep a readable window: start/end can't collapse
+  const setStart = (str: string) => {
+    if (!str) return
+    const f = Math.min(fracOfDate(new Date(str)), vis[1] - MIN_GAP)
+    setVis([Math.max(0, f), vis[1]])
+  }
+  const setEnd = (str: string) => {
+    if (!str) return
+    const f = Math.max(fracOfDate(new Date(str)), vis[0] + MIN_GAP)
+    setVis([vis[0], Math.min(1, f)])
+  }
 
   // Detected candidate dwell stops along the trail (positions resolved via ptAt).
   const stops = useMemo(() => [0.22, 0.34, 0.5, 0.66, 0.78].map((f, i) => ({ id: `d${i}`, frac: f })), [])
@@ -262,9 +282,27 @@ function AssignPane({
       </div>
 
       <div className="ml-range">
-        <button className="ml-range-btn" onClick={narrow} aria-label="Narrow range"><Minus size={13} /></button>
-        <span className="ml-range-lbl">{timeAt(vis[0])} → {timeAt(vis[1])}</span>
-        <button className="ml-range-btn" onClick={widen} aria-label="Widen range"><Plus size={13} /> more trail</button>
+        <label className="ml-range-field">
+          <span className="ml-range-lbl2">From</span>
+          <input
+            type="datetime-local"
+            value={toInput(dateAt(vis[0]))}
+            min={toInput(trailStart)}
+            max={toInput(trailEnd)}
+            onChange={(e) => setStart(e.target.value)}
+          />
+        </label>
+        <span className="ml-range-arrow">→</span>
+        <label className="ml-range-field">
+          <span className="ml-range-lbl2">To</span>
+          <input
+            type="datetime-local"
+            value={toInput(dateAt(vis[1]))}
+            min={toInput(trailStart)}
+            max={toInput(trailEnd)}
+            onChange={(e) => setEnd(e.target.value)}
+          />
+        </label>
       </div>
 
       <div className="ml-map">
