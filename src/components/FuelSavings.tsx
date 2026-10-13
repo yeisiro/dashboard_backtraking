@@ -1041,13 +1041,46 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<
     | { kind: 'state'; code: string; name: string; x: number; y: number; flipX: boolean }
-    | { kind: 'stop'; stop: FuelStop; x: number; y: number; flipX: boolean }
+    | { kind: 'station'; station: string; x: number; y: number; flipX: boolean }
     | null
   >(null)
+  const [selected, setSelected] = useState<string | null>(null)
 
   // Only stops whose truck ran a trip in the active class filter.
   const activeTrucks = useMemo(() => new Set(rows.map((r) => r.truck)), [rows])
   const stops = useMemo(() => fuelStops.filter((s) => activeTrucks.has(s.truck)), [activeTrucks])
+
+  const regionalOf = (s: FuelStop) => STATE_DIESEL[s.state] ?? s.pricePaid
+
+  // A station can collect several fill-ups across a wide window / many trucks,
+  // so the map plots ONE dot per Love's: size by total gallons, color by the
+  // gallon-weighted saving vs region. The per-stop detail lives in the panel.
+  const stations = useMemo(() => {
+    const m = new Map<string, FuelStop[]>()
+    stops.forEach((s) => {
+      const arr = m.get(s.station)
+      if (arr) arr.push(s)
+      else m.set(s.station, [s])
+    })
+    return [...m.values()].map((list) => {
+      const totalGallons = list.reduce((a, s) => a + s.gallons, 0)
+      const netSaved = list.reduce((a, s) => a + (regionalOf(s) - s.pricePaid) * s.gallons, 0)
+      const f = list[0]
+      return {
+        station: f.station,
+        address: f.address,
+        state: f.state,
+        lat: f.lat,
+        lon: f.lon,
+        stops: list,
+        totalGallons,
+        netSaved,
+        savedPerGal: totalGallons ? netSaved / totalGallons : 0,
+      }
+    })
+  }, [stops])
+
+  const selectedStation = selected ? stations.find((s) => s.station === selected) ?? null : null
 
   // Price scale bounds across every state we have a regional price for.
   const prices = Object.values(STATE_DIESEL)
@@ -1105,46 +1138,63 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
       svg.appendChild(g)
     })
 
-    // 2 ─ one dot per fuel stop at its real location.
-    stops.forEach((stop) => {
-      const xy = projection([stop.lon, stop.lat])
+    // 2 ─ one dot per station; size = total gallons, color = weighted saving.
+    stations.forEach((st) => {
+      const xy = projection([st.lon, st.lat])
       if (!xy) return
-      const regional = STATE_DIESEL[stop.state] ?? stop.pricePaid
-      const savings = regional - stop.pricePaid
-      const r = 5 + clamp01((stop.gallons - 110) / 100) * 7
-      const rgb = decisionRGB(savings)
+      const r = 5 + clamp01((st.totalGallons - 110) / 220) * 9
+      const rgb = decisionRGB(st.savedPerGal)
+      const isSel = selected === st.station
       const c = document.createElementNS(ns, 'circle')
       c.setAttribute('cx', String(xy[0]))
       c.setAttribute('cy', String(xy[1]))
       c.setAttribute('r', String(r))
       c.setAttribute('fill', rgba(rgb, 0.92))
-      c.setAttribute('stroke', 'rgba(255,255,255,0.9)')
-      c.setAttribute('stroke-width', '1.4')
+      c.setAttribute('stroke', isSel ? '#fff' : 'rgba(255,255,255,0.9)')
+      c.setAttribute('stroke-width', isSel ? '2.6' : '1.4')
       c.style.cursor = 'pointer'
       const updateHover = (e: MouseEvent) => {
         const wrapRect = wrapRef.current?.getBoundingClientRect()
         if (!wrapRect) return
         const x = e.clientX - wrapRect.left
         const y = e.clientY - wrapRect.top
-        setHover({ kind: 'stop', stop, x, y, flipX: x > wrapRect.width * 0.65 })
+        setHover({ kind: 'station', station: st.station, x, y, flipX: x > wrapRect.width * 0.65 })
       }
       c.addEventListener('mouseenter', updateHover)
       c.addEventListener('mousemove', updateHover)
-      c.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'stop' && p.stop.id === stop.id ? null : p)))
+      c.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'station' && p.station === st.station ? null : p)))
+      c.addEventListener('click', () => setSelected((prev) => (prev === st.station ? null : st.station)))
       svg.appendChild(c)
-    })
-  }, [stops])
 
-  const savedTotal = stops.reduce((sum, s) => sum + ((STATE_DIESEL[s.state] ?? s.pricePaid) - s.pricePaid) * s.gallons, 0)
+      // Count badge when a station has more than one fill-up in the window.
+      if (st.stops.length > 1) {
+        const badge = document.createElementNS(ns, 'text')
+        badge.setAttribute('x', String(xy[0] + r + 2))
+        badge.setAttribute('y', String(xy[1] - r + 1))
+        badge.setAttribute('font-size', '10')
+        badge.setAttribute('font-weight', '700')
+        badge.setAttribute('font-family', 'Inter, sans-serif')
+        badge.setAttribute('fill', 'rgba(255,255,255,0.92)')
+        badge.style.pointerEvents = 'none'
+        badge.textContent = `×${st.stops.length}`
+        svg.appendChild(badge)
+      }
+    })
+  }, [stations, selected])
+
+  const savedTotal = stations.reduce((sum, st) => sum + st.netSaved, 0)
 
   return (
     <section className="card tam-card">
       <div className="card-head">
         <span className="eyebrow">Fuel Stops</span>
-        <span className="fm-count">{stops.length} fill-up{stops.length === 1 ? '' : 's'}</span>
+        <span className="fm-count">
+          {stops.length} fill-up{stops.length === 1 ? '' : 's'} · {stations.length} station{stations.length === 1 ? '' : 's'}
+        </span>
       </div>
       <p className="tam-hint">
-        Where the fleet tanked. Dot color = price paid vs the state's regional diesel, size = gallons.{' '}
+        Where the fleet tanked, one dot per Love's. Color = price paid vs the state's regional diesel, size = gallons. Click a
+        station for its fill-ups.{' '}
         <strong>{savedTotal >= 0 ? `Net ${usd(savedTotal)} saved vs region` : `Net ${usd(-savedTotal)} over region`}.</strong>
       </p>
 
@@ -1158,7 +1208,7 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
 
       <div className="tam-body">
         <div className="tam-wrap" ref={wrapRef}>
-          <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fuel stops, colored by price paid vs region" />
+          <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fuel stops by station, colored by price paid vs region" />
 
           {hover && (
             <div
@@ -1178,27 +1228,81 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
                   </div>
                 </>
               ) : (() => {
-                const s = hover.stop
-                const regional = STATE_DIESEL[s.state] ?? s.pricePaid
-                const perGal = regional - s.pricePaid
-                const total = perGal * s.gallons
+                const st = stations.find((s) => s.station === hover.station)
+                if (!st) return null
+                const one = st.stops.length === 1 ? st.stops[0] : null
                 return (
                   <>
-                    <div className="tam-tooltip-title">{s.station}</div>
-                    <div className="fm-tip-addr">{s.address}</div>
-                    <div className="tam-tooltip-row"><span>Paid</span><span>${s.pricePaid.toFixed(2)}/gal</span></div>
-                    <div className="tam-tooltip-row"><span>Regional</span><span>${regional.toFixed(2)}/gal</span></div>
-                    <div className="tam-tooltip-row"><span>Gallons</span><span>{s.gallons}</span></div>
-                    <div className="tam-tooltip-row"><span>Local time</span><span>{s.localTime}</span></div>
+                    <div className="tam-tooltip-title">{st.station}</div>
+                    <div className="fm-tip-addr">{st.address}</div>
+                    <div className="tam-tooltip-row"><span>Fill-ups</span><span>{st.stops.length}</span></div>
+                    {one ? (
+                      <>
+                        <div className="tam-tooltip-row"><span>Paid</span><span>${one.pricePaid.toFixed(2)}/gal</span></div>
+                        <div className="tam-tooltip-row"><span>Regional</span><span>${regionalOf(one).toFixed(2)}/gal</span></div>
+                        <div className="tam-tooltip-row"><span>Gallons</span><span>{one.gallons}</span></div>
+                        <div className="tam-tooltip-row"><span>Local time</span><span>{one.localTime}</span></div>
+                      </>
+                    ) : (
+                      <div className="tam-tooltip-row"><span>Gallons</span><span>{st.totalGallons}</span></div>
+                    )}
                     <div className="tam-tooltip-row">
-                      <span>{perGal >= 0 ? 'Saved' : 'Overpaid'}</span>
-                      <span className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
-                        {usd(Math.abs(total))}
+                      <span>{st.netSaved >= 0 ? 'Saved' : 'Overpaid'}</span>
+                      <span className={st.netSaved >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
+                        {usd(Math.abs(st.netSaved))}
                       </span>
                     </div>
+                    {!one && <div className="fm-tip-cue">Click for the {st.stops.length} fill-ups</div>}
                   </>
                 )
               })()}
+            </div>
+          )}
+
+          {selectedStation && (
+            <div className="fm-panel">
+              <div className="fm-panel-head">
+                <div>
+                  <div className="fm-panel-title">{selectedStation.station}</div>
+                  <div className="fm-panel-addr">{selectedStation.address}</div>
+                </div>
+                <button className="cfm-x" onClick={() => setSelected(null)} aria-label="Close">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="fm-panel-sum">
+                <span>{selectedStation.stops.length} fill-up{selectedStation.stops.length === 1 ? '' : 's'}</span>
+                <span>{selectedStation.totalGallons} gal</span>
+                <span className={selectedStation.netSaved >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
+                  {selectedStation.netSaved >= 0 ? 'Saved ' : 'Over '}{usd(Math.abs(selectedStation.netSaved))}
+                </span>
+              </div>
+              <div className="fm-panel-list">
+                {selectedStation.stops
+                  .slice()
+                  .sort((a, b) => b.gallons - a.gallons)
+                  .map((s) => {
+                    const perGal = regionalOf(s) - s.pricePaid
+                    const saved = perGal * s.gallons
+                    return (
+                      <div className="fm-stop" key={s.id}>
+                        <div className="fm-stop-top">
+                          <span className="fm-stop-truck">{s.truck}</span>
+                          <span className="fm-stop-time">{s.localTime}</span>
+                        </div>
+                        <div className="fm-stop-row">
+                          <span>${s.pricePaid.toFixed(2)}/gal paid · ${regionalOf(s).toFixed(2)} region</span>
+                        </div>
+                        <div className="fm-stop-row">
+                          <span>{s.gallons} gal</span>
+                          <span className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
+                            {perGal >= 0 ? 'Saved ' : 'Over '}{usd(Math.abs(saved))}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
             </div>
           )}
         </div>

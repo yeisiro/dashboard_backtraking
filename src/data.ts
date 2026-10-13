@@ -1468,4 +1468,12 @@ export const fuelStops: FuelStop[] = [
   { id: 'F-28', truck: '#3301', cls: 'C', station: "Love's Travel Stop #301", address: '16751 E 32nd Ave, Aurora, CO 80011', city: 'Denver, CO', state: 'CO', lat: 39.74, lon: -104.99, gallons: 158, pricePaid: 4.07, localTime: 'May 12 · 8:05 AM MDT' },
   { id: 'F-29', truck: '#6120', cls: 'B', station: "Love's Travel Stop #788", address: '4505 S 108th St, Omaha, NE 68137', city: 'Omaha, NE', state: 'NE', lat: 41.26, lon: -95.93, gallons: 142, pricePaid: 3.72, localTime: 'May 13 · 2:40 PM CDT' },
   { id: 'F-30', truck: '#4408', cls: 'B', station: "Love's Travel Stop #412", address: '3121 SE 22nd St, Des Moines, IA 50320', city: 'Des Moines, IA', state: 'IA', lat: 41.59, lon: -93.62, gallons: 130, pricePaid: 3.90, localTime: 'May 13 · 11:20 AM CDT' },
+  // Repeat visits to the same Love's by other trucks on other days — over a
+  // wide window with several trucks, one station collects several fill-ups.
+  { id: 'F-31', truck: '#5012', cls: 'A', station: "Love's Travel Stop #277", address: '8730 NE 23rd St, Oklahoma City, OK 73141', city: 'Oklahoma City, OK', state: 'OK', lat: 35.47, lon: -97.52, gallons: 175, pricePaid: 3.46, localTime: 'May 9 · 5:20 PM CDT' },
+  { id: 'F-32', truck: '#4408', cls: 'B', station: "Love's Travel Stop #277", address: '8730 NE 23rd St, Oklahoma City, OK 73141', city: 'Oklahoma City, OK', state: 'OK', lat: 35.47, lon: -97.52, gallons: 160, pricePaid: 3.55, localTime: 'May 15 · 7:40 AM CDT' },
+  { id: 'F-33', truck: '#3301', cls: 'C', station: "Love's Travel Stop #388", address: '4160 S Michigan Ave, Chicago, IL 60653', city: 'Chicago, IL', state: 'IL', lat: 41.85, lon: -87.65, gallons: 168, pricePaid: 4.12, localTime: 'May 10 · 3:15 PM CDT' },
+  { id: 'F-34', truck: '#5012', cls: 'A', station: "Love's Travel Stop #388", address: '4160 S Michigan Ave, Chicago, IL 60653', city: 'Chicago, IL', state: 'IL', lat: 41.85, lon: -87.65, gallons: 150, pricePaid: 3.98, localTime: 'May 14 · 8:05 AM CDT' },
+  { id: 'F-35', truck: '#4408', cls: 'B', station: "Love's Travel Stop #170", address: '3484 Lamar Ave, Memphis, TN 38118', city: 'Memphis, TN', state: 'TN', lat: 35.15, lon: -90.05, gallons: 158, pricePaid: 3.69, localTime: 'May 11 · 10:50 AM CDT' },
+  { id: 'F-36', truck: '#3301', cls: 'C', station: "Love's Travel Stop #788", address: '4505 S 108th St, Omaha, NE 68137', city: 'Omaha, NE', state: 'NE', lat: 41.26, lon: -95.93, gallons: 165, pricePaid: 3.66, localTime: 'May 15 · 9:10 AM CDT' },
 ]

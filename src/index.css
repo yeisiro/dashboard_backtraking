@@ -4257,6 +4257,73 @@ button {
 }
 .fm-legend-dot-sm { width: 7px; height: 7px; }
 .fm-legend-dot-lg { width: 13px; height: 13px; }
+/* "Click for N fill-ups" cue at the bottom of a multi-stop station tooltip. */
+.fm-tip-cue {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+/* Side panel listing every fill-up at the clicked station. */
+.fm-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 280px;
+  max-height: calc(100% - 20px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  z-index: 6;
+  overflow: hidden;
+}
+.fm-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+.fm-panel-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.fm-panel-addr { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+.fm-panel-sum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 12px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.fm-panel-list { overflow-y: auto; padding: 4px 0; }
+.fm-stop {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.fm-stop:last-child { border-bottom: none; }
+.fm-stop-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.fm-stop-truck { font-size: 12px; font-weight: 600; color: var(--text); }
+.fm-stop-time { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.fm-stop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .tam-tooltip {
   position: absolute;
   z-index: 5;
