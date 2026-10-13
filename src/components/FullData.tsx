@@ -84,7 +84,7 @@ const SORT_ACCESSOR: Record<SortKey, (r: TripRow) => number> = {
   profit: (r) => r.profit,
   adherence: (r) => r.adherence,
   wastedRate: (r) => r.wastedRate,
-  leakage: (r) => r.totalExcessCost,
+  leakage: (r) => r.leakage,
 }
 
 // A row in the Trips table is either a load trip or an operative repositioning
@@ -126,6 +126,8 @@ function repoAsTrip(r: RepositionRow): TripRow {
     optimalCost: Math.max(0, totalCost - r.leakage),
     totalExcessCost: r.leakage,
     excessMilesCost: r.leakage,
+    idleCost: 0,
+    leakage: r.leakage,
     missedFuelSavings: 0,
     actualSaving: 0,
     profit: -r.cost,
@@ -309,7 +311,7 @@ function FleetAnalytics({
         const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
         const avgAdherence = rows.reduce((sum, r) => sum + r.adherence, 0) / rows.length
         const avgWastedRate = rows.reduce((sum, r) => sum + r.wastedRate, 0) / rows.length
-        const totalLeakage = rows.reduce((sum, r) => sum + r.totalExcessCost, 0)
+        const totalLeakage = rows.reduce((sum, r) => sum + r.leakage, 0)
         const margin = totalIncome ? (totalProfit / totalIncome) * 100 : 0
         const isOpen = expanded.has(cls)
         // Bar length reads as margin quality: scaled against a 15% "great margin"
@@ -1344,7 +1346,7 @@ function TripsTable({
       totalProfit: trips.reduce((sum, r) => sum + r.profit, 0) - moveCost,
       avgAdherence: gradedCount ? adherenceSum / gradedCount : 0,
       avgWastedRate: trips.length ? trips.reduce((sum, r) => sum + r.wastedRate, 0) / trips.length : 0,
-      totalLeakage: trips.reduce((sum, r) => sum + r.totalExcessCost, 0) + moves.reduce((s, r) => s + r.leakage, 0),
+      totalLeakage: trips.reduce((sum, r) => sum + r.leakage, 0) + moves.reduce((s, r) => s + r.leakage, 0),
     }
   }
 
@@ -1891,7 +1893,7 @@ function TripsTable({
       case 'wastedRate':
         return <td key={key} className="fd-dim">{pct(r.wastedRate)}</td>
       case 'leakage':
-        return <td key={key} className="fd-neg">{usd(r.totalExcessCost)}</td>
+        return <td key={key} className="fd-neg">{usd(r.leakage)}</td>
       default:
         return null
     }

@@ -978,6 +978,8 @@ export interface TripRow {
   optimalCost: number
   totalExcessCost: number
   excessMilesCost: number
+  idleCost: number // $ fuel burned while idling (idleHours × 0.8 × $/gal)
+  leakage: number // complete leakage: |missedFuelSavings| + excessMilesCost + idleCost
   missedFuelSavings: number // negative
   actualSaving: number // positive
   profit: number
@@ -1121,6 +1123,15 @@ function buildTrip(b: TripBase, index: number): TripRow {
   const dhPct = round1(((b.totalMiles - b.loadedMiles) / b.totalMiles) * 100)
   const totalCost = Math.round(b.cost * 1.08)
   const totalExcessCost = totalCost - b.optimalCost
+  const excessMilesCost = Math.round(totalExcessCost * 0.6)
+  // Executed $/gal (fuel is ~38% of cost) and the fuel burned while parked:
+  // idle hours × idle gal/hr (0.8) × $/gal. Idle is pure leakage.
+  const cpg = b.totalMiles > 0 ? (b.cost * 0.38) / (b.totalMiles / b.mpg) : 0
+  const idleCost = Math.round(b.idleHours * 0.8 * cpg)
+  // Complete money leakage = fuel paid above the optimal stop + excess-miles
+  // cost (fuel + deviations) + idle time. The Trips column and the Operation
+  // details modal both use this, so the detail reconciles to the column.
+  const leakage = Math.round(Math.abs(b.missedFuelSavings) + excessMilesCost + idleCost)
   const loadRef = 'L' + (40012001 + index)
   // Real stops: detected for most loads (from the lane endpoints), but cleared
   // for the seeded backlog loads so My Loads has something to resolve.
@@ -1144,7 +1155,9 @@ function buildTrip(b: TripBase, index: number): TripRow {
     wastedRpmPct: round1(((b.negotiatedRpm - b.effectiveRpm) / b.negotiatedRpm) * 100),
     totalCost,
     totalExcessCost,
-    excessMilesCost: Math.round(totalExcessCost * 0.6),
+    excessMilesCost,
+    idleCost,
+    leakage,
     dhMilesPct: dhPct,
     deadheadPct: dhPct,
     idlePct: round1((b.idleHours / (b.effectiveHours + b.idleHours)) * 100),

@@ -6967,7 +6967,7 @@ button {
 .ld-miles-num { font-size: 20px; font-weight: 600; color: #E6E6E6; font-variant-numeric: tabular-nums; }
 .ld-miles-num-sub { font-size: 14px; font-weight: 600; color: #B7BEC7; font-variant-numeric: tabular-nums; }
 .ld-miles-lbl { font-size: 11px; font-weight: 500; color: #686868; text-transform: uppercase; letter-spacing: 0.04em; }
-.ld-miles-sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.08); flex: 0 0 auto; margin: 0 12px; }
+.ld-miles-sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.08); flex: 0 0 auto; margin: 0 12px; align-self: center; }
 /* Label:value line pair (e.g. Earnings' "Cost $296" / "Margin $484") — same
    font size for both sides so neither line reads as more or less important
    than .ld-miles-num-sub elsewhere in the row. */
@@ -6978,10 +6978,44 @@ button {
 /* Missed-saving is the "act on this" number in every stat row — a warm tint
    and a filled chip pull it forward instead of it just being the column
    with the fewest lines and a lot of leftover whitespace. */
-.ld-miles-missed { background: rgba(255, 172, 82, 0.1); border-radius: 12px; padding: 10px 14px; margin: -10px 0; }
+.ld-miles-missed {
+  background: rgba(255, 172, 82, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0;
+  min-height: 62px;
+  justify-content: center;
+  position: relative;
+  cursor: help;
+}
 .ld-miles-missed .ld-miles-num { color: #FFAC52; }
 .ld-miles-missed .ld-miles-num-sub { color: #FFAC52; opacity: 0.85; }
 .ld-miles-missed .ld-miles-lbl { color: #FFAC52; opacity: 0.75; }
+/* Explanation on hover instead of a permanent gray subtitle. */
+.ld-miles-missed[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 210px;
+  padding: 9px 11px;
+  background: #05070b;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 60;
+}
+.ld-miles-missed[data-tip]:hover::after { opacity: 1; transform: translateY(0); }
 
 /* Map panel */
 .ld-map {

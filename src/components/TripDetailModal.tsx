@@ -1208,9 +1208,16 @@ export default function TripDetailModal({
   const excessMiles = effExcessMiles
   const milesOptimal = trip.totalMiles - effExcessMiles
 
-  // Fuel executed/optimal share the same $ basis as the fuel-stop map above
-  // (fuelCostTotal), just netted against missedFuelSavings (already negative)
-  // to get what the optimal plan would have cost.
+  // The excess miles also burn fuel — the fuel share of each extra mile. This
+  // is a SEPARATE leak from paying a worse price at the pump, so the fuel card
+  // breaks the two apart.
+  const fuelPerMile = trip.totalMiles > 0 ? fuelCostTotal / trip.totalMiles : 0
+  const excessFuelCost = Math.round(excessMiles * fuelPerMile)
+
+  // Fuel executed vs. optimal is the PRICE comparison — same gallons basis,
+  // netted against missedFuelSavings (already negative) — so the optimal $/gal
+  // reads like a real diesel price. The excess-miles fuel is a separate leak,
+  // shown as its own figure (excessFuelCost), not folded into this price gap.
   const fuelOptimal = fuelCostTotal + trip.missedFuelSavings
   const missedSavingFuel = Math.abs(trip.missedFuelSavings)
   const effFuelMissed = missedSavingFuel
@@ -1225,7 +1232,16 @@ export default function TripDetailModal({
   // One combined missed-saving figure for the earnings card — the fuel side
   // is already a $ figure, the miles side is excessMilesCost (the $ that
   // excess miles cost, the same basis excessMiles above was derived from).
-  const totalMissedSaving = effFuelMissed + effExcessCost
+  // Leakage breakdown — the four buckets that make up this trip's total
+  // leakage, and reconcile to the Trips table's Leakage column:
+  //  1. fuel paid above the optimal stop (price gap),
+  //  2. fuel burned by the excess miles,
+  //  3. the non-fuel cost of those excess miles (deadhead/route deviations),
+  //  4. idle time (fuel burned while parked).
+  const idleCost = trip.idleCost
+  const fuelPriceMiss = effFuelMissed
+  const deviationCost = Math.max(0, effExcessCost - excessFuelCost)
+  const totalLeakage = fuelPriceMiss + excessFuelCost + deviationCost + idleCost
   // What the trip would have earned running the optimal plan (same optimal
   // cost the Miles cost card already shows) — the Earnings card's own
   // "Optimal" column pairs this against that cost so the reader sees what's
@@ -1295,9 +1311,14 @@ export default function TripDetailModal({
             <span className="ld-miles-lbl">Optimal</span>
           </div>
           <span className="ld-miles-sep" />
-          <div className="ld-miles-stat ld-miles-missed">
-            <span className="ld-miles-num">{money(effFuelMissed)}</span>
-            <span className="ld-miles-lbl">Fuel missed savings</span>
+          <div className="ld-miles-stat ld-miles-missed" data-tip="Fuel paid above the price of the plan's optimal stop.">
+            <span className="ld-miles-num">{money(fuelPriceMiss)}</span>
+            <span className="ld-miles-lbl">Missed fuel savings</span>
+          </div>
+          <span className="ld-miles-sep" />
+          <div className="ld-miles-stat ld-miles-missed" data-tip="Fuel burned by the miles driven beyond the optimal route.">
+            <span className="ld-miles-num">{money(excessFuelCost)}</span>
+            <span className="ld-miles-lbl">Excess fuel</span>
           </div>
         </div>
       ),
@@ -1316,19 +1337,39 @@ export default function TripDetailModal({
           </div>
           <span className="ld-miles-sep" />
           <div className="ld-miles-stat">
-            <span className="ld-miles-num">{money(trip.totalCost - effExcessCost)}</span>
+            <span className="ld-miles-num">{money(trip.totalCost - deviationCost)}</span>
             <span className="ld-miles-num-sub">{milesOptimal.toLocaleString()} mi</span>
             <span className="ld-miles-lbl">Optimal</span>
           </div>
           <span className="ld-miles-sep" />
-          <div className="ld-miles-stat ld-miles-missed">
-            <span className="ld-miles-num">{money(effExcessCost)}</span>
+          <div className="ld-miles-stat ld-miles-missed" data-tip="Non-fuel cost of the excess miles from deadhead and route detours.">
+            <span className="ld-miles-num">{money(deviationCost)}</span>
             <span className="ld-miles-num-sub">{excessMiles.toLocaleString()} mi</span>
-            <span className="ld-miles-lbl">Miles missed savings</span>
+            <span className="ld-miles-lbl">Deviation cost</span>
           </div>
         </div>
       ),
       icon: <Route size={16} />,
+    },
+    {
+      // The fourth leakage bucket — fuel burned while the truck sat idling.
+      // Pure waste, and usually the biggest single category.
+      q: 'Idle cost',
+      value: (
+        <div className="ld-miles-row">
+          <div className="ld-miles-stat">
+            <span className="ld-miles-num">{trip.idleHours}h</span>
+            <span className="ld-miles-num-sub">{trip.idlePct}% of clock</span>
+            <span className="ld-miles-lbl">Idle time</span>
+          </div>
+          <span className="ld-miles-sep" />
+          <div className="ld-miles-stat ld-miles-missed" data-tip="Fuel burned while the truck sat idling.">
+            <span className="ld-miles-num">{money(idleCost)}</span>
+            <span className="ld-miles-lbl">Idle cost</span>
+          </div>
+        </div>
+      ),
+      icon: <Clock size={16} />,
     },
   ]
 
@@ -1619,8 +1660,8 @@ export default function TripDetailModal({
                 </div>
                 <span className="ld-miles-sep" />
                 <div className="ld-miles-stat ld-miles-missed">
-                  <span className="ld-miles-num">{money(totalMissedSaving)}</span>
-                  <span className="ld-miles-lbl">Total missed savings</span>
+                  <span className="ld-miles-num">{money(totalLeakage)}</span>
+                  <span className="ld-miles-lbl">Total leakage</span>
                 </div>
               </div>
             </section>
