@@ -6796,6 +6796,31 @@ button {
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
+/* Secondary legend column (e.g. a category's share of miles next to cost). */
+.ld-legend-sub {
+  font-size: 12px;
+  color: #9aa3b2;
+  min-width: 50px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+/* Column header row — labels the Miles / Cost / $ columns, not hoverable. */
+.ld-legend-head {
+  cursor: default;
+  padding-top: 0;
+  padding-bottom: 2px;
+}
+.ld-legend-head:hover { background: none; }
+.ld-legend-head .ld-legend-sub,
+.ld-legend-head .ld-legend-pct,
+.ld-legend-head .ld-legend-val {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #686868;
+}
 .ld-explore {
   margin-top: auto;
   padding: 15px;

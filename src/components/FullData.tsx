@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
-  Split, Layers, AlertTriangle, ShieldCheck, Undo2, MapPin, DollarSign, Route,
+  Split, Layers, AlertTriangle, ShieldCheck, Undo2, MapPin,
 } from 'lucide-react'
 import {
   tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
@@ -13,7 +13,7 @@ import MyLoadsModal, { type AssignMiles } from './MyLoadsModal'
 import { usePeriod } from '../PeriodContext'
 import TripDetailModal from './TripDetailModal'
 import DelayDetailModal, { StatusDonut, getDelaySegments } from './DelayDetailModal'
-import FuelSavings, { parseLane } from './FuelSavings'
+import FuelSavings, { parseLane, TruckActivityMap, openPlaceTripsTab } from './FuelSavings'
 import OperativeGapDrawer from './OperativeGapDrawer'
 import MergedTripModal from './MergedTripModal'
 import AssignedTripsModal from './AssignedTripsModal'
@@ -254,17 +254,16 @@ export default function FullData({
       ) : tab === 'Fleet Analytics' ? (
         <FleetAnalytics classFilter={classFilter} view={view} />
       ) : tab === 'Productivity' ? (
-        <Productivity classFilter={classFilter} />
-      ) : tab === 'Fuel and Savings' ? (
-        <FuelSavings
+        <Productivity
           classFilter={classFilter}
-          dimension={dimension}
           onSelectTrucks={(trucks) => {
             setPlaceFilter(null)
             onTruckFilterChange?.(trucks)
             setTab('Trips')
           }}
         />
+      ) : tab === 'Fuel and Savings' ? (
+        <FuelSavings classFilter={classFilter} dimension={dimension} />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
@@ -423,6 +422,36 @@ const fmtMoneyTick = (v: number) => {
   return a >= 1000 ? `$${Math.round(v / 1000)}k` : usd(v)
 }
 
+// Round a span to a "nice" number (1/2/5 × 10ⁿ). `round` snaps to the nearest
+// nice value; otherwise it rounds up, used for the overall range.
+const niceNum = (range: number, round: boolean) => {
+  const r = range > 0 ? range : 1
+  const exp = Math.floor(Math.log10(r))
+  const frac = r / 10 ** exp
+  const nf = round
+    ? frac < 1.5 ? 1 : frac < 3 ? 2 : frac < 7 ? 5 : 10
+    : frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10
+  return nf * 10 ** exp
+}
+
+// Build an axis whose floor/ceiling and gridlines land on round values, so
+// labels read cleanly ($10k, $20k…) and the plotted lines fill the band
+// instead of bunching against a forced-zero floor. The floor is NOT pinned to
+// zero: it follows the data (padded down to the nearest step) when every
+// value sits well above zero.
+function niceScale(min: number, max: number, maxTicks = 5) {
+  if (!isFinite(min) || !isFinite(max) || max <= min) {
+    const base = isFinite(max) ? max : 1
+    return { lo: Math.min(0, base), hi: base || 1, ticks: [Math.min(0, base), base || 1] }
+  }
+  const step = niceNum((max - min) / Math.max(1, maxTicks - 1), true)
+  const lo = Math.floor(min / step) * step
+  const hi = Math.ceil(max / step) * step
+  const ticks: number[] = []
+  for (let v = lo; v <= hi + step * 0.5; v += step) ticks.push(Math.round(v))
+  return { lo, hi, ticks }
+}
+
 // Income / Cost / Profit over time, ending at the fleet's real current
 // totals. Profit is derived as income − cost at every point (not an
 // independent wave), so the three lines always reconcile.
@@ -455,14 +484,15 @@ function EvolutionLineChart({
   const padB = 22
   const n = lines[0]?.s.length ?? 0
   const all = lines.flatMap((l) => l.s)
-  const min = Math.min(0, ...all)
-  const max = Math.max(...all)
-  const range = max - min || 1
+  const { lo, hi, ticks: tickVals } = niceScale(Math.min(...all), Math.max(...all), 5)
+  const span = hi - lo || 1
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
-  const y = (v: number) => padT + (1 - (v - min) / range) * (H - padT - padB)
+  const y = (v: number) => padT + (1 - (v - lo) / span) * (H - padT - padB)
   const path = (s: number[]) =>
     s.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
-  const ticks = [0, 0.5, 1].map((t) => ({ y: padT + t * (H - padT - padB), v: max - t * range }))
+  // Gridlines land on the round tick values and share the data scale, so a
+  // tick's y-position is exactly where its value sits on the lines.
+  const ticks = tickVals.map((v) => ({ y: y(v), v }))
 
   return (
     <div className="pv-line">
@@ -633,6 +663,9 @@ interface PieSegment {
   label: string
   color: string
   value: number
+  // Optional pre-formatted secondary figure shown as an extra legend column
+  // (e.g. a category's share of miles next to its share of cost).
+  sub?: string
 }
 
 // The idle+unused pool has no per-cause field in the data (unlike driving,
@@ -656,12 +689,17 @@ function PieChart({
   segments,
   formatValue,
   totalLabel = 'Total',
+  legendHead,
 }: {
   segments: PieSegment[]
   formatValue: (v: number) => string
   totalLabel?: string
+  // When set, a header row labels the legend columns. `sub`/`pct`/`val` map to
+  // the three right-hand columns (secondary figure · % of total · value).
+  legendHead?: { sub?: string; pct?: string; val?: string }
 }) {
   const [hover, setHover] = useState<number | null>(null)
+  const hasSub = segments.some((s) => s.sub !== undefined)
   const total = segments.reduce((s, x) => s + x.value, 0)
   const R = 60
   const C = 2 * Math.PI * R
@@ -714,6 +752,14 @@ function PieChart({
         </div>
       </div>
       <div className="ld-legend">
+        {legendHead && (
+          <div className="ld-legend-row ld-legend-head">
+            <span className="ld-legend-name" />
+            {hasSub && <span className="ld-legend-sub">{legendHead.sub}</span>}
+            <span className="ld-legend-pct">{legendHead.pct}</span>
+            <span className="ld-legend-val">{legendHead.val}</span>
+          </div>
+        )}
         {segments.map((s, i) => (
           <div
             className={`ld-legend-row ${hover === i ? 'active' : ''}`}
@@ -725,6 +771,7 @@ function PieChart({
               <span className="ld-legend-dot" style={{ background: s.color }} />
               {s.label}
             </span>
+            {hasSub && <span className="ld-legend-sub">{s.sub}</span>}
             <span className="ld-legend-pct">{total ? Math.round((s.value / total) * 100) : 0}%</span>
             <span className="ld-legend-val">{formatValue(s.value)}</span>
           </div>
@@ -770,13 +817,17 @@ function TimeDistributionDetailModal({
   )
 }
 
-function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
+function Productivity({
+  classFilter = [],
+  onSelectTrucks,
+}: {
+  classFilter?: string[]
+  onSelectTrucks?: (trucks: string[]) => void
+}) {
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
   const [delayModalOpen, setDelayModalOpen] = useState(false)
   const [evolutionModalOpen, setEvolutionModalOpen] = useState(false)
   const [timeModalOpen, setTimeModalOpen] = useState(false)
-  // Cost Distribution can be read in dollars or in the miles behind them.
-  const [costUnit, setCostUnit] = useState<'cost' | 'miles'>('cost')
   const { rangeDays, rangeEnd } = usePeriod()
 
   const totalLoads = rows.length
@@ -786,19 +837,14 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
   const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
   const profitability = totalIncome ? (totalProfit / totalIncome) * 100 : 0
 
-  // Cost distribution: the shared cost-segment percentages (same story as the
-  // Operation Details donut), scaled to this fleet's total cost — or to the
-  // fleet's total miles, when the user toggles the card to the Miles view.
-  const totalFleetMiles = rows.reduce((sum, r) => sum + r.totalMiles, 0)
+  // Cost distribution: the ring is each category's share of total cost; the
+  // legend shows that cost alongside the category's share of MILES, so the
+  // reader sees cheap vs. expensive miles at a glance (no toggle needed).
   const costPieSegments: PieSegment[] = costSegments.map((s) => ({
     label: s.label,
     color: s.color,
     value: totalCost * (s.pct / 100),
-  }))
-  const milesPieSegments: PieSegment[] = costSegments.map((s) => ({
-    label: s.label,
-    color: s.color,
-    value: totalFleetMiles * (s.pct / 100),
+    sub: `${s.milesPct}%`,
   }))
 
   // Time distribution: real driving + idle hours per trip, plus whatever's
@@ -905,25 +951,12 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
         <section className="card pv-panel">
           <div className="card-head">
             <span className="eyebrow">Cost Distribution by Type</span>
-            <div className="mlc-mode" role="group" aria-label="View values as">
-              <button
-                className={`mlc-mode-btn ${costUnit === 'cost' ? 'active' : ''}`}
-                onClick={() => setCostUnit('cost')}
-              >
-                <DollarSign size={13} /> Cost
-              </button>
-              <button
-                className={`mlc-mode-btn ${costUnit === 'miles' ? 'active' : ''}`}
-                onClick={() => setCostUnit('miles')}
-              >
-                <Route size={13} /> Miles
-              </button>
-            </div>
           </div>
           <div className="pv-pie-wrap">
             <PieChart
-              segments={costUnit === 'cost' ? costPieSegments : milesPieSegments}
-              formatValue={costUnit === 'cost' ? usd : (v) => miles(Math.round(v))}
+              segments={costPieSegments}
+              formatValue={usd}
+              legendHead={{ sub: 'Miles', pct: 'Cost', val: '$' }}
             />
           </div>
         </section>
@@ -948,6 +981,12 @@ function Productivity({ classFilter = [] }: { classFilter?: string[] }) {
           />
         </section>
       </div>
+
+      <TruckActivityMap
+        rows={rows}
+        onSelectTrucks={onSelectTrucks}
+        onOpenPlaceTrips={(code, name, direction) => openPlaceTripsTab(code, name, direction, classFilter)}
+      />
 
       <div className="grid-2 grid-2-even">
         <section className="card pv-panel">

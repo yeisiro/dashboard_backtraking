@@ -1345,14 +1345,19 @@ export const repositionRows: RepositionRow[] = [
 // Colors are categorical (each segment is a distinct, independently actionable
 // cause, not gradations of one thing) and reuse the app's existing accent
 // hues so the same category reads the same color everywhere it appears.
+// `pct` is each category's share of total COST. `milesPct` is its share of
+// total MILES — the two diverge because a mile of "excess/deviation" costs
+// more than an efficient loaded mile, so e.g. Loaded Deviation Excess is only
+// ~6% of miles but ~13% of cost. Showing both side by side is the whole point
+// of the Cost Distribution card: cheap miles vs. expensive miles.
 export const costSegments = [
-  { label: 'Efficient Miles', pct: 79.9, color: 'var(--green)' },
-  { label: 'Loaded Deviation Excess', pct: 13, color: 'var(--red)' },
-  { label: 'Reposition deadhead', pct: 3.34, color: 'var(--yellow)' },
-  { label: 'PC while loaded', pct: 3.29, color: 'var(--blue)' },
-  { label: 'Operative center return', pct: 0.261, color: '#7CC8CF' },
-  { label: 'PC while unloaded', pct: 0.0973, color: 'var(--orange)' },
-  { label: 'Deadhead Deviation Excess', pct: 0.0893, color: '#8a94a6' },
+  { label: 'Efficient Miles', pct: 79.9, milesPct: 88, color: 'var(--green)' },
+  { label: 'Loaded Deviation Excess', pct: 13, milesPct: 6, color: 'var(--red)' },
+  { label: 'Reposition deadhead', pct: 3.34, milesPct: 3.5, color: 'var(--yellow)' },
+  { label: 'PC while loaded', pct: 3.29, milesPct: 1.2, color: 'var(--blue)' },
+  { label: 'Operative center return', pct: 0.261, milesPct: 0.6, color: '#7CC8CF' },
+  { label: 'PC while unloaded', pct: 0.0973, milesPct: 0.4, color: 'var(--orange)' },
+  { label: 'Deadhead Deviation Excess', pct: 0.0893, milesPct: 0.3, color: '#8a94a6' },
 ]
 
 // Which costSegments categories happen while the truck is running deadhead

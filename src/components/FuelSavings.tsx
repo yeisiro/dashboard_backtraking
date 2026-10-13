@@ -518,7 +518,37 @@ function StateMetricsBar({
 const W = 960
 const H = 480
 
-function TruckActivityMap({
+// Opens the Trips card's target in a new *background* tab — clicking a state
+// shouldn't yank the user out of the view they're in. window.open(url,
+// '_blank') always steals focus, so instead this simulates a ctrl/cmd+click on
+// an <a target="_blank">, which Chromium/Firefox treat like a real
+// ctrl/cmd+click and open in the background. The target tab re-derives its
+// Trips filter from these query params on load (see FullData.tsx).
+export function openPlaceTripsTab(code: string, name: string, direction: MapDirection, classFilter: string[] = []) {
+  const params = new URLSearchParams()
+  params.set('tab', 'full')
+  params.set('subtab', 'Trips')
+  params.set('placeCode', code)
+  params.set('placeName', name)
+  params.set('placeDir', direction)
+  if (classFilter.length > 0) params.set('class', classFilter.join(','))
+
+  const link = document.createElement('a')
+  link.href = `${window.location.pathname}?${params.toString()}`
+  link.target = '_blank'
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  const isMac = navigator.platform.toUpperCase().includes('MAC')
+  link.dispatchEvent(
+    new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ctrlKey: !isMac, metaKey: isMac }),
+  )
+  document.body.removeChild(link)
+}
+
+// The fleet's profitability-by-state map. Lives here (with its state-health
+// helpers) but is rendered by the Productivity sub-tab — it's a financial
+// view, not a fuel one.
+export function TruckActivityMap({
   rows,
   onSelectTrucks,
   onOpenPlaceTrips,
@@ -977,43 +1007,14 @@ function TruckFuelList({ stats, firstColLabel = 'Truck' }: { stats: TruckFuelSta
 export default function FuelSavings({
   classFilter = [],
   dimension = 'trucks',
-  onSelectTrucks,
 }: {
   classFilter?: string[]
   dimension?: 'trucks' | 'drivers'
-  onSelectTrucks?: (trucks: string[]) => void
 }) {
   const byDriver = dimension === 'drivers'
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
   const moneySaved = rows.reduce((s, r) => s + r.actualSaving, 0)
   const moneyLeakage = rows.reduce((s, r) => s + r.totalExcessCost, 0)
-
-  // Opens the Trips card's target in a new *background* tab — clicking it
-  // shouldn't yank the user out of Fuel & Savings. window.open(url, '_blank')
-  // always steals focus, so instead this simulates a ctrl/cmd+click on an
-  // <a target="_blank">, which Chromium/Firefox treat like a real
-  // ctrl/cmd+click and open in the background. The target tab re-derives its
-  // Trips filter from these query params on load (see FullData.tsx).
-  const openPlaceTrips = (code: string, name: string, direction: MapDirection) => {
-    const params = new URLSearchParams()
-    params.set('tab', 'full')
-    params.set('subtab', 'Trips')
-    params.set('placeCode', code)
-    params.set('placeName', name)
-    params.set('placeDir', direction)
-    if (classFilter.length > 0) params.set('class', classFilter.join(','))
-
-    const link = document.createElement('a')
-    link.href = `${window.location.pathname}?${params.toString()}`
-    link.target = '_blank'
-    link.rel = 'noopener'
-    document.body.appendChild(link)
-    const isMac = navigator.platform.toUpperCase().includes('MAC')
-    link.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ctrlKey: !isMac, metaKey: isMac }),
-    )
-    document.body.removeChild(link)
-  }
 
   const [showAllTrucks, setShowAllTrucks] = useState(false)
   const truckStats = useMemo(() => computeTruckFuelStats(rows, byDriver), [rows, byDriver])
@@ -1070,7 +1071,6 @@ export default function FuelSavings({
           </div>
         </div>
       </div>
-      <TruckActivityMap rows={rows} onSelectTrucks={onSelectTrucks} onOpenPlaceTrips={openPlaceTrips} />
 
       {showAllTrucks && (
         <SubDetailModal
