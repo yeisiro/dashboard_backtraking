@@ -4274,6 +4274,14 @@ button {
   color: var(--text);
   margin-bottom: 4px;
 }
+/* Exact street address under a fuel-stop tooltip title. */
+.fm-tip-addr {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -2px 0 6px;
+  max-width: 230px;
+  line-height: 1.35;
+}
 .tam-tooltip-row {
   display: flex;
   align-items: center;
@@ -6834,6 +6842,20 @@ button {
   padding-bottom: 2px;
 }
 .ld-legend-head:hover { background: none; }
+/* Clickable column headers that pick which total the donut center shows. */
+.ld-col-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 5px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.ld-col-btn:hover { color: #c4cad6; background: rgba(255, 255, 255, 0.06); }
+.ld-col-btn.active {
+  color: #E6E6E6;
+  background: rgba(255, 255, 255, 0.1);
+}
 .ld-legend-head .ld-legend-sub,
 .ld-legend-head .ld-legend-pct,
 .ld-legend-head .ld-legend-val {

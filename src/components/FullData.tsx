@@ -690,6 +690,10 @@ function PieChart({
   formatValue,
   totalLabel = 'Total',
   legendHead,
+  centerValue,
+  centerLabel,
+  measure,
+  onMeasureChange,
 }: {
   segments: PieSegment[]
   formatValue: (v: number) => string
@@ -697,6 +701,14 @@ function PieChart({
   // When set, a header row labels the legend columns. `sub`/`pct`/`val` map to
   // the three right-hand columns (secondary figure · % of total · value).
   legendHead?: { sub?: string; pct?: string; val?: string }
+  // Override the donut's center readout (e.g. show a different total than the
+  // ring's own). Falls back to the ring total when omitted.
+  centerValue?: string
+  centerLabel?: string
+  // When provided, the Miles/Cost column headers become a toggle that picks
+  // which total the center shows. `measure` marks the active one.
+  measure?: 'cost' | 'miles'
+  onMeasureChange?: (m: 'cost' | 'miles') => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const hasSub = segments.some((s) => s.sub !== undefined)
@@ -745,8 +757,8 @@ function PieChart({
             </>
           ) : (
             <>
-              <span className="ld-donut2-total">{formatValue(total)}</span>
-              <span className="ld-donut2-label">{totalLabel}</span>
+              <span className="ld-donut2-total">{centerValue ?? formatValue(total)}</span>
+              <span className="ld-donut2-label">{centerLabel ?? totalLabel}</span>
             </>
           )}
         </div>
@@ -756,8 +768,31 @@ function PieChart({
           <div className="ld-legend-row ld-legend-head">
             <span className="ld-legend-name" />
             <span className="ld-legend-pct">{legendHead.pct}</span>
-            {hasSub && <span className="ld-legend-sub">{legendHead.sub}</span>}
-            <span className="ld-legend-val">{legendHead.val}</span>
+            {hasSub &&
+              (onMeasureChange ? (
+                <button
+                  type="button"
+                  className={`ld-legend-sub ld-col-btn ${measure === 'miles' ? 'active' : ''}`}
+                  onClick={() => onMeasureChange('miles')}
+                  data-tip="Show total miles in the donut"
+                >
+                  {legendHead.sub}
+                </button>
+              ) : (
+                <span className="ld-legend-sub">{legendHead.sub}</span>
+              ))}
+            {onMeasureChange ? (
+              <button
+                type="button"
+                className={`ld-legend-val ld-col-btn ${measure === 'cost' ? 'active' : ''}`}
+                onClick={() => onMeasureChange('cost')}
+                data-tip="Show total cost in the donut"
+              >
+                {legendHead.val}
+              </button>
+            ) : (
+              <span className="ld-legend-val">{legendHead.val}</span>
+            )}
           </div>
         )}
         {segments.map((s, i) => (
@@ -828,6 +863,10 @@ function Productivity({
   const [delayModalOpen, setDelayModalOpen] = useState(false)
   const [evolutionModalOpen, setEvolutionModalOpen] = useState(false)
   const [timeModalOpen, setTimeModalOpen] = useState(false)
+  // Which total the Cost Distribution donut shows at its center — cost or the
+  // miles behind it. The ring/rows are identical either way (shares are
+  // proportional); only the center total switches.
+  const [donutMeasure, setDonutMeasure] = useState<'cost' | 'miles'>('cost')
   const { rangeDays, rangeEnd } = usePeriod()
 
   const totalLoads = rows.length
@@ -958,6 +997,10 @@ function Productivity({
               segments={costPieSegments}
               formatValue={usd}
               legendHead={{ pct: '%', sub: 'Miles', val: 'Cost' }}
+              centerValue={donutMeasure === 'cost' ? usd(totalCost) : miles(Math.round(totalFleetMiles))}
+              centerLabel={donutMeasure === 'cost' ? 'Total cost' : 'Total miles'}
+              measure={donutMeasure}
+              onMeasureChange={setDonutMeasure}
             />
           </div>
         </section>

@@ -1423,45 +1423,49 @@ export interface FuelStop {
   id: string
   truck: string
   cls: 'A' | 'B' | 'C' | 'D'
+  station: string // all Love's — e.g. "Love's Travel Stop #788"
+  address: string // exact street address of the stop
   city: string
   state: string // USPS code — keys STATE_DIESEL
   lat: number
   lon: number
   gallons: number
   pricePaid: number // $/gal actually paid at the pump
+  localTime: string // exact LOCAL time of the stop (not UTC), tz included
 }
 
 // Where the fleet actually fueled. `pricePaid` vs STATE_DIESEL[state] is the
 // whole judgment: below region = money saved (green), above = leak (red).
+// Every station is a Love's Travel Stop; times are local to the stop.
 export const fuelStops: FuelStop[] = [
-  { id: 'F-01', truck: '#5012', cls: 'A', city: 'Dallas, TX', state: 'TX', lat: 32.78, lon: -96.80, gallons: 165, pricePaid: 3.44 },
-  { id: 'F-02', truck: '#5012', cls: 'A', city: 'Houston, TX', state: 'TX', lat: 29.76, lon: -95.37, gallons: 142, pricePaid: 3.71 },
-  { id: 'F-03', truck: '#4521', cls: 'D', city: 'Laredo, TX', state: 'TX', lat: 27.52, lon: -99.49, gallons: 188, pricePaid: 3.52 },
-  { id: 'F-04', truck: '#3301', cls: 'C', city: 'Oklahoma City, OK', state: 'OK', lat: 35.47, lon: -97.52, gallons: 150, pricePaid: 3.41 },
-  { id: 'F-05', truck: '#5007', cls: 'A', city: 'Atlanta, GA', state: 'GA', lat: 33.75, lon: -84.39, gallons: 172, pricePaid: 3.66 },
-  { id: 'F-06', truck: '#5007', cls: 'A', city: 'Macon, GA', state: 'GA', lat: 32.84, lon: -83.63, gallons: 120, pricePaid: 3.85 },
-  { id: 'F-07', truck: '#5007', cls: 'A', city: 'Orlando, FL', state: 'FL', lat: 28.54, lon: -81.38, gallons: 134, pricePaid: 3.78 },
-  { id: 'F-08', truck: '#4012', cls: 'B', city: 'Jacksonville, FL', state: 'FL', lat: 30.33, lon: -81.66, gallons: 158, pricePaid: 3.99 },
-  { id: 'F-09', truck: '#6120', cls: 'B', city: 'Nashville, TN', state: 'TN', lat: 36.16, lon: -86.78, gallons: 146, pricePaid: 3.55 },
-  { id: 'F-10', truck: '#6120', cls: 'B', city: 'Memphis, TN', state: 'TN', lat: 35.15, lon: -90.05, gallons: 170, pricePaid: 3.78 },
-  { id: 'F-11', truck: '#4408', cls: 'B', city: 'Chicago, IL', state: 'IL', lat: 41.85, lon: -87.65, gallons: 180, pricePaid: 4.05 },
-  { id: 'F-12', truck: '#4408', cls: 'B', city: 'Effingham, IL', state: 'IL', lat: 39.12, lon: -88.55, gallons: 128, pricePaid: 4.32 },
-  { id: 'F-13', truck: '#4408', cls: 'B', city: 'Indianapolis, IN', state: 'IN', lat: 39.77, lon: -86.16, gallons: 156, pricePaid: 3.74 },
-  { id: 'F-14', truck: '#2014', cls: 'C', city: 'Columbus, OH', state: 'OH', lat: 39.96, lon: -82.99, gallons: 162, pricePaid: 3.72 },
-  { id: 'F-15', truck: '#2014', cls: 'C', city: 'Toledo, OH', state: 'OH', lat: 41.66, lon: -83.56, gallons: 118, pricePaid: 3.95 },
-  { id: 'F-16', truck: '#2008', cls: 'D', city: 'Harrisburg, PA', state: 'PA', lat: 40.27, lon: -76.88, gallons: 174, pricePaid: 4.28 },
-  { id: 'F-17', truck: '#2008', cls: 'D', city: 'Allentown, PA', state: 'PA', lat: 40.60, lon: -75.47, gallons: 136, pricePaid: 4.58 },
-  { id: 'F-18', truck: '#3301', cls: 'C', city: 'Kansas City, MO', state: 'MO', lat: 39.10, lon: -94.58, gallons: 152, pricePaid: 3.50 },
-  { id: 'F-19', truck: '#3301', cls: 'C', city: 'St. Louis, MO', state: 'MO', lat: 38.63, lon: -90.20, gallons: 144, pricePaid: 3.77 },
-  { id: 'F-20', truck: '#4012', cls: 'B', city: 'Little Rock, AR', state: 'AR', lat: 34.75, lon: -92.29, gallons: 160, pricePaid: 3.49 },
-  { id: 'F-21', truck: '#4521', cls: 'D', city: 'Birmingham, AL', state: 'AL', lat: 33.52, lon: -86.80, gallons: 150, pricePaid: 3.82 },
-  { id: 'F-22', truck: '#4521', cls: 'D', city: 'Baton Rouge, LA', state: 'LA', lat: 30.45, lon: -91.19, gallons: 182, pricePaid: 3.47 },
-  { id: 'F-23', truck: '#5007', cls: 'A', city: 'Charlotte, NC', state: 'NC', lat: 35.23, lon: -80.84, gallons: 138, pricePaid: 3.71 },
-  { id: 'F-24', truck: '#2008', cls: 'D', city: 'Richmond, VA', state: 'VA', lat: 37.54, lon: -77.44, gallons: 166, pricePaid: 4.12 },
-  { id: 'F-25', truck: '#5012', cls: 'A', city: 'Phoenix, AZ', state: 'AZ', lat: 33.45, lon: -112.07, gallons: 190, pricePaid: 4.06 },
-  { id: 'F-26', truck: '#5012', cls: 'A', city: 'Barstow, CA', state: 'CA', lat: 34.90, lon: -117.02, gallons: 205, pricePaid: 5.58 },
-  { id: 'F-27', truck: '#4012', cls: 'B', city: 'Albuquerque, NM', state: 'NM', lat: 35.08, lon: -106.65, gallons: 148, pricePaid: 3.80 },
-  { id: 'F-28', truck: '#3301', cls: 'C', city: 'Denver, CO', state: 'CO', lat: 39.74, lon: -104.99, gallons: 158, pricePaid: 4.07 },
-  { id: 'F-29', truck: '#6120', cls: 'B', city: 'Omaha, NE', state: 'NE', lat: 41.26, lon: -95.93, gallons: 142, pricePaid: 3.72 },
-  { id: 'F-30', truck: '#4408', cls: 'B', city: 'Des Moines, IA', state: 'IA', lat: 41.59, lon: -93.62, gallons: 130, pricePaid: 3.90 },
+  { id: 'F-01', truck: '#5012', cls: 'A', station: "Love's Travel Stop #212", address: '3200 S Lamar St, Dallas, TX 75215', city: 'Dallas, TX', state: 'TX', lat: 32.78, lon: -96.80, gallons: 165, pricePaid: 3.44, localTime: 'May 14 · 6:40 AM CDT' },
+  { id: 'F-02', truck: '#5012', cls: 'A', station: "Love's Travel Stop #319", address: '15919 I-10, Houston, TX 77084', city: 'Houston, TX', state: 'TX', lat: 29.76, lon: -95.37, gallons: 142, pricePaid: 3.71, localTime: 'May 14 · 1:20 PM CDT' },
+  { id: 'F-03', truck: '#4521', cls: 'D', station: "Love's Travel Stop #405", address: '6610 N Bartlett Ave, Laredo, TX 78041', city: 'Laredo, TX', state: 'TX', lat: 27.52, lon: -99.49, gallons: 188, pricePaid: 3.52, localTime: 'May 13 · 9:05 AM CDT' },
+  { id: 'F-04', truck: '#3301', cls: 'C', station: "Love's Travel Stop #277", address: '8730 NE 23rd St, Oklahoma City, OK 73141', city: 'Oklahoma City, OK', state: 'OK', lat: 35.47, lon: -97.52, gallons: 150, pricePaid: 3.41, localTime: 'May 12 · 10:30 AM CDT' },
+  { id: 'F-05', truck: '#5007', cls: 'A', station: "Love's Travel Stop #512", address: '4430 Welcome All Rd, Atlanta, GA 30349', city: 'Atlanta, GA', state: 'GA', lat: 33.75, lon: -84.39, gallons: 172, pricePaid: 3.66, localTime: 'May 14 · 8:15 AM EDT' },
+  { id: 'F-06', truck: '#5007', cls: 'A', station: "Love's Travel Stop #538", address: '4321 Riverside Dr, Macon, GA 31210', city: 'Macon, GA', state: 'GA', lat: 32.84, lon: -83.63, gallons: 120, pricePaid: 3.85, localTime: 'May 14 · 12:50 PM EDT' },
+  { id: 'F-07', truck: '#5007', cls: 'A', station: "Love's Travel Stop #624", address: '13531 State Road 535, Orlando, FL 32821', city: 'Orlando, FL', state: 'FL', lat: 28.54, lon: -81.38, gallons: 134, pricePaid: 3.78, localTime: 'May 15 · 3:40 PM EDT' },
+  { id: 'F-08', truck: '#4012', cls: 'B', station: "Love's Travel Stop #631", address: '9200 New Kings Rd, Jacksonville, FL 32219', city: 'Jacksonville, FL', state: 'FL', lat: 30.33, lon: -81.66, gallons: 158, pricePaid: 3.99, localTime: 'May 15 · 7:25 AM EDT' },
+  { id: 'F-09', truck: '#6120', cls: 'B', station: "Love's Travel Stop #146", address: '1443 Murfreesboro Pike, Nashville, TN 37217', city: 'Nashville, TN', state: 'TN', lat: 36.16, lon: -86.78, gallons: 146, pricePaid: 3.55, localTime: 'May 13 · 6:50 AM CDT' },
+  { id: 'F-10', truck: '#6120', cls: 'B', station: "Love's Travel Stop #170", address: '3484 Lamar Ave, Memphis, TN 38118', city: 'Memphis, TN', state: 'TN', lat: 35.15, lon: -90.05, gallons: 170, pricePaid: 3.78, localTime: 'May 13 · 2:10 PM CDT' },
+  { id: 'F-11', truck: '#4408', cls: 'B', station: "Love's Travel Stop #388", address: '4160 S Michigan Ave, Chicago, IL 60653', city: 'Chicago, IL', state: 'IL', lat: 41.85, lon: -87.65, gallons: 180, pricePaid: 4.05, localTime: 'May 13 · 9:30 AM CDT' },
+  { id: 'F-12', truck: '#4408', cls: 'B', station: "Love's Travel Stop #392", address: '1603 W Fayette Ave, Effingham, IL 62401', city: 'Effingham, IL', state: 'IL', lat: 39.12, lon: -88.55, gallons: 128, pricePaid: 4.32, localTime: 'May 13 · 1:05 PM CDT' },
+  { id: 'F-13', truck: '#4408', cls: 'B', station: "Love's Travel Stop #374", address: '4607 S Harding St, Indianapolis, IN 46217', city: 'Indianapolis, IN', state: 'IN', lat: 39.77, lon: -86.16, gallons: 156, pricePaid: 3.74, localTime: 'May 13 · 4:20 PM EDT' },
+  { id: 'F-14', truck: '#2014', cls: 'C', station: "Love's Travel Stop #262", address: '2000 Williams Rd, Columbus, OH 43207', city: 'Columbus, OH', state: 'OH', lat: 39.96, lon: -82.99, gallons: 162, pricePaid: 3.72, localTime: 'May 12 · 8:40 AM EDT' },
+  { id: 'F-15', truck: '#2014', cls: 'C', station: "Love's Travel Stop #295", address: '3450 Libbey Rd, Perrysburg, OH 43551', city: 'Toledo, OH', state: 'OH', lat: 41.66, lon: -83.56, gallons: 118, pricePaid: 3.95, localTime: 'May 12 · 12:15 PM EDT' },
+  { id: 'F-16', truck: '#2008', cls: 'D', station: "Love's Travel Stop #408", address: '7827 Linglestown Rd, Harrisburg, PA 17112', city: 'Harrisburg, PA', state: 'PA', lat: 40.27, lon: -76.88, gallons: 174, pricePaid: 4.28, localTime: 'May 11 · 7:50 AM EDT' },
+  { id: 'F-17', truck: '#2008', cls: 'D', station: "Love's Travel Stop #436", address: '6341 Wagner Rd, Allentown, PA 18106', city: 'Allentown, PA', state: 'PA', lat: 40.60, lon: -75.47, gallons: 136, pricePaid: 4.58, localTime: 'May 11 · 11:30 AM EDT' },
+  { id: 'F-18', truck: '#3301', cls: 'C', station: "Love's Travel Stop #283", address: '1310 N Corrington Ave, Kansas City, MO 64120', city: 'Kansas City, MO', state: 'MO', lat: 39.10, lon: -94.58, gallons: 152, pricePaid: 3.50, localTime: 'May 12 · 7:15 AM CDT' },
+  { id: 'F-19', truck: '#3301', cls: 'C', station: "Love's Travel Stop #291", address: '3700 Pennridge Dr, Bridgeton, MO 63044', city: 'St. Louis, MO', state: 'MO', lat: 38.63, lon: -90.20, gallons: 144, pricePaid: 3.77, localTime: 'May 12 · 11:45 AM CDT' },
+  { id: 'F-20', truck: '#4012', cls: 'B', station: "Love's Travel Stop #220", address: '14800 Frazier Pike, Little Rock, AR 72206', city: 'Little Rock, AR', state: 'AR', lat: 34.75, lon: -92.29, gallons: 160, pricePaid: 3.49, localTime: 'May 12 · 3:05 PM CDT' },
+  { id: 'F-21', truck: '#4521', cls: 'D', station: "Love's Travel Stop #241", address: '905 Bankhead Hwy W, Birmingham, AL 35204', city: 'Birmingham, AL', state: 'AL', lat: 33.52, lon: -86.80, gallons: 150, pricePaid: 3.82, localTime: 'May 13 · 9:40 AM CDT' },
+  { id: 'F-22', truck: '#4521', cls: 'D', station: "Love's Travel Stop #452", address: '10545 Gwenadele Ave, Baton Rouge, LA 70814', city: 'Baton Rouge, LA', state: 'LA', lat: 30.45, lon: -91.19, gallons: 182, pricePaid: 3.47, localTime: 'May 13 · 1:25 PM CDT' },
+  { id: 'F-23', truck: '#5007', cls: 'A', station: "Love's Travel Stop #523", address: '3001 Nevada Blvd, Charlotte, NC 28273', city: 'Charlotte, NC', state: 'NC', lat: 35.23, lon: -80.84, gallons: 138, pricePaid: 3.71, localTime: 'May 14 · 10:10 AM EDT' },
+  { id: 'F-24', truck: '#2008', cls: 'D', station: "Love's Travel Stop #419", address: '2340 Willis Rd, Richmond, VA 23237', city: 'Richmond, VA', state: 'VA', lat: 37.54, lon: -77.44, gallons: 166, pricePaid: 4.12, localTime: 'May 11 · 2:40 PM EDT' },
+  { id: 'F-25', truck: '#5012', cls: 'A', station: "Love's Travel Stop #645", address: '1301 S 51st Ave, Phoenix, AZ 85043', city: 'Phoenix, AZ', state: 'AZ', lat: 33.45, lon: -112.07, gallons: 190, pricePaid: 4.06, localTime: 'May 14 · 6:20 AM MST' },
+  { id: 'F-26', truck: '#5012', cls: 'A', station: "Love's Travel Stop #659", address: '2812 Lenwood Rd, Barstow, CA 92311', city: 'Barstow, CA', state: 'CA', lat: 34.90, lon: -117.02, gallons: 205, pricePaid: 5.58, localTime: 'May 14 · 10:55 AM PDT' },
+  { id: 'F-27', truck: '#4012', cls: 'B', station: "Love's Travel Stop #333", address: '13401 Central Ave NE, Albuquerque, NM 87123', city: 'Albuquerque, NM', state: 'NM', lat: 35.08, lon: -106.65, gallons: 148, pricePaid: 3.80, localTime: 'May 13 · 4:15 PM MDT' },
+  { id: 'F-28', truck: '#3301', cls: 'C', station: "Love's Travel Stop #301", address: '16751 E 32nd Ave, Aurora, CO 80011', city: 'Denver, CO', state: 'CO', lat: 39.74, lon: -104.99, gallons: 158, pricePaid: 4.07, localTime: 'May 12 · 8:05 AM MDT' },
+  { id: 'F-29', truck: '#6120', cls: 'B', station: "Love's Travel Stop #788", address: '4505 S 108th St, Omaha, NE 68137', city: 'Omaha, NE', state: 'NE', lat: 41.26, lon: -95.93, gallons: 142, pricePaid: 3.72, localTime: 'May 13 · 2:40 PM CDT' },
+  { id: 'F-30', truck: '#4408', cls: 'B', station: "Love's Travel Stop #412", address: '3121 SE 22nd St, Des Moines, IA 50320', city: 'Des Moines, IA', state: 'IA', lat: 41.59, lon: -93.62, gallons: 130, pricePaid: 3.90, localTime: 'May 13 · 11:20 AM CDT' },
 ]

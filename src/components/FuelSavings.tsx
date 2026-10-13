@@ -1184,10 +1184,12 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
                 const total = perGal * s.gallons
                 return (
                   <>
-                    <div className="tam-tooltip-title">{s.city} · {s.truck}</div>
+                    <div className="tam-tooltip-title">{s.station}</div>
+                    <div className="fm-tip-addr">{s.address}</div>
                     <div className="tam-tooltip-row"><span>Paid</span><span>${s.pricePaid.toFixed(2)}/gal</span></div>
                     <div className="tam-tooltip-row"><span>Regional</span><span>${regional.toFixed(2)}/gal</span></div>
                     <div className="tam-tooltip-row"><span>Gallons</span><span>{s.gallons}</span></div>
+                    <div className="tam-tooltip-row"><span>Local time</span><span>{s.localTime}</span></div>
                     <div className="tam-tooltip-row">
                       <span>{perGal >= 0 ? 'Saved' : 'Overpaid'}</span>
                       <span className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
