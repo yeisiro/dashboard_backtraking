@@ -1403,3 +1403,65 @@ export const mapTrucks: MapTruck[] = [
   { id: '', x: 470, y: 250, tone: 'green' },
   { id: '', x: 210, y: 140, tone: 'green' },
 ]
+
+// ── Fuel map ─────────────────────────────────────────────────────────────
+// Regional diesel price ($/gal) by state — the "context" the Fuel map's state
+// fill shows. Each fuel stop is judged against its own state's regional price:
+// paying below it is a good call, paying above it is a leak. Spread roughly
+// mirrors real US diesel geography (Gulf/Plains cheapest, CA + Northeast
+// priciest) so the choropleth reads at a glance.
+export const STATE_DIESEL: Record<string, number> = {
+  CA: 5.42, OR: 4.68, WA: 4.75, NV: 4.86, AZ: 4.21, NM: 3.89, UT: 4.12, CO: 3.92,
+  TX: 3.58, OK: 3.49, KS: 3.71, NE: 3.84, MO: 3.62, AR: 3.57, LA: 3.55, MS: 3.61,
+  AL: 3.66, GA: 3.72, FL: 3.84, TN: 3.64, KY: 3.69, NC: 3.79, SC: 3.74, VA: 3.88,
+  IL: 4.18, IN: 3.86, OH: 3.81, MI: 3.93, WI: 3.79, IA: 3.74, MN: 3.88, PA: 4.42,
+  NY: 4.64, NJ: 3.98, MD: 3.95, WV: 3.92, ND: 3.86, SD: 3.82, MT: 3.97, ID: 4.08,
+  WY: 3.90,
+}
+
+export interface FuelStop {
+  id: string
+  truck: string
+  cls: 'A' | 'B' | 'C' | 'D'
+  city: string
+  state: string // USPS code — keys STATE_DIESEL
+  lat: number
+  lon: number
+  gallons: number
+  pricePaid: number // $/gal actually paid at the pump
+}
+
+// Where the fleet actually fueled. `pricePaid` vs STATE_DIESEL[state] is the
+// whole judgment: below region = money saved (green), above = leak (red).
+export const fuelStops: FuelStop[] = [
+  { id: 'F-01', truck: '#5012', cls: 'A', city: 'Dallas, TX', state: 'TX', lat: 32.78, lon: -96.80, gallons: 165, pricePaid: 3.44 },
+  { id: 'F-02', truck: '#5012', cls: 'A', city: 'Houston, TX', state: 'TX', lat: 29.76, lon: -95.37, gallons: 142, pricePaid: 3.71 },
+  { id: 'F-03', truck: '#4521', cls: 'D', city: 'Laredo, TX', state: 'TX', lat: 27.52, lon: -99.49, gallons: 188, pricePaid: 3.52 },
+  { id: 'F-04', truck: '#3301', cls: 'C', city: 'Oklahoma City, OK', state: 'OK', lat: 35.47, lon: -97.52, gallons: 150, pricePaid: 3.41 },
+  { id: 'F-05', truck: '#5007', cls: 'A', city: 'Atlanta, GA', state: 'GA', lat: 33.75, lon: -84.39, gallons: 172, pricePaid: 3.66 },
+  { id: 'F-06', truck: '#5007', cls: 'A', city: 'Macon, GA', state: 'GA', lat: 32.84, lon: -83.63, gallons: 120, pricePaid: 3.85 },
+  { id: 'F-07', truck: '#5007', cls: 'A', city: 'Orlando, FL', state: 'FL', lat: 28.54, lon: -81.38, gallons: 134, pricePaid: 3.78 },
+  { id: 'F-08', truck: '#4012', cls: 'B', city: 'Jacksonville, FL', state: 'FL', lat: 30.33, lon: -81.66, gallons: 158, pricePaid: 3.99 },
+  { id: 'F-09', truck: '#6120', cls: 'B', city: 'Nashville, TN', state: 'TN', lat: 36.16, lon: -86.78, gallons: 146, pricePaid: 3.55 },
+  { id: 'F-10', truck: '#6120', cls: 'B', city: 'Memphis, TN', state: 'TN', lat: 35.15, lon: -90.05, gallons: 170, pricePaid: 3.78 },
+  { id: 'F-11', truck: '#4408', cls: 'B', city: 'Chicago, IL', state: 'IL', lat: 41.85, lon: -87.65, gallons: 180, pricePaid: 4.05 },
+  { id: 'F-12', truck: '#4408', cls: 'B', city: 'Effingham, IL', state: 'IL', lat: 39.12, lon: -88.55, gallons: 128, pricePaid: 4.32 },
+  { id: 'F-13', truck: '#4408', cls: 'B', city: 'Indianapolis, IN', state: 'IN', lat: 39.77, lon: -86.16, gallons: 156, pricePaid: 3.74 },
+  { id: 'F-14', truck: '#2014', cls: 'C', city: 'Columbus, OH', state: 'OH', lat: 39.96, lon: -82.99, gallons: 162, pricePaid: 3.72 },
+  { id: 'F-15', truck: '#2014', cls: 'C', city: 'Toledo, OH', state: 'OH', lat: 41.66, lon: -83.56, gallons: 118, pricePaid: 3.95 },
+  { id: 'F-16', truck: '#2008', cls: 'D', city: 'Harrisburg, PA', state: 'PA', lat: 40.27, lon: -76.88, gallons: 174, pricePaid: 4.28 },
+  { id: 'F-17', truck: '#2008', cls: 'D', city: 'Allentown, PA', state: 'PA', lat: 40.60, lon: -75.47, gallons: 136, pricePaid: 4.58 },
+  { id: 'F-18', truck: '#3301', cls: 'C', city: 'Kansas City, MO', state: 'MO', lat: 39.10, lon: -94.58, gallons: 152, pricePaid: 3.50 },
+  { id: 'F-19', truck: '#3301', cls: 'C', city: 'St. Louis, MO', state: 'MO', lat: 38.63, lon: -90.20, gallons: 144, pricePaid: 3.77 },
+  { id: 'F-20', truck: '#4012', cls: 'B', city: 'Little Rock, AR', state: 'AR', lat: 34.75, lon: -92.29, gallons: 160, pricePaid: 3.49 },
+  { id: 'F-21', truck: '#4521', cls: 'D', city: 'Birmingham, AL', state: 'AL', lat: 33.52, lon: -86.80, gallons: 150, pricePaid: 3.82 },
+  { id: 'F-22', truck: '#4521', cls: 'D', city: 'Baton Rouge, LA', state: 'LA', lat: 30.45, lon: -91.19, gallons: 182, pricePaid: 3.47 },
+  { id: 'F-23', truck: '#5007', cls: 'A', city: 'Charlotte, NC', state: 'NC', lat: 35.23, lon: -80.84, gallons: 138, pricePaid: 3.71 },
+  { id: 'F-24', truck: '#2008', cls: 'D', city: 'Richmond, VA', state: 'VA', lat: 37.54, lon: -77.44, gallons: 166, pricePaid: 4.12 },
+  { id: 'F-25', truck: '#5012', cls: 'A', city: 'Phoenix, AZ', state: 'AZ', lat: 33.45, lon: -112.07, gallons: 190, pricePaid: 4.06 },
+  { id: 'F-26', truck: '#5012', cls: 'A', city: 'Barstow, CA', state: 'CA', lat: 34.90, lon: -117.02, gallons: 205, pricePaid: 5.58 },
+  { id: 'F-27', truck: '#4012', cls: 'B', city: 'Albuquerque, NM', state: 'NM', lat: 35.08, lon: -106.65, gallons: 148, pricePaid: 3.80 },
+  { id: 'F-28', truck: '#3301', cls: 'C', city: 'Denver, CO', state: 'CO', lat: 39.74, lon: -104.99, gallons: 158, pricePaid: 4.07 },
+  { id: 'F-29', truck: '#6120', cls: 'B', city: 'Omaha, NE', state: 'NE', lat: 41.26, lon: -95.93, gallons: 142, pricePaid: 3.72 },
+  { id: 'F-30', truck: '#4408', cls: 'B', city: 'Des Moines, IA', state: 'IA', lat: 41.59, lon: -93.62, gallons: 130, pricePaid: 3.90 },
+]

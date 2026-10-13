@@ -4,7 +4,7 @@ import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { FeatureCollection } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
-import { tripRows, type TripRow } from '../data'
+import { tripRows, fuelStops, STATE_DIESEL, type TripRow, type FuelStop } from '../data'
 
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 
@@ -1003,6 +1003,207 @@ function TruckFuelList({ stats, firstColLabel = 'Truck' }: { stats: TruckFuelSta
   )
 }
 
+// ---------- Fuel Map ----------
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+
+// Sequential "heat" ramp for the regional-price context backdrop: pale amber
+// (cheapest region) → orange → red (priciest). Kept faint so the fuel-stop
+// dots on top stay the focus.
+function priceRGB(t: number): [number, number, number] {
+  const k = clamp01(t)
+  if (k < 0.5) {
+    const u = k / 0.5
+    return [lerp(242, 232, u), lerp(201, 140, u), lerp(110, 60, u)]
+  }
+  const u = (k - 0.5) / 0.5
+  return [lerp(232, 190, u), lerp(140, 44, u), lerp(60, 38, u)]
+}
+
+// Diverging ramp for a fuel stop's decision: red (overpaid vs region) →
+// neutral → green (saved vs region). `s` is $/gal saved, capped at ±$0.35.
+function decisionRGB(s: number): [number, number, number] {
+  const t = Math.max(-1, Math.min(1, s / 0.35))
+  if (t >= 0) return [lerp(180, 46, t), lerp(170, 184, t), lerp(90, 120, t)]
+  const u = -t
+  return [lerp(180, 224, u), lerp(170, 72, u), lerp(90, 72, u)]
+}
+
+const rgba = (c: [number, number, number], a: number) =>
+  `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${a})`
+
+// The fleet's fuel map: a dot per fill-up at its real location, colored by how
+// the price paid compared to that state's regional diesel (green = saved, red
+// = overpaid) and sized by gallons. The faint state tint behind them is the
+// regional context the decision is judged against.
+function FuelMap({ rows }: { rows: TripRow[] }) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<
+    | { kind: 'state'; code: string; name: string; x: number; y: number; flipX: boolean }
+    | { kind: 'stop'; stop: FuelStop; x: number; y: number; flipX: boolean }
+    | null
+  >(null)
+
+  // Only stops whose truck ran a trip in the active class filter.
+  const activeTrucks = useMemo(() => new Set(rows.map((r) => r.truck)), [rows])
+  const stops = useMemo(() => fuelStops.filter((s) => activeTrucks.has(s.truck)), [activeTrucks])
+
+  // Price scale bounds across every state we have a regional price for.
+  const prices = Object.values(STATE_DIESEL)
+  const minPrice = Math.min(...prices)
+  const maxPrice = Math.max(...prices)
+  const priceT = (p: number) => (maxPrice > minPrice ? (p - minPrice) / (maxPrice - minPrice) : 0.5)
+
+  useEffect(() => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+
+    const projection = geoAlbersUsa().scale(1150).translate([W / 2, H / 2])
+    const path = geoPath().projection(projection)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const topo = usTopo as any
+    const states = feature(topo, topo.objects.states) as unknown as FeatureCollection
+
+    const svg = svgEl
+    while (svg.firstChild) svg.removeChild(svg.firstChild)
+    const ns = 'http://www.w3.org/2000/svg'
+
+    // 1 ─ faint regional-price backdrop, so the dots read "how good vs this
+    // region" at a glance without the choropleth stealing focus.
+    states.features.forEach((f) => {
+      const entry = FIPS_STATE[Number(f.id)]
+      if (!entry) return
+      const [code, name] = entry
+      const d = path(f as never)
+      if (!d) return
+      const price = STATE_DIESEL[code]
+      const g = document.createElementNS(ns, 'g')
+      const shape = document.createElementNS(ns, 'path')
+      shape.setAttribute('d', d)
+      if (price !== undefined) {
+        const rgb = priceRGB(priceT(price))
+        shape.setAttribute('fill', rgba(rgb, 0.18))
+      } else {
+        shape.setAttribute('fill', 'rgba(255,255,255,0.03)')
+      }
+      shape.setAttribute('stroke', 'rgba(255,255,255,0.14)')
+      shape.setAttribute('stroke-width', '0.6')
+      if (price !== undefined) {
+        const updateHover = (e: MouseEvent) => {
+          const wrapRect = wrapRef.current?.getBoundingClientRect()
+          if (!wrapRect) return
+          const x = e.clientX - wrapRect.left
+          const y = e.clientY - wrapRect.top
+          setHover({ kind: 'state', code, name, x, y, flipX: x > wrapRect.width * 0.65 })
+        }
+        shape.addEventListener('mouseenter', updateHover)
+        shape.addEventListener('mousemove', updateHover)
+        shape.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'state' && p.code === code ? null : p)))
+      }
+      g.appendChild(shape)
+      svg.appendChild(g)
+    })
+
+    // 2 ─ one dot per fuel stop at its real location.
+    stops.forEach((stop) => {
+      const xy = projection([stop.lon, stop.lat])
+      if (!xy) return
+      const regional = STATE_DIESEL[stop.state] ?? stop.pricePaid
+      const savings = regional - stop.pricePaid
+      const r = 5 + clamp01((stop.gallons - 110) / 100) * 7
+      const rgb = decisionRGB(savings)
+      const c = document.createElementNS(ns, 'circle')
+      c.setAttribute('cx', String(xy[0]))
+      c.setAttribute('cy', String(xy[1]))
+      c.setAttribute('r', String(r))
+      c.setAttribute('fill', rgba(rgb, 0.92))
+      c.setAttribute('stroke', 'rgba(255,255,255,0.9)')
+      c.setAttribute('stroke-width', '1.4')
+      c.style.cursor = 'pointer'
+      const updateHover = (e: MouseEvent) => {
+        const wrapRect = wrapRef.current?.getBoundingClientRect()
+        if (!wrapRect) return
+        const x = e.clientX - wrapRect.left
+        const y = e.clientY - wrapRect.top
+        setHover({ kind: 'stop', stop, x, y, flipX: x > wrapRect.width * 0.65 })
+      }
+      c.addEventListener('mouseenter', updateHover)
+      c.addEventListener('mousemove', updateHover)
+      c.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'stop' && p.stop.id === stop.id ? null : p)))
+      svg.appendChild(c)
+    })
+  }, [stops])
+
+  const savedTotal = stops.reduce((sum, s) => sum + ((STATE_DIESEL[s.state] ?? s.pricePaid) - s.pricePaid) * s.gallons, 0)
+
+  return (
+    <section className="card tam-card">
+      <div className="card-head">
+        <span className="eyebrow">Fuel Stops</span>
+        <span className="fm-count">{stops.length} fill-up{stops.length === 1 ? '' : 's'}</span>
+      </div>
+      <p className="tam-hint">
+        Where the fleet tanked. Dot color = price paid vs the state's regional diesel, size = gallons.{' '}
+        <strong>{savedTotal >= 0 ? `Net ${usd(savedTotal)} saved vs region` : `Net ${usd(-savedTotal)} over region`}.</strong>
+      </p>
+
+      <div className="fm-legend">
+        <span className="fm-legend-label">Overpaid</span>
+        <span className="fm-legend-gradient fm-legend-decision" />
+        <span className="fm-legend-label">Saved</span>
+        <span className="fm-legend-sep" />
+        <span className="fm-legend-size"><i className="fm-legend-dot-sm" /><i className="fm-legend-dot-lg" /> gallons</span>
+      </div>
+
+      <div className="tam-body">
+        <div className="tam-wrap" ref={wrapRef}>
+          <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fuel stops, colored by price paid vs region" />
+
+          {hover && (
+            <div
+              className="tam-tooltip"
+              style={{
+                left: hover.flipX ? hover.x - 14 : hover.x + 14,
+                top: hover.y + 14,
+                transform: `translate(${hover.flipX ? '-100%' : '0'}, 0)`,
+              }}
+            >
+              {hover.kind === 'state' ? (
+                <>
+                  <div className="tam-tooltip-title">{hover.name}</div>
+                  <div className="tam-tooltip-row">
+                    <span>Regional diesel</span>
+                    <span>${(STATE_DIESEL[hover.code] ?? 0).toFixed(2)}/gal</span>
+                  </div>
+                </>
+              ) : (() => {
+                const s = hover.stop
+                const regional = STATE_DIESEL[s.state] ?? s.pricePaid
+                const perGal = regional - s.pricePaid
+                const total = perGal * s.gallons
+                return (
+                  <>
+                    <div className="tam-tooltip-title">{s.city} · {s.truck}</div>
+                    <div className="tam-tooltip-row"><span>Paid</span><span>${s.pricePaid.toFixed(2)}/gal</span></div>
+                    <div className="tam-tooltip-row"><span>Regional</span><span>${regional.toFixed(2)}/gal</span></div>
+                    <div className="tam-tooltip-row"><span>Gallons</span><span>{s.gallons}</span></div>
+                    <div className="tam-tooltip-row">
+                      <span>{perGal >= 0 ? 'Saved' : 'Overpaid'}</span>
+                      <span className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
+                        {usd(Math.abs(total))}
+                      </span>
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
 
 export default function FuelSavings({
   classFilter = [],
@@ -1071,6 +1272,8 @@ export default function FuelSavings({
           </div>
         </div>
       </div>
+
+      <FuelMap rows={rows} />
 
       {showAllTrucks && (
         <SubDetailModal
