@@ -6796,11 +6796,11 @@ button {
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
-/* Secondary legend column (e.g. a category's share of miles next to cost). */
+/* Secondary legend column (e.g. a category's miles value next to its cost). */
 .ld-legend-sub {
-  font-size: 12px;
-  color: #9aa3b2;
-  min-width: 50px;
+  font-size: 13px;
+  color: #c4cad6;
+  min-width: 82px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;

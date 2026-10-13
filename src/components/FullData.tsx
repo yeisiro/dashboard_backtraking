@@ -755,8 +755,8 @@ function PieChart({
         {legendHead && (
           <div className="ld-legend-row ld-legend-head">
             <span className="ld-legend-name" />
-            {hasSub && <span className="ld-legend-sub">{legendHead.sub}</span>}
             <span className="ld-legend-pct">{legendHead.pct}</span>
+            {hasSub && <span className="ld-legend-sub">{legendHead.sub}</span>}
             <span className="ld-legend-val">{legendHead.val}</span>
           </div>
         )}
@@ -771,8 +771,8 @@ function PieChart({
               <span className="ld-legend-dot" style={{ background: s.color }} />
               {s.label}
             </span>
-            {hasSub && <span className="ld-legend-sub">{s.sub}</span>}
             <span className="ld-legend-pct">{total ? Math.round((s.value / total) * 100) : 0}%</span>
+            {hasSub && <span className="ld-legend-sub">{s.sub}</span>}
             <span className="ld-legend-val">{formatValue(s.value)}</span>
           </div>
         ))}
@@ -837,14 +837,15 @@ function Productivity({
   const totalProfit = rows.reduce((sum, r) => sum + r.profit, 0)
   const profitability = totalIncome ? (totalProfit / totalIncome) * 100 : 0
 
-  // Cost distribution: the ring is each category's share of total cost; the
-  // legend shows that cost alongside the category's share of MILES, so the
-  // reader sees cheap vs. expensive miles at a glance (no toggle needed).
+  // Cost distribution: one share % per category (miles and cost are
+  // proportional to the totals), shown with that category's miles value and
+  // cost value side by side — no toggle.
+  const totalFleetMiles = rows.reduce((sum, r) => sum + r.totalMiles, 0)
   const costPieSegments: PieSegment[] = costSegments.map((s) => ({
     label: s.label,
     color: s.color,
     value: totalCost * (s.pct / 100),
-    sub: `${s.milesPct}%`,
+    sub: miles(Math.round(totalFleetMiles * (s.pct / 100))),
   }))
 
   // Time distribution: real driving + idle hours per trip, plus whatever's
@@ -956,7 +957,7 @@ function Productivity({
             <PieChart
               segments={costPieSegments}
               formatValue={usd}
-              legendHead={{ sub: 'Miles', pct: 'Cost', val: '$' }}
+              legendHead={{ pct: '%', sub: 'Miles', val: 'Cost' }}
             />
           </div>
         </section>
