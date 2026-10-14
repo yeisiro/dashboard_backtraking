@@ -7041,6 +7041,35 @@ button {
   min-height: 400px;
 }
 .ld-map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* First-load overlay while the route map parses topology and paints. */
+.ld-map-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(11, 17, 22, 0.78);
+  backdrop-filter: blur(2px);
+  animation: ld-map-fade 150ms ease;
+}
+@keyframes ld-map-fade { from { opacity: 0; } to { opacity: 1; } }
+.ld-map-loading-spin {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.14);
+  border-top-color: var(--blue);
+  animation: refresh-spin 0.8s linear infinite;
+}
+.ld-map-loading-txt {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
 .ld-map-controls {
   position: absolute;
   top: 14px;

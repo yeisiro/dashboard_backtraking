@@ -258,6 +258,12 @@ const STATE_MESH = mesh(usTopoAny, usTopoAny.objects.states, (a: unknown, b: unk
 const NATION_PATH = mapPathGen(NATION_FEATURE) ?? ''
 const STATE_MESH_PATH = mapPathGen(STATE_MESH as unknown as MultiLineString) ?? ''
 
+// The first route map of the session pays for parsing the US topology and
+// painting the full state mesh, so it lands a beat late. A one-time
+// "detecting deviations" overlay covers that first paint; later opens are warm
+// and skip it. Module-level so it persists across modal opens.
+let mapWarmed = false
+
 // Coordinates for every city that appears in a trip lane (see data.ts TRIP_BASE).
 const CITY_COORDS: Record<string, [number, number]> = {
   'Atlanta, GA': [-84.388, 33.749],
@@ -711,6 +717,17 @@ export default function TripDetailModal({
   // briefly since the (mock) data returns instantly — same idea as the header
   // Refresh, but surfaced on the map the way the ELD status panel does.
   const [mapSyncing, setMapSyncing] = useState(false)
+  // First-load map overlay: only the session's first route map shows it, while
+  // the topology parses and the mesh paints; after that the map is warm.
+  const [detecting, setDetecting] = useState(!mapWarmed)
+  useEffect(() => {
+    if (!detecting) return
+    const t = setTimeout(() => {
+      mapWarmed = true
+      setDetecting(false)
+    }, 1300)
+    return () => clearTimeout(t)
+  }, [detecting])
   const syncMap = () => {
     if (mapSyncing) return
     setMapSyncing(true)
@@ -1757,6 +1774,13 @@ export default function TripDetailModal({
               >
                 {mapLayers}
               </svg>
+
+              {detecting && (
+                <div className="ld-map-loading" role="status" aria-live="polite">
+                  <span className="ld-map-loading-spin" />
+                  <span className="ld-map-loading-txt">Detecting deviations…</span>
+                </div>
+              )}
 
               <div className="ld-map-scrub">
                 <button className="ld-scrub-play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
