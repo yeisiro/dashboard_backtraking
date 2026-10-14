@@ -1359,7 +1359,7 @@ export default function TripDetailModal({
         <div className="ld-miles-row">
           <div className="ld-miles-stat">
             <span className="ld-miles-num">{trip.idleHours}h</span>
-            <span className="ld-miles-num-sub">{trip.idlePct}% of clock</span>
+            <span className="ld-miles-num-sub">{trip.idlePct}% of total route time</span>
             <span className="ld-miles-lbl">Idle time</span>
           </div>
           <span className="ld-miles-sep" />

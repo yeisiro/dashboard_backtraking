@@ -197,6 +197,7 @@ export default function FullData({
   dimension = 'trucks',
   view = 'dashboard',
   onSubTabChange,
+  searchSeed = null,
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
@@ -206,6 +207,8 @@ export default function FullData({
   dimension?: 'trucks' | 'drivers'
   view?: 'summary' | 'dashboard'
   onSubTabChange?: (tab: SubTab) => void
+  // A load id to pre-fill the Trips search with (from a live-ops load click).
+  searchSeed?: string | null
 }) {
   // Landing here from a "Trips Here" new-tab link (see FuelSavings.tsx's
   // openPlaceTrips) — the query string is the only way a fresh tab can carry
@@ -252,6 +255,7 @@ export default function FullData({
           dimension={dimension}
           placeFilter={placeFilter}
           onClearPlaceFilter={() => setPlaceFilter(null)}
+          searchSeed={searchSeed}
         />
       ) : tab === 'Fleet Analytics' ? (
         <FleetAnalytics classFilter={classFilter} view={view} />
@@ -1102,6 +1106,7 @@ function TripsTable({
   dimension = 'trucks',
   placeFilter = null,
   onClearPlaceFilter,
+  searchSeed = null,
 }: {
   band?: 'best' | 'worst' | null
   classFilter?: string[]
@@ -1111,6 +1116,7 @@ function TripsTable({
   dimension?: 'trucks' | 'drivers'
   placeFilter?: { code: string; name: string; direction: 'outbound' | 'inbound' | 'all' } | null
   onClearPlaceFilter?: () => void
+  searchSeed?: string | null
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>('profit')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -1120,7 +1126,7 @@ function TripsTable({
   const [dhAdjust, setDhAdjust] = useState<TripRow | null>(null)
   const splitSeq = useRef(0)
   const [selectedMove, setSelectedMove] = useState<RepositionRow | null>(null)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(searchSeed ?? '')
   // Also fold in empty repositioning moves (deadhead, no load) alongside trips.
   const [showReposition, setShowReposition] = useState(true)
   // Trips are stateful so assigning an operative gap can fold its empty miles

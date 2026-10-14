@@ -46,6 +46,9 @@ export default function App() {
   const [analysisDim, setAnalysisDim] = useState<'trucks' | 'drivers'>('trucks')
   // A truck clicked in Live Operation Monitoring, isolated on the Fleet map.
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null)
+  // A load id clicked in Live Operation Monitoring — seeds the Trips search so
+  // Full Data opens pre-filtered to that single load.
+  const [tripSearchSeed, setTripSearchSeed] = useState<string | null>(null)
   const [deadheadMode, setDeadheadMode] = useState<DeadheadMode>('in-range')
   const [fullDataSubTab, setFullDataSubTab] = useState<SubTab>('Trips')
   // Trips and Fleet Analytics always need each trip's untouched full
@@ -180,7 +183,11 @@ export default function App() {
             {sync && <SyncBar sync={sync} />}
             <Toolbar
               tab={dataTab}
-              onTabChange={setDataTab}
+              onTabChange={(t) => {
+                // A deliberate tab switch clears any load-seeded Trips search.
+                setTripSearchSeed(null)
+                setDataTab(t)
+              }}
               classFilter={classFilter}
               onClassFilterChange={setClassFilter}
               truckFilter={truckFilter}
@@ -214,6 +221,7 @@ export default function App() {
                 dimension={analysisDim}
                 view={view}
                 onSubTabChange={setFullDataSubTab}
+                searchSeed={tripSearchSeed}
               />
             ) : (
               <>
@@ -231,6 +239,7 @@ export default function App() {
                     dimension={analysisDim}
                     hideLeaders={view === 'summary'}
                     onViewTrips={(band, members) => {
+                      setTripSearchSeed(null)
                       setTripsBand(band)
                       // Filter Full Data to the picked trucks/drivers — by the
                       // active analysis dimension so the right filter applies.
@@ -249,6 +258,14 @@ export default function App() {
                       noData={noData}
                       onFocusTruck={setMapFocus}
                       focusedId={mapFocus?.label ?? null}
+                      onOpenLoad={(loadRef) => {
+                        setTripSearchSeed(loadRef)
+                        setTruckFilter([])
+                        setDriverFilter([])
+                        setTripsBand(null)
+                        setMapFocus(null)
+                        setDataTab('full')
+                      }}
                     />
                     <MarketMap
                       fill

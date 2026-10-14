@@ -36,11 +36,14 @@ export default function LiveOperations({
   noData = false,
   onFocusTruck,
   focusedId = null,
+  onOpenLoad,
 }: {
   noData?: boolean
   // Click a truck row → isolate it on the Fleet Monitor map.
   onFocusTruck?: (f: LiveFocus | null) => void
   focusedId?: string | null
+  // Click a load id → open the Trips view filtered to that load.
+  onOpenLoad?: (loadRef: string) => void
 }) {
   const [tab, setTab] = useState<LiveTab>('active')
   // Sort the inactive list by time-without-a-load; default longest-first.
@@ -150,7 +153,29 @@ export default function LiveOperations({
                       </span>
                     </div>
                     <div className="trip-route">
-                      <span className="trip-load">{t.loadRef}</span>
+                      {onOpenLoad ? (
+                        <span
+                          className="trip-load trip-load-link"
+                          role="button"
+                          tabIndex={0}
+                          title="View this load in Trips"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onOpenLoad(t.loadRef)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              onOpenLoad(t.loadRef)
+                            }
+                          }}
+                        >
+                          {t.loadRef}
+                        </span>
+                      ) : (
+                        <span className="trip-load">{t.loadRef}</span>
+                      )}
                       <span className="trip-route-sep">·</span>
                       {t.route}
                     </div>

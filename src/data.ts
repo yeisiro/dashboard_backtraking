@@ -811,7 +811,9 @@ export const trips: Trip[] = Array.from({ length: 32 }, (_, i) => {
     id: '#' + (4000 + i * 13),
     cls: FLEET_CLASSES[i % 4],
     driver: driverForIndex(i),
-    loadRef: String(300000 + i * 40993).slice(-7).padStart(7, '0'),
+    // Same load ids as the Full Data trips table (tripRows), so clicking a
+    // live load opens that exact trip in Trips.
+    loadRef: 'L' + (40012001 + i),
     alert: alert.a,
     alertTone: alert.t,
     route: ACTIVE_ROUTES[i % ACTIVE_ROUTES.length],
