@@ -3781,7 +3781,33 @@ button {
 .fd-truck-row { display: flex; align-items: center; }
 .fd-truck { font-weight: 700; }
 .fd-driver { font-size: 12px; margin-top: 3px; }
-.fd-load-ref { font-weight: 700; }
+.fd-load-ref { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+/* TONU (Truck Ordered Not Used) load tag — a chip shown next to the load id. */
+.fd-tonu-tag,
+.ld-tonu-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--orange);
+  background: rgba(224, 164, 88, 0.14);
+  border: 1px solid rgba(224, 164, 88, 0.32);
+  cursor: help;
+  white-space: nowrap;
+}
+.ld-tonu-tag { margin-left: 4px; }
+/* The chip is nowrap, but its tooltip must wrap — anchor it left of the chip
+   so it opens into the row's open space instead of overflowing one long line. */
+.fd-tonu-tag.cf-tip::after,
+.ld-tonu-tag.cf-tip::after {
+  white-space: normal;
+  left: 0;
+  right: auto;
+  width: 240px;
+}
 .fd-load-route { font-size: 12px; margin-top: 2px; }
 .fd-class {
   display: inline-flex;

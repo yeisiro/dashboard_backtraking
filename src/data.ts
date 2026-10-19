@@ -964,6 +964,9 @@ export interface TripRow {
   lane: string
   loadRef: string // load reference id, e.g. "L40012007"
   band?: 'best' | 'worst'
+  // Free-form load tags (shown as chips). "TONU" = Truck Ordered Not Used: the
+  // load was canceled by the shipper/broker after a truck was dispatched.
+  tags?: string[]
   // V1 only models trips that already happened — the post-delivery paperwork
   // lifecycle (Delivered → Invoiced/Posted → Paid). Pre-delivery statuses
   // (Booked/Dispatched, Picked up, In Transit) and TONU aren't tracked yet.
@@ -1121,6 +1124,9 @@ interface TripBase {
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
+// Loads (by index into TRIP_BASE) tagged TONU — Truck Ordered Not Used.
+const TONU_LOADS = new Set([2, 9, 16])
+
 function buildTrip(b: TripBase, index: number): TripRow {
   const dhPct = round1(((b.totalMiles - b.loadedMiles) / b.totalMiles) * 100)
   const totalCost = Math.round(b.cost * 1.08)
@@ -1135,6 +1141,7 @@ function buildTrip(b: TripBase, index: number): TripRow {
   // details modal both use this, so the detail reconciles to the column.
   const leakage = Math.round(Math.abs(b.missedFuelSavings) + excessMilesCost + idleCost)
   const loadRef = 'L' + (40012001 + index)
+  const tags = TONU_LOADS.has(index) ? ['TONU'] : undefined
   // Real stops: detected for most loads (from the lane endpoints), but cleared
   // for the seeded backlog loads so My Loads has something to resolve.
   const [origin, dest] = b.lane.split(' → ')
@@ -1152,6 +1159,7 @@ function buildTrip(b: TripBase, index: number): TripRow {
     score: 0, // filled in by computeScores once the full set is known
     driver: driverForIndex(index),
     loadRef,
+    tags,
     status: b.status ?? 'delivered',
     profit: b.income - b.cost,
     wastedRpmPct: round1(((b.negotiatedRpm - b.effectiveRpm) / b.negotiatedRpm) * 100),

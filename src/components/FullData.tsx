@@ -1799,7 +1799,17 @@ function TripsTable({
         const opCount = opCountByLoad.get(r.loadRef) ?? 0
         return (
           <td key={key} className="fd-left">
-            <div className="fd-load-ref">{r.loadRef}</div>
+            <div className="fd-load-ref">
+              {r.loadRef}
+              {r.tags?.includes('TONU') && (
+                <span
+                  className="fd-tonu-tag cf-tip"
+                  data-tip="TONU — Truck Ordered Not Used: the load was canceled by the shipper or broker after a truck was dispatched or assigned."
+                >
+                  TONU
+                </span>
+              )}
+            </div>
             <div className="fd-load-route fd-dim">{r.lane}</div>
             {legCount > 0 && (
               <button

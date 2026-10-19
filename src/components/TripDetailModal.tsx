@@ -1630,6 +1630,14 @@ export default function TripDetailModal({
                 </div>
               </div>
             )}
+            {!repo && trip.tags?.includes('TONU') && (
+              <span
+                className="ld-tonu-tag cf-tip"
+                data-tip="TONU — Truck Ordered Not Used: the load was canceled by the shipper or broker after a truck was dispatched or assigned."
+              >
+                TONU
+              </span>
+            )}
             {repo ? (
               <span className="ld-status-pill" style={{ background: '#341D24', color: 'var(--red)' }}>
                 DH
