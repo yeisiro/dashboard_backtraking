@@ -4,7 +4,7 @@ import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { FeatureCollection } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
-import { tripRows, fuelStops, STATE_DIESEL, type TripRow, type FuelStop } from '../data'
+import { tripRows, fuelStops, STATE_FUEL_AVG, type TripRow, type FuelStop } from '../data'
 import { usePeriod } from '../PeriodContext'
 
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
@@ -1039,9 +1039,18 @@ function TruckFuelList({ stats, firstColLabel = 'Truck' }: { stats: TruckFuelSta
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
-// Sequential "heat" ramp for the regional-price context backdrop: pale amber
-// (cheapest region) → orange → red (priciest). Kept faint so the fuel-stop
-// dots on top stay the focus.
+// Sequential green ramp for a station's fuel-card discount ($/gal off the pump
+// price): a muted green-gray at a thin discount → saturated green at a deep one.
+// Always green — a card never pays above retail, so the discount is never < 0.
+function discountRGB(d: number): [number, number, number] {
+  const t = clamp01(d / 0.6) // $0.60/gal saturates the ramp
+  return [lerp(150, 46, t), lerp(170, 184, t), lerp(130, 120, t)]
+}
+
+// Sequential "heat" ramp for the backdrop choropleth: pale amber (the fleet's
+// cheapest region to fuel) → orange → red (priciest). Kept faint so the green
+// discount dots on top stay the focus. `t` is the state's avg $/gal paid,
+// normalized across the states the fleet actually fueled in.
 function priceRGB(t: number): [number, number, number] {
   const k = clamp01(t)
   if (k < 0.5) {
@@ -1052,22 +1061,21 @@ function priceRGB(t: number): [number, number, number] {
   return [lerp(232, 190, u), lerp(140, 44, u), lerp(60, 38, u)]
 }
 
-// Diverging ramp for a fuel stop's decision: red (overpaid vs region) →
-// neutral → green (saved vs region). `s` is $/gal saved, capped at ±$0.35.
-function decisionRGB(s: number): [number, number, number] {
-  const t = Math.max(-1, Math.min(1, s / 0.35))
-  if (t >= 0) return [lerp(180, 46, t), lerp(170, 184, t), lerp(90, 120, t)]
-  const u = -t
-  return [lerp(180, 224, u), lerp(170, 72, u), lerp(90, 72, u)]
-}
-
 const rgba = (c: [number, number, number], a: number) =>
   `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${a})`
 
-// The fleet's fuel map: a dot per fill-up at its real location, colored by how
-// the price paid compared to that state's regional diesel (green = saved, red
-// = overpaid) and sized by gallons. The faint state tint behind them is the
-// regional context the decision is judged against.
+// Backdrop scale spans the regional-average table across the whole country, so
+// every state tints on one stable color scale (not just the states fueled in).
+const FUEL_AVG_VALUES = Object.values(STATE_FUEL_AVG)
+const FUEL_AVG_MIN = Math.min(...FUEL_AVG_VALUES)
+const FUEL_AVG_MAX = Math.max(...FUEL_AVG_VALUES)
+const fuelAvgT = (p: number) =>
+  FUEL_AVG_MAX > FUEL_AVG_MIN ? (p - FUEL_AVG_MIN) / (FUEL_AVG_MAX - FUEL_AVG_MIN) : 0.5
+
+// The fleet's fuel map: one dot per Love's station at its real location, colored
+// by the fuel-card discount captured there (retail − paid, greener = deeper
+// discount) and sized by gallons. The judgment is the card savings off the pump
+// price, not the public regional diesel average (irrelevant to a card fleet).
 function FuelMap({
   classFilter,
   truckFilter,
@@ -1110,11 +1118,12 @@ function FuelMap({
     )
   }, [classFilter, truckFilter, driverFilter, rangeDays, rangeEnd])
 
-  const regionalOf = (s: FuelStop) => STATE_DIESEL[s.state] ?? s.pricePaid
+  // The fuel-card discount captured at a stop: retail pump price − price paid.
+  const discountOf = (s: FuelStop) => s.retail - s.pricePaid
 
   // A station can collect several fill-ups across a wide window / many trucks,
   // so the map plots ONE dot per Love's: size by total gallons, color by the
-  // gallon-weighted saving vs region. The per-stop detail lives in the panel.
+  // gallon-weighted card discount. The per-stop detail lives in the drawer.
   const stations = useMemo(() => {
     const m = new Map<string, FuelStop[]>()
     stops.forEach((s) => {
@@ -1125,7 +1134,7 @@ function FuelMap({
     return [...m.values()].map((list) => {
       const totalGallons = list.reduce((a, s) => a + s.gallons, 0)
       const totalCost = list.reduce((a, s) => a + s.pricePaid * s.gallons, 0)
-      const netSaved = list.reduce((a, s) => a + (regionalOf(s) - s.pricePaid) * s.gallons, 0)
+      const netSaved = list.reduce((a, s) => a + (s.retail - s.pricePaid) * s.gallons, 0)
       const f = list[0]
       return {
         station: f.station,
@@ -1148,13 +1157,23 @@ function FuelMap({
   // reads at any fleet size; area-proportional (sqrt) so volume maps to area.
   const maxStationGallons = Math.max(1, ...stations.map((s) => s.totalGallons))
 
-  const selectedStation = selected ? stations.find((s) => s.station === selected) ?? null : null
+  // The fleet's OWN gallon-weighted avg $/gal paid per state (card prices), used
+  // on the state hover to show what the fleet actually paid where it fueled. The
+  // backdrop color itself comes from the country-wide STATE_FUEL_AVG table.
+  const statePaid = useMemo(() => {
+    const agg = new Map<string, { cost: number; gal: number }>()
+    stops.forEach((s) => {
+      const a = agg.get(s.state) ?? { cost: 0, gal: 0 }
+      a.cost += s.pricePaid * s.gallons
+      a.gal += s.gallons
+      agg.set(s.state, a)
+    })
+    const avg = new Map<string, number>()
+    agg.forEach((a, code) => avg.set(code, a.gal ? a.cost / a.gal : 0))
+    return avg
+  }, [stops])
 
-  // Price scale bounds across every state we have a regional price for.
-  const prices = Object.values(STATE_DIESEL)
-  const minPrice = Math.min(...prices)
-  const maxPrice = Math.max(...prices)
-  const priceT = (p: number) => (maxPrice > minPrice ? (p - minPrice) / (maxPrice - minPrice) : 0.5)
+  const selectedStation = selected ? stations.find((s) => s.station === selected) ?? null : null
 
   useEffect(() => {
     const svgEl = svgRef.current
@@ -1170,27 +1189,27 @@ function FuelMap({
     while (svg.firstChild) svg.removeChild(svg.firstChild)
     const ns = 'http://www.w3.org/2000/svg'
 
-    // 1 ─ faint regional-price backdrop, so the dots read "how good vs this
-    // region" at a glance without the choropleth stealing focus.
+    // 1 ─ backdrop choropleth tinted by the regional average fuel price in every
+    // state (the whole country, not just where the fleet fueled), so the dots
+    // read "we fueled in a cheaper/pricier region" at a glance. Faint so the
+    // green discount dots stay the focus.
     states.features.forEach((f) => {
       const entry = FIPS_STATE[Number(f.id)]
       if (!entry) return
       const [code, name] = entry
       const d = path(f as never)
       if (!d) return
-      const price = STATE_DIESEL[code]
-      const g = document.createElementNS(ns, 'g')
+      const avg = STATE_FUEL_AVG[code]
       const shape = document.createElementNS(ns, 'path')
       shape.setAttribute('d', d)
-      if (price !== undefined) {
-        const rgb = priceRGB(priceT(price))
-        shape.setAttribute('fill', rgba(rgb, 0.18))
+      if (avg !== undefined) {
+        shape.setAttribute('fill', rgba(priceRGB(fuelAvgT(avg)), 0.2))
       } else {
         shape.setAttribute('fill', 'rgba(255,255,255,0.03)')
       }
       shape.setAttribute('stroke', 'rgba(255,255,255,0.14)')
       shape.setAttribute('stroke-width', '0.6')
-      if (price !== undefined) {
+      if (avg !== undefined) {
         const updateHover = (e: MouseEvent) => {
           const wrapRect = wrapRef.current?.getBoundingClientRect()
           if (!wrapRect) return
@@ -1202,16 +1221,15 @@ function FuelMap({
         shape.addEventListener('mousemove', updateHover)
         shape.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'state' && p.code === code ? null : p)))
       }
-      g.appendChild(shape)
-      svg.appendChild(g)
+      svg.appendChild(shape)
     })
 
-    // 2 ─ one dot per station; size = total gallons, color = weighted saving.
+    // 2 ─ one dot per station; size = total gallons, color = card discount.
     stations.forEach((st) => {
       const xy = projection([st.lon, st.lat])
       if (!xy) return
       const r = 5 + Math.sqrt(st.totalGallons / maxStationGallons) * 11
-      const rgb = decisionRGB(st.savedPerGal)
+      const rgb = discountRGB(st.savedPerGal)
       const isSel = selected === st.station
       const c = document.createElementNS(ns, 'circle')
       c.setAttribute('cx', String(xy[0]))
@@ -1247,22 +1265,26 @@ function FuelMap({
         </span>
       </div>
       <p className="tam-hint">
-        Where the fleet tanked, one dot per Love's. Color = price paid vs the state's regional diesel, size = gallons. Click a
-        station for its fill-ups.{' '}
-        <strong>{savedTotal >= 0 ? `Net ${usd(savedTotal)} saved vs region` : `Net ${usd(-savedTotal)} over region`}.</strong>
+        Where the fleet tanked, one dot per Love's. Dot color = fuel-card discount off the pump price, size = gallons; the
+        state shading = that region's average fuel price (cheaper → pricier). Click a station for its fill-ups.{' '}
+        <strong>{usd(savedTotal)} saved with the card.</strong>
       </p>
 
       <div className="fm-legend">
-        <span className="fm-legend-label">Overpaid</span>
+        <span className="fm-legend-label">Lower</span>
         <span className="fm-legend-gradient fm-legend-decision" />
-        <span className="fm-legend-label">Saved</span>
+        <span className="fm-legend-label">Higher discount</span>
         <span className="fm-legend-sep" />
         <span className="fm-legend-size"><i className="fm-legend-dot-sm" /><i className="fm-legend-dot-lg" /> gallons</span>
+        <span className="fm-legend-sep" />
+        <span className="fm-legend-label">Cheaper</span>
+        <span className="fm-legend-gradient fm-legend-price" />
+        <span className="fm-legend-label">pricier region (avg $/gal)</span>
       </div>
 
       <div className="tam-body">
         <div className="tam-wrap" ref={wrapRef}>
-          <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fuel stops by station, colored by price paid vs region" />
+          <svg ref={svgRef} className="tam-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fuel stops by station, colored by fuel-card discount" />
 
           {hover && (
             <div
@@ -1273,15 +1295,24 @@ function FuelMap({
                 transform: `translate(${hover.flipX ? '-100%' : '0'}, 0)`,
               }}
             >
-              {hover.kind === 'state' ? (
-                <>
-                  <div className="tam-tooltip-title">{hover.name}</div>
-                  <div className="tam-tooltip-row">
-                    <span>Regional diesel</span>
-                    <span>${(STATE_DIESEL[hover.code] ?? 0).toFixed(2)}/gal</span>
-                  </div>
-                </>
-              ) : (() => {
+              {hover.kind === 'state' ? (() => {
+                const paid = statePaid.get(hover.code)
+                return (
+                  <>
+                    <div className="tam-tooltip-title">{hover.name}</div>
+                    <div className="tam-tooltip-row">
+                      <span>Regional avg</span>
+                      <span>${(STATE_FUEL_AVG[hover.code] ?? 0).toFixed(2)}/gal</span>
+                    </div>
+                    {paid !== undefined && (
+                      <div className="tam-tooltip-row">
+                        <span>You paid</span>
+                        <span className="tam-tooltip-pos">${paid.toFixed(2)}/gal</span>
+                      </div>
+                    )}
+                  </>
+                )
+              })() : (() => {
                 const st = stations.find((s) => s.station === hover.station)
                 if (!st) return null
                 return (
@@ -1345,7 +1376,7 @@ function FuelMap({
                 .slice()
                 .sort((a, b) => fsStopStamp(b) - fsStopStamp(a))
                 .map((s) => {
-                  const perGal = regionalOf(s) - s.pricePaid
+                  const perGal = Math.max(0, discountOf(s))
                   const saved = perGal * s.gallons
                   return (
                     <div className="fs-txn" key={s.id}>
@@ -1357,12 +1388,12 @@ function FuelMap({
                         <span className="fs-txn-time">{s.localTime}</span>
                       </div>
                       <div className="fs-txn-grid">
+                        <span className="fs-txn-cell"><i>Retail</i><b>${s.retail.toFixed(2)}/gal</b></span>
                         <span className="fs-txn-cell"><i>Paid</i><b>${s.pricePaid.toFixed(2)}/gal</b></span>
-                        <span className="fs-txn-cell"><i>Regional</i><b>${regionalOf(s).toFixed(2)}/gal</b></span>
                         <span className="fs-txn-cell"><i>Gallons</i><b>{s.gallons}</b></span>
                         <span className="fs-txn-cell">
-                          <i>{perGal >= 0 ? 'Saved' : 'Overpaid'}</i>
-                          <b className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>{usd(Math.abs(saved))}</b>
+                          <i>Saved</i>
+                          <b className="tam-tooltip-pos">{usd(saved)}</b>
                         </span>
                       </div>
                     </div>

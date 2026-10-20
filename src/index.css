@@ -4273,8 +4273,8 @@ button {
 .fm-count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .fm-legend-label { font-size: 10px; color: var(--text-muted); }
 .fm-legend-gradient { width: 120px; height: 6px; border-radius: 3px; }
+.fm-legend-decision { background: linear-gradient(90deg, rgb(150,170,130), rgb(46,184,120)); }
 .fm-legend-price { background: linear-gradient(90deg, rgb(242,201,110), rgb(232,140,60), rgb(190,44,38)); }
-.fm-legend-decision { background: linear-gradient(90deg, rgb(224,72,72), rgb(180,170,90), rgb(46,184,120)); }
 .fm-legend-sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; }
 .fm-legend-size { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); }
 .fm-legend-dot-sm, .fm-legend-dot-lg {
