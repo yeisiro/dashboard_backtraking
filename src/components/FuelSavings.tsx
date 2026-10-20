@@ -5,8 +5,40 @@ import { feature } from 'topojson-client'
 import type { FeatureCollection } from 'geojson'
 import usTopo from 'us-atlas/states-10m.json'
 import { tripRows, fuelStops, STATE_DIESEL, type TripRow, type FuelStop } from '../data'
+import { usePeriod } from '../PeriodContext'
 
 const usd = (n: number) => '$' + Math.round(n).toLocaleString()
+
+// "May 14" → a month/day sort key, matching the Trips table so fuel stops and
+// trips share one re-anchored timeline for the Date filter.
+const FS_MONTH_INDEX: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+}
+const fsDateValue = (s: string) => {
+  const [mon, day] = s.split(' ')
+  return (FS_MONTH_INDEX[mon] ?? 0) * 31 + Number(day)
+}
+const fsStartOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+// The day part of a fuel stop's local time, e.g. "May 14 · 6:40 AM CDT" → "May 14".
+const fsStopDay = (s: FuelStop) => s.localTime.split(' · ')[0]
+// A sortable timestamp (day + minutes) for ordering a station's history.
+const fsStopStamp = (s: FuelStop) => {
+  const [day, rest = ''] = s.localTime.split(' · ')
+  const m = rest.match(/(\d+):(\d+)\s*(AM|PM)/i)
+  let mins = 0
+  if (m) {
+    let h = Number(m[1]) % 12
+    if (/pm/i.test(m[3])) h += 12
+    mins = h * 60 + Number(m[2])
+  }
+  return fsDateValue(day) * 1440 + mins
+}
+// Each truck's driver, from the trips it ran — lets the Driver filter apply to
+// fuel stops even though a stop only carries a truck id.
+const TRUCK_DRIVER: Record<string, string> = {}
+tripRows.forEach((r) => {
+  if (!TRUCK_DRIVER[r.truck]) TRUCK_DRIVER[r.truck] = r.driver
+})
 
 // idle_gph from the Money Leakage Breakdown's documented Idle Time Cost
 // formula (see data.ts's leakBars comment) — Samsara doesn't report idle
@@ -1036,7 +1068,15 @@ const rgba = (c: [number, number, number], a: number) =>
 // the price paid compared to that state's regional diesel (green = saved, red
 // = overpaid) and sized by gallons. The faint state tint behind them is the
 // regional context the decision is judged against.
-function FuelMap({ rows }: { rows: TripRow[] }) {
+function FuelMap({
+  classFilter,
+  truckFilter,
+  driverFilter,
+}: {
+  classFilter: string[]
+  truckFilter: string[]
+  driverFilter: string[]
+}) {
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<
@@ -1045,10 +1085,30 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
     | null
   >(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const { rangeDays, rangeEnd } = usePeriod()
 
-  // Only stops whose truck ran a trip in the active class filter.
-  const activeTrucks = useMemo(() => new Set(rows.map((r) => r.truck)), [rows])
-  const stops = useMemo(() => fuelStops.filter((s) => activeTrucks.has(s.truck)), [activeTrucks])
+  // Fuel stops respect every active filter: class, truck, driver, and the Date
+  // window. Dates are re-anchored to the same "today" as the Trips table so the
+  // toolbar Date filter bounds them (the data's own dates are abstract).
+  const stops = useMemo(() => {
+    const newest = tripRows.reduce((m, t) => Math.max(m, fsDateValue(t.startDate)), 0)
+    const anchor = fsStartOfDay(new Date())
+    const winEnd = fsStartOfDay(rangeEnd)
+    const winStart = new Date(winEnd)
+    winStart.setDate(winStart.getDate() - (rangeDays - 1))
+    const inWindow = (s: FuelStop) => {
+      const d = new Date(anchor)
+      d.setDate(d.getDate() - (newest - fsDateValue(fsStopDay(s))))
+      return d >= winStart && d <= winEnd
+    }
+    return fuelStops.filter(
+      (s) =>
+        (classFilter.length === 0 || classFilter.includes(s.cls)) &&
+        (truckFilter.length === 0 || truckFilter.includes(s.truck)) &&
+        (driverFilter.length === 0 || driverFilter.includes(TRUCK_DRIVER[s.truck] ?? '')) &&
+        inWindow(s),
+    )
+  }, [classFilter, truckFilter, driverFilter, rangeDays, rangeEnd])
 
   const regionalOf = (s: FuelStop) => STATE_DIESEL[s.state] ?? s.pricePaid
 
@@ -1264,7 +1324,7 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
               <div className="fm-panel-list">
                 {selectedStation.stops
                   .slice()
-                  .sort((a, b) => b.gallons - a.gallons)
+                  .sort((a, b) => fsStopStamp(b) - fsStopStamp(a))
                   .map((s) => {
                     const perGal = regionalOf(s) - s.pricePaid
                     const saved = perGal * s.gallons
@@ -1298,9 +1358,13 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
 export default function FuelSavings({
   classFilter = [],
   dimension = 'trucks',
+  truckFilter = [],
+  driverFilter = [],
 }: {
   classFilter?: string[]
   dimension?: 'trucks' | 'drivers'
+  truckFilter?: string[]
+  driverFilter?: string[]
 }) {
   const byDriver = dimension === 'drivers'
   const rows = classFilter.length > 0 ? tripRows.filter((r) => classFilter.includes(r.cls)) : tripRows
@@ -1363,7 +1427,7 @@ export default function FuelSavings({
         </div>
       </div>
 
-      <FuelMap rows={rows} />
+      <FuelMap classFilter={classFilter} truckFilter={truckFilter} driverFilter={driverFilter} />
 
       {showAllTrucks && (
         <SubDetailModal

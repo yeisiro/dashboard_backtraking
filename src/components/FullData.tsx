@@ -269,7 +269,7 @@ export default function FullData({
           }}
         />
       ) : tab === 'Fuel and Savings' ? (
-        <FuelSavings classFilter={classFilter} dimension={dimension} />
+        <FuelSavings classFilter={classFilter} dimension={dimension} truckFilter={truckFilter} driverFilter={driverFilter} />
       ) : (
         <div className="fd-empty">{tab} — coming soon</div>
       )}
