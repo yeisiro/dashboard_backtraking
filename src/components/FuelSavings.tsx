@@ -1064,6 +1064,7 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
     })
     return [...m.values()].map((list) => {
       const totalGallons = list.reduce((a, s) => a + s.gallons, 0)
+      const totalCost = list.reduce((a, s) => a + s.pricePaid * s.gallons, 0)
       const netSaved = list.reduce((a, s) => a + (regionalOf(s) - s.pricePaid) * s.gallons, 0)
       const f = list[0]
       return {
@@ -1074,11 +1075,18 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
         lon: f.lon,
         stops: list,
         totalGallons,
+        totalCost,
         netSaved,
+        // Gallon-weighted averages (the title shows them without "weighted").
+        costPerGal: totalGallons ? totalCost / totalGallons : 0,
         savedPerGal: totalGallons ? netSaved / totalGallons : 0,
       }
     })
   }, [stops])
+
+  // Dot size = total gallons, scaled relative to the busiest station so it
+  // reads at any fleet size; area-proportional (sqrt) so volume maps to area.
+  const maxStationGallons = Math.max(1, ...stations.map((s) => s.totalGallons))
 
   const selectedStation = selected ? stations.find((s) => s.station === selected) ?? null : null
 
@@ -1142,7 +1150,7 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
     stations.forEach((st) => {
       const xy = projection([st.lon, st.lat])
       if (!xy) return
-      const r = 5 + clamp01((st.totalGallons - 110) / 220) * 9
+      const r = 5 + Math.sqrt(st.totalGallons / maxStationGallons) * 11
       const rgb = decisionRGB(st.savedPerGal)
       const isSel = selected === st.station
       const c = document.createElementNS(ns, 'circle')
@@ -1165,22 +1173,8 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
       c.addEventListener('mouseleave', () => setHover((p) => (p?.kind === 'station' && p.station === st.station ? null : p)))
       c.addEventListener('click', () => setSelected((prev) => (prev === st.station ? null : st.station)))
       svg.appendChild(c)
-
-      // Count badge when a station has more than one fill-up in the window.
-      if (st.stops.length > 1) {
-        const badge = document.createElementNS(ns, 'text')
-        badge.setAttribute('x', String(xy[0] + r + 2))
-        badge.setAttribute('y', String(xy[1] - r + 1))
-        badge.setAttribute('font-size', '10')
-        badge.setAttribute('font-weight', '700')
-        badge.setAttribute('font-family', 'Inter, sans-serif')
-        badge.setAttribute('fill', 'rgba(255,255,255,0.92)')
-        badge.style.pointerEvents = 'none'
-        badge.textContent = `×${st.stops.length}`
-        svg.appendChild(badge)
-      }
     })
-  }, [stations, selected])
+  }, [stations, selected, maxStationGallons])
 
   const savedTotal = stations.reduce((sum, st) => sum + st.netSaved, 0)
 
@@ -1230,29 +1224,19 @@ function FuelMap({ rows }: { rows: TripRow[] }) {
               ) : (() => {
                 const st = stations.find((s) => s.station === hover.station)
                 if (!st) return null
-                const one = st.stops.length === 1 ? st.stops[0] : null
                 return (
                   <>
                     <div className="tam-tooltip-title">{st.station}</div>
                     <div className="fm-tip-addr">{st.address}</div>
-                    <div className="tam-tooltip-row"><span>Fill-ups</span><span>{st.stops.length}</span></div>
-                    {one ? (
-                      <>
-                        <div className="tam-tooltip-row"><span>Paid</span><span>${one.pricePaid.toFixed(2)}/gal</span></div>
-                        <div className="tam-tooltip-row"><span>Regional</span><span>${regionalOf(one).toFixed(2)}/gal</span></div>
-                        <div className="tam-tooltip-row"><span>Gallons</span><span>{one.gallons}</span></div>
-                        <div className="tam-tooltip-row"><span>Local time</span><span>{one.localTime}</span></div>
-                      </>
-                    ) : (
-                      <div className="tam-tooltip-row"><span>Gallons</span><span>{st.totalGallons}</span></div>
-                    )}
+                    <div className="tam-tooltip-row"><span>Total cost</span><span>{usd(st.totalCost)}</span></div>
+                    <div className="tam-tooltip-row"><span>Total gallons</span><span>{Math.round(st.totalGallons).toLocaleString()}</span></div>
+                    <div className="tam-tooltip-row"><span>Cost / gal</span><span>${st.costPerGal.toFixed(2)}</span></div>
                     <div className="tam-tooltip-row">
-                      <span>{st.netSaved >= 0 ? 'Saved' : 'Overpaid'}</span>
-                      <span className={st.netSaved >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
-                        {usd(Math.abs(st.netSaved))}
+                      <span>Discount / gal</span>
+                      <span className={st.savedPerGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
+                        {st.savedPerGal < 0 ? '-' : ''}${Math.abs(st.savedPerGal).toFixed(2)}
                       </span>
                     </div>
-                    {!one && <div className="fm-tip-cue">Click for the {st.stops.length} fill-ups</div>}
                   </>
                 )
               })()}
