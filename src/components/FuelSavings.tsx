@@ -1293,9 +1293,7 @@ function FuelMap({
                     <div className="tam-tooltip-row"><span>Cost / gal</span><span>${st.costPerGal.toFixed(2)}</span></div>
                     <div className="tam-tooltip-row">
                       <span>Discount / gal</span>
-                      <span className={st.savedPerGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
-                        {st.savedPerGal < 0 ? '-' : ''}${Math.abs(st.savedPerGal).toFixed(2)}
-                      </span>
+                      <span className="tam-tooltip-pos">${Math.max(0, st.savedPerGal).toFixed(2)}</span>
                     </div>
                   </>
                 )
@@ -1335,9 +1333,7 @@ function FuelMap({
               </div>
               <div className="fs-metric">
                 <span className="fs-metric-lbl">Discount / gal</span>
-                <span className={`fs-metric-val ${selectedStation.savedPerGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}`}>
-                  {selectedStation.savedPerGal < 0 ? '-' : ''}${Math.abs(selectedStation.savedPerGal).toFixed(2)}
-                </span>
+                <span className="fs-metric-val tam-tooltip-pos">${Math.max(0, selectedStation.savedPerGal).toFixed(2)}</span>
               </div>
             </div>
 
