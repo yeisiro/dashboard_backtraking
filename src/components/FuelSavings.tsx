@@ -1303,54 +1303,79 @@ function FuelMap({
             </div>
           )}
 
-          {selectedStation && (
-            <div className="fm-panel">
-              <div className="fm-panel-head">
-                <div>
-                  <div className="fm-panel-title">{selectedStation.station}</div>
-                  <div className="fm-panel-addr">{selectedStation.address}</div>
-                </div>
-                <button className="cfm-x" onClick={() => setSelected(null)} aria-label="Close">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="fm-panel-sum">
-                <span>{selectedStation.stops.length} fill-up{selectedStation.stops.length === 1 ? '' : 's'}</span>
-                <span>{selectedStation.totalGallons} gal</span>
-                <span className={selectedStation.netSaved >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
-                  {selectedStation.netSaved >= 0 ? 'Saved ' : 'Over '}{usd(Math.abs(selectedStation.netSaved))}
-                </span>
-              </div>
-              <div className="fm-panel-list">
-                {selectedStation.stops
-                  .slice()
-                  .sort((a, b) => fsStopStamp(b) - fsStopStamp(a))
-                  .map((s) => {
-                    const perGal = regionalOf(s) - s.pricePaid
-                    const saved = perGal * s.gallons
-                    return (
-                      <div className="fm-stop" key={s.id}>
-                        <div className="fm-stop-top">
-                          <span className="fm-stop-truck">{s.truck}</span>
-                          <span className="fm-stop-time">{s.localTime}</span>
-                        </div>
-                        <div className="fm-stop-row">
-                          <span>${s.pricePaid.toFixed(2)}/gal paid · ${regionalOf(s).toFixed(2)} region</span>
-                        </div>
-                        <div className="fm-stop-row">
-                          <span>{s.gallons} gal</span>
-                          <span className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>
-                            {perGal >= 0 ? 'Saved ' : 'Over '}{usd(Math.abs(saved))}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {selectedStation && (
+        <>
+          <div className="fs-drawer-backdrop" onClick={() => setSelected(null)} />
+          <aside className="fs-drawer" role="dialog" aria-label={`${selectedStation.station} fuel history`}>
+            <div className="fs-drawer-head">
+              <div className="fs-drawer-head-txt">
+                <div className="fs-drawer-title">{selectedStation.station}</div>
+                <div className="fs-drawer-addr">{selectedStation.address}</div>
+              </div>
+              <button className="cfm-x" onClick={() => setSelected(null)} aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="fs-drawer-metrics">
+              <div className="fs-metric">
+                <span className="fs-metric-lbl">Total cost</span>
+                <span className="fs-metric-val">{usd(selectedStation.totalCost)}</span>
+              </div>
+              <div className="fs-metric">
+                <span className="fs-metric-lbl">Total gallons</span>
+                <span className="fs-metric-val">{Math.round(selectedStation.totalGallons).toLocaleString()}</span>
+              </div>
+              <div className="fs-metric">
+                <span className="fs-metric-lbl">Cost / gal</span>
+                <span className="fs-metric-val">${selectedStation.costPerGal.toFixed(2)}</span>
+              </div>
+              <div className="fs-metric">
+                <span className="fs-metric-lbl">Discount / gal</span>
+                <span className={`fs-metric-val ${selectedStation.savedPerGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}`}>
+                  {selectedStation.savedPerGal < 0 ? '-' : ''}${Math.abs(selectedStation.savedPerGal).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="fs-drawer-sect">
+              Transactions <span className="fs-drawer-sect-count">{selectedStation.stops.length}</span>
+            </div>
+            <div className="fs-drawer-list">
+              {selectedStation.stops
+                .slice()
+                .sort((a, b) => fsStopStamp(b) - fsStopStamp(a))
+                .map((s) => {
+                  const perGal = regionalOf(s) - s.pricePaid
+                  const saved = perGal * s.gallons
+                  return (
+                    <div className="fs-txn" key={s.id}>
+                      <div className="fs-txn-top">
+                        <span className="fs-txn-who">
+                          <span className="fs-txn-truck">{s.truck}</span>
+                          <span className="fs-txn-driver">{TRUCK_DRIVER[s.truck] ?? '—'}</span>
+                        </span>
+                        <span className="fs-txn-time">{s.localTime}</span>
+                      </div>
+                      <div className="fs-txn-grid">
+                        <span className="fs-txn-cell"><i>Paid</i><b>${s.pricePaid.toFixed(2)}/gal</b></span>
+                        <span className="fs-txn-cell"><i>Regional</i><b>${regionalOf(s).toFixed(2)}/gal</b></span>
+                        <span className="fs-txn-cell"><i>Gallons</i><b>{s.gallons}</b></span>
+                        <span className="fs-txn-cell">
+                          <i>{perGal >= 0 ? 'Saved' : 'Overpaid'}</i>
+                          <b className={perGal >= 0 ? 'tam-tooltip-pos' : 'tam-tooltip-neg'}>{usd(Math.abs(saved))}</b>
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </aside>
+        </>
+      )}
     </section>
   )
 }
