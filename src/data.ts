@@ -1128,7 +1128,12 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 const TONU_LOADS = new Set([2, 9, 16])
 
 function buildTrip(b: TripBase, index: number): TripRow {
-  const dhPct = round1(((b.totalMiles - b.loadedMiles) / b.totalMiles) * 100)
+  const isTonu = TONU_LOADS.has(index)
+  // A TONU load is closed at its pickup (real drop-off minutes after the real
+  // pickup), so it carries no loaded miles: every mile it ran is deadhead, and
+  // its total miles equal its deadhead.
+  const loadedMiles = isTonu ? 0 : b.loadedMiles
+  const dhPct = round1(((b.totalMiles - loadedMiles) / b.totalMiles) * 100)
   const totalCost = Math.round(b.cost * 1.08)
   const totalExcessCost = totalCost - b.optimalCost
   const excessMilesCost = Math.round(totalExcessCost * 0.6)
@@ -1141,7 +1146,7 @@ function buildTrip(b: TripBase, index: number): TripRow {
   // details modal both use this, so the detail reconciles to the column.
   const leakage = Math.round(Math.abs(b.missedFuelSavings) + excessMilesCost + idleCost)
   const loadRef = 'L' + (40012001 + index)
-  const tags = TONU_LOADS.has(index) ? ['TONU'] : undefined
+  const tags = isTonu ? ['TONU'] : undefined
   // Real stops: detected for most loads (from the lane endpoints), but cleared
   // for the seeded backlog loads so My Loads has something to resolve.
   const [origin, dest] = b.lane.split(' → ')
@@ -1156,6 +1161,7 @@ function buildTrip(b: TripBase, index: number): TripRow {
       : makeStopPoint(dest ?? b.lane, b.endDate, 15, 0.95, `${loadRef}-do`)
   return {
     ...b,
+    loadedMiles,
     score: 0, // filled in by computeScores once the full set is known
     driver: driverForIndex(index),
     loadRef,

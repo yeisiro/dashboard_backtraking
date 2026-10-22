@@ -1711,7 +1711,10 @@ export default function TripDetailModal({
                 <CostBreakdownDonut segments={costSegments} total={trip.totalCost} />
               ) : (
                 <>
-                  <TripCostGauge total={trip.totalCost} deadheadPct={repo ? 100 : undefined} />
+                  <TripCostGauge
+                    total={trip.totalCost}
+                    deadheadPct={repo ? 100 : trip.tags?.includes('TONU') ? trip.deadheadPct : undefined}
+                  />
                   <button className="ld-explore" onClick={() => setCostExpanded(true)}>
                     Explore breakdown
                   </button>
