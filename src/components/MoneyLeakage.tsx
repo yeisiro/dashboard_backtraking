@@ -12,9 +12,19 @@ const AVOIDABLE_NAME = 'Poor Planning'
 // Number of trucks in the fleet, for the per-unit leakage figure.
 const FLEET_TRUCKS = new Set(tripRows.map((r) => r.truck)).size
 
-// V2 renames "Empty Miles" so it reads as what it is: the cost of extra empty
-// (deadhead) miles from repositioning and off-route driving.
-const V2_BAR_NAME: Record<string, string> = { 'Empty Miles': 'Deadhead Deviations' }
+// "Empty Miles" is shown everywhere as "Deadhead Deviations" so it reads as what
+// it is: the cost of the deadhead miles from repositioning and off-route driving.
+const BAR_RENAME: Record<string, string> = { 'Empty Miles': 'Deadhead Deviations' }
+
+// What each leakage category is, shown in a tooltip next to the bar name.
+// Metric definition only — no dashes, no side comments.
+const LEAK_TIP: Record<string, string> = {
+  'Missed Fuel Savings': 'Money wasted on fuel due to not following the optimal plan.',
+  'Empty Miles': 'Cost of miles driven beyond the optimal route to reposition the truck.',
+  'Route Deviations': 'Cost of the miles driven beyond the optimal route.',
+  'Idle Time Cost': 'Fuel burned while the truck sat idling.',
+  'Operative Inefficiencies': 'Cost of the deadhead miles run on operative trips.',
+}
 const money = (n: number) => '-$' + Math.round(n).toLocaleString('en-US')
 
 function DeltaArrow({ trend, size }: { trend: 'up' | 'down' | 'flat'; size: number }) {
@@ -48,7 +58,7 @@ export default function MoneyLeakage({
   const unitCount = byDriver ? FLEET_DRIVERS : FLEET_TRUCKS
   const perUnit = money(leakAmount(leakTotal) / unitCount)
   const perUnitLabel = byDriver ? 'per driver' : 'per unit'
-  const barName = (name: string) => (isV2 && V2_BAR_NAME[name]) || name
+  const barName = (name: string) => BAR_RENAME[name] || name
 
   return (
     <section className="card">
@@ -134,7 +144,17 @@ export default function MoneyLeakage({
             ) : (
               <div className="bar-row" key={b.name}>
                 <div className="bar-label">
-                  <div className="name">{barName(b.name)}</div>
+                  <div className="name">
+                    {barName(b.name)}
+                    {LEAK_TIP[b.name] && (
+                      <span className="info-tip" tabIndex={0}>
+                        <Info size={12} color="var(--text-muted)" />
+                        <span className="info-tip-bubble" role="tooltip">
+                          {LEAK_TIP[b.name]}
+                        </span>
+                      </span>
+                    )}
+                  </div>
                   <div className="pct">{b.pct}%</div>
                 </div>
                 <div className="bar-track">

@@ -129,6 +129,9 @@ export default function KpiDetailModal({ card, compareLabel, summary = false, on
                         <span className="kd-flow-item neg">
                           <span className="kd-flow-lbl">Costs</span> {m.flow.costs}
                         </span>
+                        <span className={`kd-flow-item total ${m.flow.profit.trim().startsWith('-') ? 'neg' : 'pos'}`}>
+                          <span className="kd-flow-lbl">Profit</span> {m.flow.profit}
+                        </span>
                       </span>
                     )}
                     {m.subMetrics && (

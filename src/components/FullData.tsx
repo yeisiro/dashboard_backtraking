@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronUp, ChevronDown, Eye, Search, X, GripVertical, Filter, Check,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, Clock, Navigation, Merge,
@@ -294,6 +294,9 @@ function FleetAnalytics({
   const [expanded, setExpanded] = useState<Set<TripRow['cls']>>(
     () => new Set(classes[0] ? [classes[0]] : [])
   )
+  // Expanded body can show the same metrics per truck (aggregated) or the full
+  // per-trip table. Shared across classes so the choice is consistent.
+  const [rowMode, setRowMode] = useState<'truck' | 'trip'>('truck')
   const toggleExpanded = (cls: TripRow['cls']) =>
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -357,12 +360,108 @@ function FleetAnalytics({
             )}
             {isOpen && (
               <div className="fd-fleet-body">
-                <TripsTable band={null} classFilter={[cls]} view={view} />
+                <div className="fd-fleet-modes" role="tablist" aria-label="Breakdown level">
+                  <button
+                    className={`fd-fleet-mode ${rowMode === 'truck' ? 'active' : ''}`}
+                    role="tab"
+                    aria-selected={rowMode === 'truck'}
+                    onClick={() => setRowMode('truck')}
+                  >
+                    By truck
+                  </button>
+                  <button
+                    className={`fd-fleet-mode ${rowMode === 'trip' ? 'active' : ''}`}
+                    role="tab"
+                    aria-selected={rowMode === 'trip'}
+                    onClick={() => setRowMode('trip')}
+                  >
+                    By trip
+                  </button>
+                </div>
+                {rowMode === 'truck' ? (
+                  <TruckBreakdown rows={rows} />
+                ) : (
+                  <TripsTable band={null} classFilter={[cls]} view={view} />
+                )}
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Per-truck breakdown inside an expanded class: one row per truck with the same
+// nine metrics as the class header, aggregated over that truck's trips (dollars
+// and miles summed, adherence and wasted rate averaged). Sorted by profit.
+function TruckBreakdown({ rows }: { rows: TripRow[] }) {
+  const trucks = useMemo(() => {
+    const m = new Map<string, TripRow[]>()
+    rows.forEach((r) => {
+      const arr = m.get(r.truck)
+      if (arr) arr.push(r)
+      else m.set(r.truck, [r])
+    })
+    return [...m.entries()]
+      .map(([truck, rs]) => ({
+        truck,
+        driver: rs[0].driver,
+        cls: rs[0].cls,
+        trips: rs.length,
+        time: rs.reduce((s, r) => s + drivingHours(r), 0),
+        miles: rs.reduce((s, r) => s + r.totalMiles, 0),
+        deadhead: rs.reduce((s, r) => s + deadheadMiles(r), 0),
+        income: rs.reduce((s, r) => s + r.income, 0),
+        cost: rs.reduce((s, r) => s + r.cost, 0),
+        profit: rs.reduce((s, r) => s + r.profit, 0),
+        adherence: rs.reduce((s, r) => s + r.adherence, 0) / rs.length,
+        wastedRate: rs.reduce((s, r) => s + r.wastedRate, 0) / rs.length,
+        leakage: rs.reduce((s, r) => s + r.leakage, 0),
+      }))
+      .sort((a, b) => b.profit - a.profit)
+  }, [rows])
+
+  return (
+    <div className="fd-table-wrap">
+      <table className="fd-table">
+        <thead>
+          <tr>
+            <th className="fd-left">Truck</th>
+            <th>Driving Time</th>
+            <th>Total Miles</th>
+            <th>Deadhead</th>
+            <th>Income</th>
+            <th>Cost</th>
+            <th>Profit</th>
+            <th>Adherence</th>
+            <th>Wasted Rate</th>
+            <th>Leakage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trucks.map((t) => (
+            <tr key={t.truck}>
+              <td className="fd-left">
+                <div className="fd-truck-row">
+                  <span className="fd-truck">{t.truck}</span>
+                  <span className="fd-class" style={{ background: CLASS_COLOR[t.cls] }}>{t.cls}</span>
+                </div>
+                <div className="fd-driver fd-dim">{t.driver} · {t.trips} trips</div>
+              </td>
+              <td className="fd-dim">{fmtHours(t.time)}</td>
+              <td className="fd-dim">{miles(t.miles)}</td>
+              <td className="fd-dim">{miles(t.deadhead)}</td>
+              <td>{usd(t.income)}</td>
+              <td className="fd-dim">{usd(t.cost)}</td>
+              <td className="fd-strong">{usd(t.profit)}</td>
+              <td className="fd-dim">{pct(t.adherence)}</td>
+              <td className="fd-dim">{pct(t.wastedRate)}</td>
+              <td className="fd-neg">{usd(t.leakage)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

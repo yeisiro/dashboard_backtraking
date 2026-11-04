@@ -133,6 +133,10 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
             <span className="kpi-flow-lbl">Costs</span>
             <span>{m.flow.costs}</span>
           </span>
+          <span className={`kpi-flow-item total ${m.flow.profit.trim().startsWith('-') ? 'neg' : 'pos'}`}>
+            <span className="kpi-flow-lbl">Profit</span>
+            <span>{m.flow.profit}</span>
+          </span>
         </div>
       )}
       {m.subMetrics && (
