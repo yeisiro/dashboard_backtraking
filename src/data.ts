@@ -938,6 +938,136 @@ export const TMS_PROVIDERS: Provider[] = [
   { name: 'Project44', mono: 'P4', fields: [{ key: 'apikey', label: 'API key', placeholder: 'Enter the API key', secret: true }] },
 ]
 
+// ── Onboarding (V2 Connect Fleet) ─────────────────────────────────────────
+// What production actually supports end to end. The wider ELD_PROVIDERS /
+// TMS_PROVIDERS lists above are design mock-ups still used by V1 and Manage
+// Fleet; the V2 wizard only offers these.
+export const SUPPORTED_ELD = ['Samsara', 'Geotab']
+export const SUPPORTED_TMS = ['Datatruck']
+
+// Trailers discovered across the connected ELD + TMS (V2 fleet step).
+export const TRAILER_POOL: string[] = Array.from({ length: 36 }, (_, i) => `TR-${1101 + i * 7}`)
+
+// Fuel cards the platform supports end to end. efRouting's card doubles as the
+// temporary card while a custom-card request is being set up.
+export interface FuelCardOption {
+  name: string
+  mono: string
+  note: string
+}
+export const FUEL_CARD_CATALOG: FuelCardOption[] = [
+  { name: "Love's", mono: 'Lo', note: "Love's Travel Stops network and discounts" },
+  { name: 'efRouting', mono: 'ef', note: 'Discounts at 20,000+ stations across the US' },
+]
+
+// Anything the org can't self-serve becomes a request the efRouting team
+// processes: an unsupported ELD/TMS, a custom fuel card, an efRouting card, or
+// a call to set up fuel transactions.
+export type RequestType = 'eld' | 'tms' | 'fuel-card' | 'efrouting-card' | 'transactions'
+export type RequestStatus = 'received' | 'in-progress' | 'resolved'
+export interface OnboardingRequest {
+  id: string
+  type: RequestType
+  detail: string
+  status: RequestStatus
+  createdAt: Date
+}
+
+// What an org gives up for each thing it skipped or is still pending (V3:
+// shown in the wizard review, the setup guide and the affected modules).
+export type OnboardingGap = 'transactions' | 'tms-pending' | 'eld-pending' | 'fuelcard-pending'
+export const ONBOARDING_LOSS: Record<OnboardingGap, { title: string; loss: string }> = {
+  transactions: {
+    title: 'Fuel transactions not shared',
+    loss: "Fuel spend is estimated from your ELD (~95% accuracy) — you won't see the exact overspend per transaction or fuel card misuse.",
+  },
+  'tms-pending': {
+    title: 'TMS connection pending',
+    loss: 'No loads or revenue yet — Profitability, RPM and My Loads stay empty until your TMS is connected.',
+  },
+  'eld-pending': {
+    title: 'ELD connection pending',
+    loss: "We can't sync your operation yet — you'll keep seeing sample data until your ELD is connected.",
+  },
+  'fuelcard-pending': {
+    title: 'Your fuel card is being set up',
+    loss: "Fuel savings and leakage use the efRouting network, not your card's own stations and discounts.",
+  },
+}
+
+// A source (ELD or TMS) is covered once it's connected with valid credentials
+// or declared as not supported (which opens a request).
+export interface OnboardingSource {
+  status: 'connected' | 'unsupported'
+  name: string
+  mono: string
+  label?: string
+}
+export type OnboardingFuelCard =
+  | { kind: 'catalog'; name: string }
+  | { kind: 'custom'; provider: string } // efRouting card active meanwhile
+
+// Equipment created by hand (same fields as the My Company "Add new cab" /
+// "Add new trailer" modals) — for orgs whose ELD/TMS isn't connected yet or
+// that are missing units.
+export interface ManualCab {
+  name: string
+  eldId?: string
+  vin?: string
+  plate?: string
+  fuelType: string
+  maxHitch?: number
+  axleConfig?: string
+  tankCapacity: number
+  mpg: number
+  operatingCost?: string
+}
+export interface ManualTrailer {
+  name: string
+  type: string
+  plate?: string
+  weightCapacity?: number
+  length?: number
+  width?: number
+  height?: number
+  axles?: number
+  minTemp?: number
+  maxTemp?: number
+}
+
+// The wizard's progress, kept in App so closing the modal never loses it and
+// reopening resumes at the first pending step.
+export interface OnboardingState {
+  eld: OnboardingSource | null
+  tms: OnboardingSource | null
+  cabins: string[]
+  trailers: string[]
+  manualCabins: ManualCab[]
+  manualTrailers: ManualTrailer[]
+  manualDrivers: FleetDriver[] // invited by email (name = email)
+  fleetDone: boolean
+  range: PeriodKey | null
+  fuelCard: OnboardingFuelCard | null
+  efroutingCardRequested: boolean
+  transactionsContact: boolean
+  syncStarted: boolean
+}
+export const EMPTY_ONBOARDING: OnboardingState = {
+  eld: null,
+  tms: null,
+  cabins: [],
+  trailers: [],
+  manualCabins: [],
+  manualTrailers: [],
+  manualDrivers: [],
+  fleetDone: false,
+  range: null,
+  fuelCard: null,
+  efroutingCardRequested: false,
+  transactionsContact: false,
+  syncStarted: false,
+}
+
 // A connected integration, tracked in App so the Manage → Integrations tab can
 // list and manage them after the wizard finishes.
 export interface Integration {

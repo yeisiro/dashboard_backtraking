@@ -787,6 +787,25 @@ const TIME_IDLE_WEIGHTS: { label: string; color: string; share: number }[] = [
   { label: 'Other resting/waiting', color: '#8a94a6', share: 0.07 },
 ]
 
+// CEO buckets: the eight detailed categories regrouped into three honest shares
+// that sum to 100% — productive Driving, necessary Working, and non-productive
+// Downtime (the pool a CEO watches). Detention is the biggest avoidable slice.
+const TIME_GROUP: Record<string, 'Driving' | 'Working' | 'Downtime'> = {
+  'Loaded Driving': 'Driving',
+  'Deadhead driving': 'Driving',
+  'Loading/Unloading': 'Working',
+  Refueling: 'Working',
+  Detention: 'Downtime',
+  '30 min break rule': 'Downtime',
+  'Personal Conveyance (PC)': 'Downtime',
+  'Other resting/waiting': 'Downtime',
+}
+const TIME_GROUP_COLOR: Record<'Driving' | 'Working' | 'Downtime', string> = {
+  Driving: 'var(--green)',
+  Working: 'var(--orange)',
+  Downtime: '#8a94a6',
+}
+
 // Same donut rendering as StatusDonut, generalized to any labeled set of
 // segments — reused for cost distribution, time distribution, and the hours
 // breakdown, each with its own value formatter (currency vs. duration).
@@ -799,10 +818,14 @@ function PieChart({
   centerLabel,
   measure,
   onMeasureChange,
+  segmentDetail,
 }: {
   segments: PieSegment[]
   formatValue: (v: number) => string
   totalLabel?: string
+  // When set, hovering a segment (arc or legend row) shows a panel with that
+  // segment's sub-category breakdown below the donut.
+  segmentDetail?: (seg: PieSegment) => { label: string; value: string; pct?: string }[] | undefined
   // When set, a header row labels the legend columns. `sub`/`pct`/`val` map to
   // the three right-hand columns (secondary figure · % of total · value).
   legendHead?: { sub?: string; pct?: string; val?: string }
@@ -867,6 +890,26 @@ function PieChart({
             </>
           )}
         </div>
+        {hover !== null && (() => {
+          const parts = segmentDetail?.(segments[hover])
+          if (!parts || parts.length === 0) return null
+          return (
+            <div className="ld-donut2-tip">
+              <div className="ld-donut2-tip-head" style={{ color: segments[hover].color }}>
+                {segments[hover].label} · {formatValue(segments[hover].value)}
+              </div>
+              {parts.map((p) => (
+                <div className="ld-donut2-tip-row" key={p.label}>
+                  <span>{p.label}</span>
+                  <span className="ld-donut2-tip-vals">
+                    <b>{p.value}</b>
+                    {p.pct && <i>{p.pct}</i>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
       </div>
       <div className="ld-legend">
         {legendHead && (
@@ -921,15 +964,110 @@ function PieChart({
   )
 }
 
-function TimeDistributionDetailModal({
-  summarySegments,
-  segments,
-  onClose,
-}: {
-  summarySegments: PieSegment[]
-  segments: PieSegment[]
-  onClose: () => void
-}) {
+type TimePart = { label: string; hours: number }
+type TimeUnitRow = {
+  id: string
+  truck: string
+  driving: number
+  working: number
+  downtime: number
+  total: number
+  downtimePct: number
+  drivingParts: TimePart[]
+  workingParts: TimePart[]
+  downtimeParts: TimePart[]
+}
+type TimeView = {
+  total: number
+  utilization: number
+  driving: number
+  deadhead: number
+  downtime: number
+  downtimePct: number
+  detention: number
+  detentionPct: number
+  groupSegments: PieSegment[]
+  groupDetail: { name: string; color: string; hours: number; items: PieSegment[] }[]
+  nLoads: number
+  nTrucks: number
+  trucks: TimeUnitRow[]
+  loads: TimeUnitRow[]
+}
+
+// One truck/load row: the stacked Driving/Working/Downtime bar, with a styled
+// hover panel per segment (same head + label/value/% layout as the donut panel).
+function TimeUnitBar({ row, unit }: { row: TimeUnitRow; unit: 'truck' | 'load' }) {
+  const [seg, setSeg] = useState<number | null>(null)
+  const groups = [
+    { name: 'Driving', color: 'var(--green)', value: row.driving, parts: row.drivingParts },
+    { name: 'Working', color: 'var(--orange)', value: row.working, parts: row.workingParts },
+    { name: 'Downtime', color: '#8a94a6', value: row.downtime, parts: row.downtimeParts },
+  ]
+  const active = seg !== null ? groups[seg] : null
+  return (
+    <div className="td-truck">
+      <div className="td-truck-head">
+        <span className="td-truck-id">
+          {row.id}
+          {unit === 'load' && <span className="td-truck-sub fd-dim"> · {row.truck}</span>}
+        </span>
+        <span className="td-truck-dt">{fmtHours(row.downtime)} · {pct(row.downtimePct)}</span>
+      </div>
+      <div className="td-bar">
+        {groups.map((g, i) => (
+          <span
+            key={g.name}
+            className="td-seg"
+            style={{ width: `${(g.value / row.total) * 100}%`, background: g.color }}
+            onMouseEnter={() => setSeg(i)}
+            onMouseLeave={() => setSeg((s) => (s === i ? null : s))}
+          />
+        ))}
+        {active && active.parts.length > 0 && (
+          <div className="td-seg-tip">
+            <div className="ld-donut2-tip-head" style={{ color: active.color }}>
+              {active.name} · {fmtHours(active.value)}
+            </div>
+            {active.parts.map((p) => (
+              <div className="ld-donut2-tip-row" key={p.label}>
+                <span>{p.label}</span>
+                <span className="ld-donut2-tip-vals">
+                  <b>{fmtHours(p.hours)}</b>
+                  <i>{active.value ? Math.round((p.hours / active.value) * 100) : 0}%</i>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TimeDistributionDetailModal({ data, onClose }: { data: TimeView; onClose: () => void }) {
+  // Toggle what the breakdown numbers show (total vs. averaged per load/truck)
+  // and whether the right-hand list is by truck or by load.
+  const [measure, setMeasure] = useState<'total' | 'load' | 'truck'>('total')
+  const [unit, setUnit] = useState<'truck' | 'load'>('truck')
+  const pctOf = (h: number) => (data.total ? pct((h / data.total) * 100) : '0%')
+  // Tooltip for a bar segment: the group total plus each sub-category's hours.
+  // Group name → its sub-categories, for the donut's hover panel.
+  const groupParts: Record<string, TimePart[]> = {}
+  data.groupDetail.forEach((g) => {
+    groupParts[g.name] = g.items.map((it) => ({ label: it.label, hours: it.value }))
+  })
+  const donutDetail = (seg: PieSegment) => {
+    const parts = groupParts[seg.label] ?? []
+    const tot = parts.reduce((s, p) => s + p.hours, 0)
+    return parts.map((p) => ({
+      label: p.label,
+      value: fmtHours(p.hours),
+      pct: tot ? `${Math.round((p.hours / tot) * 100)}%` : '0%',
+    }))
+  }
+  const measureHours = (v: number) =>
+    measure === 'total' ? fmtHours(v) : fmtHours(v / Math.max(1, measure === 'load' ? data.nLoads : data.nTrucks))
+  const unitRows = unit === 'truck' ? data.trucks : data.loads
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal delay-detail" onClick={(e) => e.stopPropagation()}>
@@ -943,13 +1081,78 @@ function TimeDistributionDetailModal({
           </button>
         </div>
         <div className="modal-body">
-          <div className="dd-block">
-            <div className="dd-block-title">Hours Summary</div>
-            <PieChart segments={summarySegments} formatValue={fmtHours} />
+          {/* Headline: is the fleet's time productive, and how much is downtime? */}
+          <div className="td-stats">
+            <div className="td-stat">
+              <span className="td-stat-lbl">Utilization</span>
+              <span className="td-stat-val td-pos">{pct(data.utilization)}</span>
+              <span className="td-stat-foot">Driving + working, of total time</span>
+            </div>
+            <div className="td-stat">
+              <span className="td-stat-lbl">Downtime</span>
+              <span className="td-stat-val td-neg">{fmtHours(data.downtime)}</span>
+              <span className="td-stat-foot">{pct(data.downtimePct)} of total time</span>
+            </div>
+            <div className="td-stat">
+              <span className="td-stat-lbl">Detention</span>
+              <span className="td-stat-val td-neg">{fmtHours(data.detention)}</span>
+              <span className="td-stat-foot">{pct(data.detentionPct)} of total · biggest avoidable</span>
+            </div>
           </div>
-          <div className="dd-block">
-            <div className="dd-block-title">Hours Breakdown</div>
-            <PieChart segments={segments} formatValue={fmtHours} />
+
+          <div className="dd-row">
+            <div className="dd-block">
+              <div className="dd-block-head">
+                <div className="dd-block-title">Where the time goes</div>
+                <div className="fd-fleet-modes" role="tablist" aria-label="Measure">
+                  <button className={`fd-fleet-mode ${measure === 'total' ? 'active' : ''}`} onClick={() => setMeasure('total')}>Total</button>
+                  <button className={`fd-fleet-mode ${measure === 'load' ? 'active' : ''}`} onClick={() => setMeasure('load')}>Per load</button>
+                  <button className={`fd-fleet-mode ${measure === 'truck' ? 'active' : ''}`} onClick={() => setMeasure('truck')}>Per truck</button>
+                </div>
+              </div>
+              <div className="dd-donut-row">
+                <PieChart segments={data.groupSegments} formatValue={fmtHours} segmentDetail={donutDetail} />
+              </div>
+              <div className="td-groups">
+                {data.groupDetail.map((g) => (
+                  <div className="td-group" key={g.name}>
+                    <div className="td-group-head">
+                      <span className="td-dot" style={{ background: g.color }} />
+                      <span className="td-group-name">{g.name}</span>
+                      <span className="td-group-hours">{measureHours(g.hours)}</span>
+                      <span className="td-group-pct">{pctOf(g.hours)}</span>
+                    </div>
+                    {g.items.map((it) => (
+                      <div className="td-sub" key={it.label}>
+                        <span className="td-sub-name">{it.label}</span>
+                        <span className="td-sub-hours">{measureHours(it.value)}</span>
+                        <span className="td-sub-pct">{pctOf(it.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="dd-block">
+              <div className="dd-block-head">
+                <div className="dd-block-title">Downtime by {unit}</div>
+                <div className="fd-fleet-modes" role="tablist" aria-label="Breakdown unit">
+                  <button className={`fd-fleet-mode ${unit === 'truck' ? 'active' : ''}`} onClick={() => setUnit('truck')}>By truck</button>
+                  <button className={`fd-fleet-mode ${unit === 'load' ? 'active' : ''}`} onClick={() => setUnit('load')}>By load</button>
+                </div>
+              </div>
+              <div className="td-legend">
+                <span><i style={{ background: 'var(--green)' }} /> Driving</span>
+                <span><i style={{ background: 'var(--orange)' }} /> Working</span>
+                <span><i style={{ background: '#8a94a6' }} /> Downtime</span>
+              </div>
+              <div className="td-trucks">
+                {unitRows.map((r) => (
+                  <TimeUnitBar key={r.id} row={r} unit={unit} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1003,17 +1206,6 @@ function Productivity({
     sumIdle += r.idleHours
     sumNotUsed += Math.max(0, days * 24 - r.effectiveHours - r.idleHours)
   })
-  const timeShares = [
-    { label: 'Effective hours', color: 'var(--green)', hours: sumEffective },
-    { label: 'Non-productive hours', color: 'var(--yellow)', hours: sumIdle },
-    { label: 'Not used hours', color: 'var(--red)', hours: sumNotUsed },
-  ]
-  const timePieSegments: PieSegment[] = timeShares.map((t) => ({
-    label: t.label,
-    color: t.color,
-    value: t.hours,
-  }))
-
   // Time distribution detail: the same driving/idle/unused totals as the
   // card's 3-bar view, split further into real operational sub-categories —
   // loaded vs. deadhead driving comes straight off each trip's deadheadPct;
@@ -1026,6 +1218,89 @@ function Productivity({
     { label: 'Deadhead driving', color: 'var(--red)', value: deadheadHours },
     ...TIME_IDLE_WEIGHTS.map((w) => ({ label: w.label, color: w.color, value: idlePoolHours * w.share })),
   ]
+
+  // CEO view: regroup the detailed categories into Driving / Working / Downtime
+  // (honest % of total) and break the downtime pool down per truck and per load.
+  const totalHours = timeDetailSegments.reduce((s, x) => s + x.value, 0)
+  const groupHours: Record<'Driving' | 'Working' | 'Downtime', number> = { Driving: 0, Working: 0, Downtime: 0 }
+  timeDetailSegments.forEach((x) => { groupHours[TIME_GROUP[x.label]] += x.value })
+  const detentionHours = timeDetailSegments.find((x) => x.label === 'Detention')?.value ?? 0
+  const utilization = totalHours ? ((groupHours.Driving + groupHours.Working) / totalHours) * 100 : 0
+  const timeGroupSegments: PieSegment[] = (['Driving', 'Working', 'Downtime'] as const).map((g) => ({
+    label: g,
+    color: TIME_GROUP_COLOR[g],
+    value: groupHours[g],
+  }))
+  const timeGroupDetail = (['Driving', 'Working', 'Downtime'] as const).map((g) => ({
+    name: g,
+    color: TIME_GROUP_COLOR[g],
+    hours: groupHours[g],
+    items: timeDetailSegments.filter((x) => TIME_GROUP[x.label] === g),
+  }))
+  // The idle pool splits into working vs downtime by the same TIME_IDLE_WEIGHTS,
+  // applied per truck and per load so each unit's downtime reads off its own idle.
+  const WORK_SHARE = TIME_IDLE_WEIGHTS.filter((w) => TIME_GROUP[w.label] === 'Working').reduce((s, w) => s + w.share, 0)
+  const DOWN_SHARE = TIME_IDLE_WEIGHTS.filter((w) => TIME_GROUP[w.label] === 'Downtime').reduce((s, w) => s + w.share, 0)
+  // Per-unit row with the sub-category breakdown behind each group, so a hover
+  // on a bar segment can show that unit's loaded/deadhead, loading/refueling, or
+  // detention/break/PC/resting hours. Driving splits by deadheadPct; the idle
+  // pool splits by the same TIME_IDLE_WEIGHTS shares.
+  const workParts = TIME_IDLE_WEIGHTS.filter((w) => TIME_GROUP[w.label] === 'Working')
+  const downParts = TIME_IDLE_WEIGHTS.filter((w) => TIME_GROUP[w.label] === 'Downtime')
+  const makeUnitRow = (id: string, truck: string, loaded: number, deadhead: number, pool: number): TimeUnitRow => {
+    const driving = loaded + deadhead
+    const downtime = pool * DOWN_SHARE
+    const total = driving + pool
+    return {
+      id,
+      truck,
+      driving,
+      working: pool * WORK_SHARE,
+      downtime,
+      total,
+      downtimePct: total ? (downtime / total) * 100 : 0,
+      drivingParts: [
+        { label: 'Loaded Driving', hours: loaded },
+        { label: 'Deadhead driving', hours: deadhead },
+      ],
+      workingParts: workParts.map((w) => ({ label: w.label, hours: pool * w.share })),
+      downtimeParts: downParts.map((w) => ({ label: w.label, hours: pool * w.share })),
+    }
+  }
+  const truckAgg = new Map<string, { loaded: number; deadhead: number; pool: number }>()
+  const loadRows: TimeUnitRow[] = []
+  rows.forEach((r) => {
+    const days = Math.max(1, dateSortValue(r.endDate) - dateSortValue(r.startDate) + 1)
+    const pool = r.idleHours + Math.max(0, days * 24 - r.effectiveHours - r.idleHours)
+    const deadhead = r.effectiveHours * (r.deadheadPct / 100)
+    const loaded = r.effectiveHours - deadhead
+    const t = truckAgg.get(r.truck) ?? { loaded: 0, deadhead: 0, pool: 0 }
+    t.loaded += loaded
+    t.deadhead += deadhead
+    t.pool += pool
+    truckAgg.set(r.truck, t)
+    loadRows.push(makeUnitRow(r.loadRef, r.truck, loaded, deadhead, pool))
+  })
+  const truckRows: TimeUnitRow[] = [...truckAgg.entries()]
+    .map(([truck, v]) => makeUnitRow(truck, truck, v.loaded, v.deadhead, v.pool))
+    .sort((a, b) => b.downtimePct - a.downtimePct)
+  loadRows.sort((a, b) => b.downtime - a.downtime)
+  const timeView: TimeView = {
+    total: totalHours,
+    utilization,
+    driving: groupHours.Driving,
+    deadhead: deadheadHours,
+    downtime: groupHours.Downtime,
+    downtimePct: totalHours ? (groupHours.Downtime / totalHours) * 100 : 0,
+    detention: detentionHours,
+    detentionPct: totalHours ? (detentionHours / totalHours) * 100 : 0,
+    groupSegments: timeGroupSegments,
+    groupDetail: timeGroupDetail,
+    nLoads: rows.length,
+    nTrucks: totalTrucks,
+    trucks: truckRows,
+    loads: loadRows,
+  }
 
   // Delay distribution: same Fair/Early/Late classification shown in the
   // detail modal — the card is just the compact preview of it.
@@ -1151,7 +1426,7 @@ function Productivity({
             </button>
           </div>
           <div className="pv-pie-wrap">
-            <PieChart segments={timePieSegments} formatValue={fmtHours} />
+            <PieChart segments={timeGroupSegments} formatValue={fmtHours} />
           </div>
         </section>
         <section className="card pv-panel">
@@ -1174,11 +1449,7 @@ function Productivity({
       </div>
 
       {timeModalOpen && (
-        <TimeDistributionDetailModal
-          summarySegments={timePieSegments}
-          segments={timeDetailSegments}
-          onClose={() => setTimeModalOpen(false)}
-        />
+        <TimeDistributionDetailModal data={timeView} onClose={() => setTimeModalOpen(false)} />
       )}
       {delayModalOpen && <DelayDetailModal rows={rows} onClose={() => setDelayModalOpen(false)} />}
       {evolutionModalOpen && (

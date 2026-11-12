@@ -1,6 +1,6 @@
 import { HelpCircle, Bookmark, Bell } from 'lucide-react'
 
-export default function Header() {
+export default function Header({ initials = 'DP' }: { initials?: string }) {
   return (
     <header className="header">
       <div className="brand">
@@ -17,7 +17,7 @@ export default function Header() {
         <button className="icon-btn" aria-label="Notifications">
           <Bell size={19} />
         </button>
-        <div className="avatar">DP</div>
+        <div className="avatar">{initials}</div>
       </div>
     </header>
   )

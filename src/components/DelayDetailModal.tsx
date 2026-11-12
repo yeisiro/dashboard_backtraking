@@ -80,15 +80,6 @@ const CAUSE_ORDER: Cause[] = [
   'Excess Driving Miles', 'Excess Fuel Stop Time', 'Excess Rest Time',
   'Late Pickup', 'Other', 'Truck Breakdown', 'High Detention On Previous DO',
 ]
-const CAUSE_COLOR: Record<Cause, string> = {
-  'Excess Driving Miles': 'var(--blue)',
-  'Excess Fuel Stop Time': 'var(--red)',
-  'Excess Rest Time': '#f4a6a6',
-  'Late Pickup': '#7CC8CF',
-  Other: '#8fd98f',
-  'Truck Breakdown': '#4f7a1f',
-  'High Detention On Previous DO': 'var(--orange)',
-}
 
 export function StatusDonut({
   title,
@@ -184,21 +175,29 @@ export function StatusDonut({
   )
 }
 
+// Late-arrival reasons as a calm horizontal list: one muted tone (tied to the
+// "Late" red of the semaphore), sorted by frequency, with the share each reason
+// represents. Zero-count reasons stay listed but dimmed, so the full set of
+// tracked causes is visible without the rainbow of colors competing for attention.
 function CauseBarChart({ counts }: { counts: Record<Cause, number> }) {
+  const total = CAUSE_ORDER.reduce((s, c) => s + counts[c], 0)
   const max = Math.max(1, ...CAUSE_ORDER.map((c) => counts[c]))
+  const ordered = [...CAUSE_ORDER].sort((a, b) => counts[b] - counts[a])
+  if (total === 0) {
+    return <div className="dd-cause-empty">No late stops in this period.</div>
+  }
   return (
-    <div className="pv-bars dd-cause-bars">
-      {CAUSE_ORDER.map((c) => (
-        <div className="pv-bar-col" key={c}>
-          <span className="pv-bar-val">{counts[c]}</span>
-          <div className="pv-bar-track">
-            <div
-              className="pv-bar-fill"
-              style={{ height: `${Math.max(2, (counts[c] / max) * 100)}%`, background: CAUSE_COLOR[c] }}
-              title={`${c}: ${counts[c]}`}
-            />
+    <div className="dd-cause-list">
+      {ordered.map((c) => (
+        <div className={`dd-cause-row ${counts[c] === 0 ? 'zero' : ''}`} key={c}>
+          <span className="dd-cause-name">{c}</span>
+          <div className="dd-cause-track">
+            <div className="dd-cause-fill" style={{ width: `${(counts[c] / max) * 100}%` }} />
           </div>
-          <span className="pv-bar-label">{c}</span>
+          <span className="dd-cause-count">
+            {counts[c]}
+            <i>{Math.round((counts[c] / total) * 100)}%</i>
+          </span>
         </div>
       ))}
     </div>

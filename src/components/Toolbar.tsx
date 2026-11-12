@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Settings2, Truck, User } from 'lucide-react'
 import ClassFilter from './ClassFilter'
 import TrucksFilter from './TrucksFilter'
@@ -6,9 +6,19 @@ import DriversFilter from './DriversFilter'
 import DateFilter from './DateFilter'
 import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal, { type SyncState } from './ConnectFleetModal'
+import ConnectFleetV2, { type WizardTarget } from './ConnectFleetV2'
 import ManageFleetModal from './ManageFleetModal'
 import RefreshButton from './RefreshButton'
-import { type FleetCabin, type FleetDriver, type Integration, type PeriodKey } from '../data'
+import {
+  type FleetCabin,
+  type FleetDriver,
+  type Integration,
+  type PeriodKey,
+  type OnboardingState,
+  type OnboardingRequest,
+  type RequestType,
+  EMPTY_ONBOARDING,
+} from '../data'
 
 export type DataTab = 'overview' | 'full'
 export type AnalysisDim = 'trucks' | 'drivers'
@@ -68,6 +78,15 @@ export default function Toolbar({
   onRemoveCabin,
   onAddDrivers,
   onRemoveIntegration,
+  onboarding,
+  onOnboardingChange,
+  requests = [],
+  onRequest,
+  onStartOnboardingSync,
+  v3 = false,
+  wizardTarget = null,
+  onWizardTargetHandled,
+  onWizardClosed,
 }: {
   tab?: DataTab
   onTabChange?: (t: DataTab) => void
@@ -84,7 +103,7 @@ export default function Toolbar({
   onDeadheadModeChange?: (next: DeadheadMode) => void
   deadheadLocked?: boolean
   onStartSync?: (cabinIds: string[], driverIds: string[], range: PeriodKey, extraDrivers?: FleetDriver[]) => void
-  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string) => void
+  onConnectIntegration?: (type: 'eld' | 'tms', name: string, mono: string, label?: string) => void
   sync?: SyncState | null
   fleet?: FleetCabin[]
   drivers?: FleetDriver[]
@@ -93,10 +112,38 @@ export default function Toolbar({
   onRemoveCabin?: (id: string) => void
   onAddDrivers?: (ids: string[]) => void
   onRemoveIntegration?: (type: 'eld' | 'tms', name: string) => void
+  // V2 onboarding (progress + requests live in App so they survive closing).
+  onboarding?: OnboardingState
+  onOnboardingChange?: (patch: Partial<OnboardingState>) => void
+  requests?: OnboardingRequest[]
+  onRequest?: (type: RequestType, detail: string) => void
+  onStartOnboardingSync?: () => void
+  // V3: integration consent + the setup guide opening the wizard at a step.
+  v3?: boolean
+  wizardTarget?: WizardTarget | null
+  onWizardTargetHandled?: () => void
+  onWizardClosed?: () => void
 }) {
   const [showConnect, setShowConnect] = useState(false)
+  // Step the wizard opens at (set by the V3 setup guide; else first pending).
+  const [openAt, setOpenAt] = useState<WizardTarget | undefined>(undefined)
+  useEffect(() => {
+    if (!wizardTarget) return
+    setOpenAt(wizardTarget)
+    setShowConnect(true)
+    onWizardTargetHandled?.()
+  }, [wizardTarget, onWizardTargetHandled])
   const [showManage, setShowManage] = useState(false)
-  const connected = fleet.length > 0 || drivers.length > 0 || integrations.length > 0
+  const isV2 = view === 'dashboard'
+  // V1 flips to Manage Fleet as soon as anything is connected. V2 keeps
+  // Connect Fleet until the sync starts, so a half-finished onboarding always
+  // reopens the wizard where it was left.
+  const connected = isV2
+    ? !!onboarding?.syncStarted
+    : fleet.length > 0 || drivers.length > 0 || integrations.length > 0
+  // V2 shows the button in every view (it's the only entry point); V1 keeps
+  // its original visibility.
+  const showFleetButton = isV2 || (!(view === 'summary' && tab === 'overview') && tab !== 'full')
 
   return (
     <div className="toolbar">
@@ -131,14 +178,20 @@ export default function Toolbar({
         )}
         <DateFilter />
         <RefreshButton label="Refresh data" />
-        {!(view === 'summary' && tab === 'overview') && tab !== 'full' && (
+        {showFleetButton && (
           connected ? (
             <button className="btn-primary" onClick={() => setShowManage(true)}>
               Manage Fleet
               <Settings2 size={15} />
             </button>
           ) : (
-            <button className="btn-primary" onClick={() => setShowConnect(true)}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setOpenAt(undefined)
+                setShowConnect(true)
+              }}
+            >
               Connect Fleet
               <Plus size={15} />
             </button>
@@ -146,7 +199,25 @@ export default function Toolbar({
         )}
       </div>
 
-      {showConnect && (
+      {showConnect && isV2 && onboarding && (
+        <ConnectFleetV2
+          // Defaults fill any field an older in-memory state (hot reload) lacks.
+          ob={{ ...EMPTY_ONBOARDING, ...onboarding }}
+          onChange={(patch) => onOnboardingChange?.(patch)}
+          requests={requests}
+          onRequest={(type, detail) => onRequest?.(type, detail)}
+          onConnectIntegration={onConnectIntegration}
+          onStartSync={() => onStartOnboardingSync?.()}
+          sync={sync}
+          onClose={() => {
+            setShowConnect(false)
+            onWizardClosed?.()
+          }}
+          v3={v3}
+          initialStep={openAt}
+        />
+      )}
+      {showConnect && !isV2 && (
         <ConnectFleetModal
           onClose={() => setShowConnect(false)}
           onStartSync={onStartSync}
@@ -165,7 +236,13 @@ export default function Toolbar({
           onRemoveCabin={(id) => onRemoveCabin?.(id)}
           onAddDrivers={(ids) => onAddDrivers?.(ids)}
           onRemoveIntegration={(type, name) => onRemoveIntegration?.(type, name)}
-          onConnectIntegration={(type, name, mono) => onConnectIntegration?.(type, name, mono)}
+          onConnectIntegration={(type, name, mono, label) => onConnectIntegration?.(type, name, mono, label)}
+          v2={isV2}
+          trailers={onboarding?.trailers ?? []}
+          onTrailersChange={(ids) => onOnboardingChange?.({ trailers: ids })}
+          requests={requests}
+          onRequest={(type, detail) => onRequest?.(type, detail)}
+          v3={v3}
         />
       )}
     </div>

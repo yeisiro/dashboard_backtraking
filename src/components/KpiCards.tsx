@@ -15,9 +15,13 @@ import EmptyState from './EmptyState'
 export default function KpiCards({
   noData = false,
   hideMarketPosition = false,
+  cardNotes = {},
 }: {
   noData?: boolean
   hideMarketPosition?: boolean
+  // V3: a small notice on cards affected by something the org skipped or is
+  // still pending (e.g. Fuel "Estimated from ELD"), keyed by card label.
+  cardNotes?: Record<string, { text: string; tip: string }>
 }) {
   const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
@@ -31,6 +35,11 @@ export default function KpiCards({
         <div className="card kpi" key={card.label}>
           <div className="kpi-head">
             <span className="eyebrow">{card.label}</span>
+            {cardNotes[card.label] && (
+              <span className="kpi-note cf-tip" data-tip={cardNotes[card.label].tip}>
+                {cardNotes[card.label].text}
+              </span>
+            )}
             {!noData && (
               <button
                 className="kpi-arrow"
