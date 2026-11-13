@@ -9234,3 +9234,124 @@ div.lc-row.static { cursor: default; }
 .mc-privacy { display: flex; gap: 10px; padding: 12px; margin-bottom: 4px; border-radius: 10px; background: var(--surface-2); font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 .mc-privacy svg { color: var(--green); flex-shrink: 0; margin-top: 1px; }
 @media (max-width: 1100px) { .mc-grid { grid-template-columns: 1fr; } }
+
+/* ================= V3 · setup visibility (2026-11-13) ================= */
+/* Guide: accent frame so it doesn't blend with the dashboard cards. */
+.sg.todo {
+  width: 368px;
+  border: 1px solid rgba(116, 194, 199, 0.55);
+  box-shadow: 0 0 0 4px rgba(116, 194, 199, 0.08), 0 22px 56px rgba(0, 0, 0, 0.6);
+}
+.sg.todo .sg-head { background: linear-gradient(180deg, rgba(116, 194, 199, 0.14), transparent); }
+.sg.resume { animation: sg-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), sg-glow 1.2s ease-in-out 0.3s 2; }
+@keyframes sg-glow { 50% { box-shadow: 0 0 0 8px rgba(116, 194, 199, 0.22), 0 22px 56px rgba(0, 0, 0, 0.6); } }
+.sg-next {
+  display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px;
+  background: linear-gradient(160deg, rgba(116, 194, 199, 0.16), rgba(116, 194, 199, 0.04));
+  border: 1px solid rgba(116, 194, 199, 0.35);
+}
+.sg-next-kicker { font-size: 10.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #74c2c7; }
+.sg-next-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.sg-next-why { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+.sg-next-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+.sg-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-muted); }
+.sg-next .sg-cta { margin-top: 6px; }
+.sg-next-foot { font-size: 11px; color: var(--text-muted); text-align: center; }
+.sg-item.is-next { background: rgba(116, 194, 199, 0.08); }
+.sg-item.is-next .sg-check { border-color: #74c2c7; }
+.sg-item-time { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+/* Pill: names the next step and nudges until the sync starts. */
+.sg-pill.todo {
+  padding: 10px 18px 10px 12px; gap: 11px;
+  background: #74c2c7; border-color: #74c2c7; color: #08201f;
+  box-shadow: 0 0 0 4px rgba(116, 194, 199, 0.18), 0 14px 36px rgba(0, 0, 0, 0.55);
+  animation: sg-nudge 6s ease-in-out 2s infinite;
+}
+.sg-pill.todo:hover { background: #8fd0d4; }
+.sg-pill.todo .sg-ring circle { stroke: rgba(8, 32, 31, 0.2); }
+.sg-pill.todo .sg-ring circle + circle { stroke: #08201f; }
+.sg-pill-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; text-align: left; }
+.sg-pill-text b { font-size: 13px; font-weight: 800; }
+.sg-pill-text span { font-size: 11px; font-weight: 600; opacity: 0.75; }
+@keyframes sg-nudge {
+  0%, 88%, 100% { transform: none; }
+  91% { transform: translateY(-6px); }
+  94% { transform: none; }
+  97% { transform: translateY(-3px); }
+}
+.has-guide-pill .toast { right: 290px; }
+
+/* Sample-data banner above the dashboard. */
+.sb {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 12px 14px 12px 16px;
+  border-radius: 12px; border: 1px solid rgba(116, 194, 199, 0.45);
+  background: linear-gradient(90deg, rgba(116, 194, 199, 0.16), rgba(116, 194, 199, 0.05) 60%, rgba(116, 194, 199, 0.02));
+}
+.sb.wait { border-color: rgba(230, 180, 80, 0.4); background: linear-gradient(90deg, rgba(230, 180, 80, 0.14), rgba(230, 180, 80, 0.03)); }
+.sb.syncing { border-color: rgba(79, 209, 139, 0.35); background: linear-gradient(90deg, rgba(79, 209, 139, 0.12), rgba(79, 209, 139, 0.03)); }
+.sb.syncing > svg { color: var(--green); flex-shrink: 0; }
+.sb-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; background: rgba(116, 194, 199, 0.18); color: #74c2c7; }
+.sb.wait .sb-ico { background: rgba(230, 180, 80, 0.18); color: var(--yellow); }
+.sb-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sb-main b { font-size: 14px; font-weight: 700; color: var(--text); }
+.sb-main span { font-size: 12.5px; color: var(--text-dim); }
+.sb-progress { display: flex; flex-direction: column; gap: 6px; min-width: 210px; }
+.sb-segs { display: flex; gap: 4px; }
+.sb-segs span { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.sb-segs span.done { background: var(--green); }
+.sb-segs span.wait { background: var(--yellow); }
+.sb-progress-text { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-dim); }
+.sb-cta {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 999px;
+  background: #74c2c7; color: #08201f; font-size: 13px; font-weight: 800;
+}
+.sb-cta:hover { background: #8fd0d4; }
+.sb-cta.ghost { background: transparent; color: var(--yellow); border: 1px solid rgba(230, 180, 80, 0.5); }
+.sb-bar { width: 220px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.sb-bar > div { height: 100%; background: var(--green); transition: width 0.3s ease; }
+
+/* Connect Fleet button: progress badge + soft pulse until the sync starts. */
+.btn-primary.cf-attn { position: relative; }
+.btn-primary.cf-attn::after {
+  content: ''; position: absolute; inset: -3px; border-radius: inherit; pointer-events: none;
+  border: 2px solid rgba(116, 194, 199, 0.6); animation: cf-ring 2.4s ease-out infinite;
+}
+@keyframes cf-ring { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.12); } }
+.cf-count { padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; background: rgba(0, 0, 0, 0.22); }
+
+/* One-time welcome after sign-up. */
+.sw-overlay {
+  position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px;
+  background: rgba(5, 8, 12, 0.62); backdrop-filter: blur(2px); animation: sw-fade 0.25s ease;
+}
+@keyframes sw-fade { from { opacity: 0; } }
+.sw {
+  width: 540px; max-width: 100%; padding: 28px; border-radius: 18px; display: flex; flex-direction: column;
+  background: #10151d; border: 1px solid rgba(116, 194, 199, 0.45);
+  box-shadow: 0 0 0 6px rgba(116, 194, 199, 0.07), 0 30px 80px rgba(0, 0, 0, 0.6);
+  animation: sg-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.sw-kicker {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; color: #74c2c7; background: rgba(116, 194, 199, 0.12);
+}
+.sw-title { margin: 14px 0 8px; font-size: 22px; line-height: 1.3; font-weight: 700; color: var(--text); }
+.sw-sub { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-dim); }
+.sw-sub b { color: var(--text); }
+.sw-steps { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sw-steps li { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 10px; background: var(--surface-2); }
+.sw-step-n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11.5px; font-weight: 800; color: #08201f; background: #74c2c7; flex-shrink: 0; }
+.sw-step-ico { color: var(--text-dim); display: inline-flex; }
+.sw-step-label { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.sw-step-min { font-size: 12px; color: var(--text-muted); }
+.sw-need { display: flex; gap: 12px; margin-top: 14px; padding: 13px 14px; border-radius: 10px; border: 1px dashed var(--border-strong); }
+.sw-need > svg { color: var(--yellow); flex-shrink: 0; margin-top: 2px; }
+.sw-need > div { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+.sw-need b { color: var(--text); font-size: 13px; }
+.sw-need-dim { color: var(--text-muted); }
+.sw-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 22px; }
+.sw-secondary { padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.sw-secondary:hover { color: var(--text); background: var(--surface-2); }
+.sw-primary { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 800; background: #74c2c7; color: #08201f; }
+.sw-primary:hover { background: #8fd0d4; }
+@media (max-width: 900px) { .sb { flex-wrap: wrap; } .sb-progress { min-width: 0; width: 100%; } }

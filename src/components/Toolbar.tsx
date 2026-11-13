@@ -8,6 +8,7 @@ import DeadheadFilter, { type DeadheadMode } from './DeadheadFilter'
 import ConnectFleetModal, { type SyncState } from './ConnectFleetModal'
 import ConnectFleetV2, { type WizardTarget } from './ConnectFleetV2'
 import ManageFleetModal from './ManageFleetModal'
+import { setupItems } from './SetupGuide'
 import RefreshButton from './RefreshButton'
 import {
   type FleetCabin,
@@ -144,6 +145,11 @@ export default function Toolbar({
   // V2 shows the button in every view (it's the only entry point); V1 keeps
   // its original visibility.
   const showFleetButton = isV2 || (!(view === 'summary' && tab === 'overview') && tab !== 'full')
+  // V3: the button carries the setup progress until the sync starts.
+  const setupCovered =
+    v3 && onboarding && !onboarding.syncStarted
+      ? setupItems({ ...EMPTY_ONBOARDING, ...onboarding }).filter((i) => i.state !== 'todo' && i.state !== 'blocked').length
+      : null
 
   return (
     <div className="toolbar">
@@ -186,14 +192,14 @@ export default function Toolbar({
             </button>
           ) : (
             <button
-              className="btn-primary"
+              className={`btn-primary ${setupCovered !== null ? 'cf-attn' : ''}`}
               onClick={() => {
                 setOpenAt(undefined)
                 setShowConnect(true)
               }}
             >
               Connect Fleet
-              <Plus size={15} />
+              {setupCovered !== null ? <span className="cf-count">{setupCovered}/5</span> : <Plus size={15} />}
             </button>
           )
         )}

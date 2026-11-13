@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Sidebar, { type View, type Version, type V3Page } from './components/Sidebar'
 import SignupV3, { type SignupAccount } from './components/SignupV3'
 import SetupGuide, { onboardingGaps, setupItems } from './components/SetupGuide'
+import { SetupWelcome, SampleBanner } from './components/SetupNudges'
 import ConnectFleetV2, { type WizardTarget } from './components/ConnectFleetV2'
 import MyCompanyV3, { type CompanyManageTab } from './components/MyCompanyV3'
 import ManageFleetModal from './components/ManageFleetModal'
@@ -47,6 +48,10 @@ export default function App() {
   // closed once the minimum is done.
   const [guideOpen, setGuideOpen] = useState(true)
   const [guideDismissed, setGuideDismissed] = useState(false)
+  // V3: one-time start moment after sign-up, and the guide reopening on the
+  // next step when the wizard is closed half-way.
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+  const [guideResume, setGuideResume] = useState(false)
   // Step the guide asked the wizard to open at (consumed by Toolbar).
   const [wizardTarget, setWizardTarget] = useState<WizardTarget | null>(null)
   const clearWizardTarget = useCallback(() => setWizardTarget(null), [])
@@ -283,15 +288,28 @@ export default function App() {
     setGuideOpen(true)
     setGuideDismissed(false)
     setV3Page('dashboard')
+    setWelcomeOpen(true)
+    setGuideResume(false)
     setV3Account(acct)
   }, [])
 
-  // V3: closing the wizard half-way leaves a reminder of what's left.
+  // V3: closing the wizard half-way reopens the guide on the next step
+  // ("Pick up where you left off") instead of a toast that's easy to miss.
   const onWizardClosed = () => {
     if (version !== 'v3' || onboarding.syncStarted) return
     const left = setupItems(onboarding).filter((i) => i.state === 'todo').length
-    if (left > 0)
-      setNotice(`You have ${left} setup step${left === 1 ? '' : 's'} left — pick up anytime from the setup guide.`)
+    if (left > 0) {
+      setGuideDismissed(false)
+      setGuideOpen(true)
+      setGuideResume(true)
+    }
+  }
+  // V3: open the wizard at a step, from the guide, the banner or the welcome.
+  const openSetup = (t?: WizardTarget) => {
+    setGuideResume(false)
+    if (v3Page === 'company') return setCompanyWizard({ at: t })
+    setDataTab('overview')
+    setWizardTarget(t ?? 'eld')
   }
   // Closing the guide with requests still open points to where to follow them.
   const dismissGuide = () => {
@@ -430,6 +448,14 @@ export default function App() {
               </>
             ) : (
             <>
+            {version === 'v3' && v3Account && (
+              <SampleBanner
+                ob={{ ...EMPTY_ONBOARDING, ...onboarding }}
+                sync={sync}
+                onContinue={openSetup}
+                onTrack={() => setV3Page('company')}
+              />
+            )}
             <Toolbar
               tab={dataTab}
               onTabChange={(t) => {
@@ -567,21 +593,34 @@ export default function App() {
           />
         )}
         {notice && !syncToast && <Toast message={notice} onDone={clearNotice} duration={5500} />}
-        {version === 'v3' && v3Account && !guideDismissed && (
+        {version === 'v3' && v3Account && !guideDismissed && !welcomeOpen && (
           <SetupGuide
             ob={{ ...EMPTY_ONBOARDING, ...onboarding }}
             requests={requests}
             sync={sync}
             open={guideOpen}
-            onToggle={setGuideOpen}
-            onOpenWizard={(t) => {
-              if (v3Page === 'company') return setCompanyWizard({ at: t })
-              setDataTab('overview')
-              setWizardTarget(t)
+            onToggle={(o) => {
+              setGuideOpen(o)
+              if (!o) setGuideResume(false)
             }}
+            resume={guideResume}
+            onOpenWizard={openSetup}
             onShareTransactions={shareTransactions}
             onDismiss={dismissGuide}
             onTrackRequests={v3Page === 'company' ? undefined : () => setV3Page('company')}
+          />
+        )}
+        {version === 'v3' && v3Account && welcomeOpen && (
+          <SetupWelcome
+            firstName={v3Account.name.trim().split(/\s+/)[0] || 'there'}
+            onStart={() => {
+              setWelcomeOpen(false)
+              openSetup('eld')
+            }}
+            onExplore={() => {
+              setWelcomeOpen(false)
+              setGuideOpen(true)
+            }}
           />
         )}
         {/* V3 · My Company hosts its own wizard and Manage Fleet. */}

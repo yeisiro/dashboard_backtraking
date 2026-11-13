@@ -22,6 +22,10 @@ interface Item {
   state: ItemState
   note?: string
   target: WizardTarget
+  minutes: number
+  // What the step is for and what to have at hand (shown on the "next step" card).
+  why: string
+  need?: string
 }
 
 export function onboardingGaps(ob: OnboardingState, requests: OnboardingRequest[]): OnboardingGap[] {
@@ -45,6 +49,9 @@ export function setupItems(ob: OnboardingState): Item[] {
       state: !ob.eld ? 'todo' : ob.eld.status === 'connected' ? 'done' : 'pending',
       note: ob.eld?.status === 'unsupported' ? `${ob.eld.name} · request sent` : ob.eld?.name,
       target: 'eld',
+      minutes: 2,
+      why: 'Brings in your trucks, drivers, miles, hours and fuel use.',
+      need: 'API key from your ELD admin (Samsara or Geotab)',
     },
     {
       key: 'tms',
@@ -52,6 +59,9 @@ export function setupItems(ob: OnboardingState): Item[] {
       state: !ob.tms ? 'todo' : ob.tms.status === 'connected' ? 'done' : 'pending',
       note: ob.tms?.status === 'unsupported' ? `${ob.tms.name} · request sent` : ob.tms?.name,
       target: 'tms',
+      minutes: 2,
+      why: 'Brings in your loads and revenue for profitability and RPM.',
+      need: 'API token and company subdomain from Datatruck',
     },
     {
       key: 'fleet',
@@ -59,6 +69,8 @@ export function setupItems(ob: OnboardingState): Item[] {
       state: ob.fleetDone && ob.range ? 'done' : 'todo',
       note: ob.fleetDone && ob.range ? `${ob.cabins.length} cabins` : undefined,
       target: ob.fleetDone ? 'range' : 'fleet',
+      minutes: 3,
+      why: 'Pick the trucks, drivers and trailers to analyze and how much history to pull.',
     },
     {
       key: 'fuel',
@@ -70,6 +82,8 @@ export function setupItems(ob: OnboardingState): Item[] {
           ? ob.fuelCard.name
           : `${ob.fuelCard.provider} requested · efRouting meanwhile`,
       target: 'fuel',
+      minutes: 1,
+      why: 'Fuel savings and leakage are calculated with your card’s stations and discounts.',
     },
     {
       key: 'sync',
@@ -77,6 +91,8 @@ export function setupItems(ob: OnboardingState): Item[] {
       state: ob.syncStarted ? 'done' : eldBlocked ? 'blocked' : 'todo',
       note: eldBlocked && !ob.syncStarted ? 'Waiting for your ELD to be connected' : undefined,
       target: 'review',
+      minutes: 1,
+      why: 'Review what you connected and start bringing in your operation.',
     },
   ]
 }
@@ -91,6 +107,7 @@ export default function SetupGuide({
   onShareTransactions,
   onDismiss,
   onTrackRequests,
+  resume = false,
 }: {
   ob: OnboardingState
   requests: OnboardingRequest[]
@@ -102,6 +119,8 @@ export default function SetupGuide({
   onDismiss: () => void
   // V3: jump to My Company → Setup requests (hidden when already there).
   onTrackRequests?: () => void
+  // The wizard was just closed half-way: the guide reopens on the next step.
+  resume?: boolean
 }) {
   const items = setupItems(ob)
   const covered = items.filter((i) => i.state === 'done' || i.state === 'pending').length
@@ -115,29 +134,40 @@ export default function SetupGuide({
   const minimumDone = ob.syncStarted
   const allSet = minimumDone && gaps.length === 0
 
-  // The next thing to do: first uncovered item, else the review to start syncing.
+  // The next thing to do: first uncovered item (the review once all are covered).
   const next = items.find((i) => i.state === 'todo')
-  const primary = !ob.syncStarted
-    ? next
-      ? { label: covered === 0 ? 'Connect your fleet' : 'Continue setup', target: next.target }
-      : null
-    : null
+  const minutesLeft = items.filter((i) => i.state === 'todo').reduce((a, i) => a + i.minutes, 0)
 
   if (!open) {
+    // Minimized: the pill names the next step instead of a bare counter, and
+    // nudges every few seconds until the sync starts.
     return (
-      <button className="sg-pill" onClick={() => onToggle(true)} aria-label="Open setup guide">
+      <button
+        className={`sg-pill ${!minimumDone ? 'todo' : ''}`}
+        onClick={() => onToggle(true)}
+        aria-label="Open setup guide"
+      >
         <svg viewBox="0 0 36 36" className="sg-ring">
           <circle cx="18" cy="18" r="15" />
           <circle cx="18" cy="18" r="15" style={{ strokeDasharray: `${(pct / 100) * 94.2} 94.2` }} />
         </svg>
-        <span>{allSet ? "You're all set" : minimumDone ? `${gaps.length} pending` : `Setup ${covered}/${total}`}</span>
-        {!minimumDone && <span className="sg-pill-dot" />}
+        {!minimumDone ? (
+          <span className="sg-pill-text">
+            <b>{next ? `Next: ${next.label}` : eldBlocked ? 'Waiting for your ELD' : 'Start your sync'}</b>
+            <span>
+              Setup {covered}/{total}
+              {minutesLeft > 0 ? ` · ~${minutesLeft} min left` : ''}
+            </span>
+          </span>
+        ) : (
+          <span>{allSet ? "You're all set" : `${gaps.length} pending`}</span>
+        )}
       </button>
     )
   }
 
   return (
-    <aside className="sg" role="dialog" aria-label="Setup guide">
+    <aside className={`sg ${!minimumDone ? 'todo' : ''} ${resume ? 'resume' : ''}`} role="dialog" aria-label="Setup guide">
       <div className="sg-head">
         <span className="sg-head-ico">
           <Sparkles size={15} />
@@ -167,7 +197,7 @@ export default function SetupGuide({
           {!ob.syncStarted
             ? eldBlocked
               ? "You're viewing sample data until your ELD is connected. We'll let you know when it's ready."
-              : "You're viewing sample data. Connect your fleet to see your own operation."
+              : `You're viewing sample data. About ${Math.max(minutesLeft, 1)} minutes left to see your own operation.`
             : syncing
               ? `Syncing your operation · ${Math.round(sync!.progress)}% — your data fills in as it arrives.`
               : allSet
@@ -175,15 +205,28 @@ export default function SetupGuide({
                 : 'Your dashboard now runs on your own data. A few things are still pending:'}
         </p>
 
-        {primary && (
-          <button className="sg-cta" onClick={() => onOpenWizard(primary.target)}>
-            {primary.label} <ArrowRight size={15} />
-          </button>
-        )}
-        {!ob.syncStarted && !next && !eldBlocked && (
-          <button className="sg-cta" onClick={() => onOpenWizard('review')}>
-            Start your sync <ArrowRight size={15} />
-          </button>
+        {/* The next step, front and center: what it is, why, how long and what to have at hand. */}
+        {!ob.syncStarted && (next || !eldBlocked) && (
+          <div className="sg-next">
+            <span className="sg-next-kicker">
+              {resume ? 'Pick up where you left off' : covered === 0 ? 'Start here' : 'Next step'}
+            </span>
+            <span className="sg-next-title">{next ? next.label : 'Start your sync'}</span>
+            <span className="sg-next-why">{next ? next.why : items[4].why}</span>
+            <span className="sg-next-meta">
+              <Clock size={12} /> ~{next ? next.minutes : 1} min
+              {next?.need && (
+                <>
+                  <span className="sg-dot" /> You&apos;ll need: {next.need}
+                </>
+              )}
+            </span>
+            <button className="sg-cta" onClick={() => onOpenWizard(next ? next.target : 'review')}>
+              {next ? (covered === 0 ? 'Connect your fleet' : 'Continue setup') : 'Review and start sync'}{' '}
+              <ArrowRight size={15} />
+            </button>
+            {covered === 0 && <span className="sg-next-foot">Your progress is saved — stop anytime and come back.</span>}
+          </div>
         )}
 
         {/* Minimum checklist (hidden once synced — it's all done by then) */}
@@ -194,7 +237,7 @@ export default function SetupGuide({
               return (
                 <li key={i.key}>
                   <button
-                    className={`sg-item ${i.state}`}
+                    className={`sg-item ${i.state} ${i.key === next?.key ? 'is-next' : ''}`}
                     disabled={!clickable}
                     onClick={() => clickable && onOpenWizard(i.target)}
                   >
@@ -209,6 +252,7 @@ export default function SetupGuide({
                       <span className="sg-item-label">{i.label}</span>
                       {i.note && <span className="sg-item-note">{i.note}</span>}
                     </span>
+                    {i.state === 'todo' && <span className="sg-item-time">~{i.minutes} min</span>}
                     {clickable && <ChevronRight size={15} className="sg-item-arrow" />}
                   </button>
                 </li>
@@ -236,7 +280,7 @@ export default function SetupGuide({
         )}
 
         {/* Optional: fuel transactions */}
-        {!allSet && (
+        {minimumDone && !allSet && (
           <div className="sg-section">
             <span className="sg-section-title">Optional · most accurate fuel numbers</span>
             <div className="sg-gap tx">
