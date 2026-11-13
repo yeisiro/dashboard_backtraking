@@ -53,7 +53,7 @@ function firstPendingStep(ob: OnboardingState): Step {
   if (!ob.eld) return 'eld'
   if (!ob.tms) return 'tms'
   if (!ob.fleetDone) return 'fleet'
-  if (!ob.range) return 'range'
+  if (!ob.range && !ob.rangeDeferred) return 'range'
   if (!ob.fuelCard) return 'fuel'
   return 'review'
 }
@@ -236,7 +236,7 @@ export default function ConnectFleetV2({
     !ob.eld && 'ELD',
     !ob.tms && 'TMS',
     !ob.fleetDone && 'Fleet',
-    !ob.range && 'Data range',
+    !ob.range && !ob.rangeDeferred && 'Data range',
     !ob.fuelCard && 'Fuel card',
   ].filter(Boolean) as string[]
   const canSync = missing.length === 0 && !eldBlocked
@@ -372,7 +372,9 @@ export default function ConnectFleetV2({
         </div>
         {total === 0 ? (
           <p className="mf-empty">
-            No {key} yet. Add your {key} manually — you can link them to your ELD later.
+            {sourcesText
+              ? `No ${key} yet. Add your ${key} manually — you can link them to your ELD later.`
+              : `Nothing to do here for now — your ${key} come in from your ELD once it's connected.`}
           </p>
         ) : (
           <div className="tf-scroll lc-list">
@@ -476,7 +478,7 @@ export default function ConnectFleetV2({
               <p className="cfm-sub">
                 {sourcesText
                   ? `Choose the part of your fleet to analyze. We found these units in ${sourcesText} — add any that are missing.`
-                  : "We can't read your units yet because your ELD and TMS aren't connected. Add your cabins, drivers and trailers manually to continue."}
+                  : "We'll bring in your cabins, drivers and trailers automatically as soon as your ELD is connected. You can continue now — or add some by hand if you want them in from the start."}
               </p>
               <div className="cfm-fleet-tabs">
                 {(
@@ -519,7 +521,11 @@ export default function ConnectFleetV2({
                     </button>
                   </div>
                   {allDrivers.length === 0 ? (
-                    <p className="mf-empty">No drivers yet. Invite your drivers by email.</p>
+                    <p className="mf-empty">
+                      {sourcesText
+                        ? 'No drivers yet. Invite your drivers by email.'
+                        : "Nothing to do here for now — your drivers come in from your ELD once it's connected."}
+                    </p>
                   ) : (
                     <div className="tf-scroll lc-list">
                       {driversShown.map((d) => (
@@ -544,10 +550,10 @@ export default function ConnectFleetV2({
               )}
             </div>
             <div className="modal-foot">
-              {ob.cabins.length === 0 ? (
-                <span className="cfm-foot-msg">
-                  {cabinPool.length ? 'Select at least one cabin to continue' : 'Add at least one cabin to continue'}
-                </span>
+              {ob.cabins.length === 0 && sourcesText ? (
+                <span className="cfm-foot-msg">Select at least one cabin to continue</span>
+              ) : ob.cabins.length === 0 ? (
+                <span className="cfm-foot-msg">Your fleet comes in once your ELD is connected</span>
               ) : (
                 <button className="btn-text" onClick={onClose}>
                   Close
@@ -555,9 +561,11 @@ export default function ConnectFleetV2({
               )}
               <button
                 className="btn-pill"
-                disabled={ob.cabins.length === 0}
+                // Without a connected ELD/TMS (both are requests) nothing is
+                // required here: the fleet is brought in once they connect.
+                disabled={ob.cabins.length === 0 && !!sourcesText}
                 onClick={() => {
-                  onChange({ fleetDone: true })
+                  onChange({ fleetDone: true, fleetDeferred: !sourcesText })
                   setStep('range')
                 }}
               >
@@ -613,8 +621,9 @@ export default function ConnectFleetV2({
           <>
             <div className="modal-body cfm-period">
               <p className="cfm-sub">
-                How much history should we pull to build your operation? More history takes longer to sync, and
-                you can always add more later from Manage Fleet.
+                {sourcesText
+                  ? 'How much history should we pull to build your operation? More history takes longer to sync, and you can always add more later from Manage Fleet.'
+                  : "Nothing is connected yet, so you don't need to decide this now. If you skip it, we pull 3 months as soon as your ELD is connected — you can add more later from Manage Fleet."}
               </p>
               <div className="field">
                 <label>Data range</label>
@@ -647,13 +656,25 @@ export default function ConnectFleetV2({
               </div>
             </div>
             <div className="modal-foot">
-              <button className="btn-text" onClick={onClose}>
-                Close
-              </button>
+              {sourcesText ? (
+                <button className="btn-text" onClick={onClose}>
+                  Close
+                </button>
+              ) : (
+                <button
+                  className="btn-text"
+                  onClick={() => {
+                    onChange({ range: null, rangeDeferred: true })
+                    setStep('fuel')
+                  }}
+                >
+                  Decide later
+                </button>
+              )}
               <button
                 className="btn-pill"
                 onClick={() => {
-                  onChange({ range })
+                  onChange({ range, rangeDeferred: false })
                   setStep('fuel')
                 }}
               >
@@ -877,7 +898,9 @@ export default function ConnectFleetV2({
                 )}
                 {reviewRow(
                   'Fleet',
-                  ob.fleetDone
+                  ob.fleetDone && ob.fleetDeferred && ob.cabins.length === 0
+                    ? 'From your ELD once it’s connected'
+                    : ob.fleetDone
                     ? [
                         [ob.cabins.length, 'cabin'],
                         [allDrivers.length, 'driver'],
@@ -886,11 +909,19 @@ export default function ConnectFleetV2({
                         .map(([n, w]) => `${n} ${w}${n === 1 ? '' : 's'}`)
                         .join(' · ')
                     : null,
-                  ob.fleetDone ? 'ok' : 'missing',
-                  null,
+                  !ob.fleetDone ? 'missing' : ob.fleetDeferred ? 'warn' : 'ok',
+                  ob.fleetDeferred
+                    ? "We'll bring in all your cabins, drivers and trailers when your ELD is connected. Adjust them anytime in Manage Fleet."
+                    : null,
                   'fleet',
                 )}
-                {reviewRow('Data range', ob.range ? labelForPeriod(ob.range) : null, ob.range ? 'ok' : 'missing', null, 'range')}
+                {reviewRow(
+                  'Data range',
+                  ob.range ? labelForPeriod(ob.range) : ob.rangeDeferred ? '3 months once your ELD is connected' : null,
+                  ob.range ? 'ok' : ob.rangeDeferred ? 'warn' : 'missing',
+                  ob.rangeDeferred ? 'You can change it or add more history anytime in Manage Fleet.' : null,
+                  'range',
+                )}
                 {reviewRow(
                   'Fuel card',
                   !ob.fuelCard

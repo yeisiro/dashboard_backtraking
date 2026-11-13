@@ -28,6 +28,8 @@ import {
   type RequestType,
   monthsForPeriod,
   DRIVER_POOL,
+  CABIN_POOL,
+  TRAILER_POOL,
   EMPTY_ONBOARDING,
   ONBOARDING_LOSS,
 } from './data'
@@ -249,6 +251,19 @@ export default function App() {
       if (r.type === 'transactions') notes.push('fuel transactions set up')
       if (r.type === 'efrouting-card') notes.push('efRouting Fuel Card issued')
     })
+    // Fleet left for later (no ELD/TMS connected at the fleet step): once the
+    // ELD connects, bring in everything it finds plus anything added by hand.
+    if (ob.fleetDeferred && (patch.eld?.status === 'connected' || ob.eld?.status === 'connected')) {
+      patch.cabins = [...new Set([...ob.cabins, ...CABIN_POOL])]
+      patch.trailers = [...new Set([...ob.trailers, ...TRAILER_POOL])]
+      patch.fleetDeferred = false
+      notes.push(`${CABIN_POOL.length} cabins and ${TRAILER_POOL.length} trailers brought in from your ELD`)
+    }
+    if (ob.rangeDeferred && (patch.eld?.status === 'connected' || ob.eld?.status === 'connected')) {
+      patch.range = '3m'
+      patch.rangeDeferred = false
+      notes.push('syncing the last 3 months')
+    }
     setRequests((prev) => prev.map((r) => ({ ...r, status: 'resolved' })))
     const next = { ...ob, ...patch }
     setOnboarding(next)

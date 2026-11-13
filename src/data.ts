@@ -1046,6 +1046,13 @@ export interface OnboardingState {
   manualTrailers: ManualTrailer[]
   manualDrivers: FleetDriver[] // invited by email (name = email)
   fleetDone: boolean
+  // Fleet step continued with nothing selected because neither ELD nor TMS is
+  // connected yet (both are requests): the fleet comes in automatically once
+  // the ELD is connected.
+  fleetDeferred: boolean
+  // Same idea for the data range: with nothing connected it can be left for
+  // later (3 months is used when the ELD connects; changeable in Manage Fleet).
+  rangeDeferred: boolean
   range: PeriodKey | null
   fuelCard: OnboardingFuelCard | null
   efroutingCardRequested: boolean
@@ -1061,6 +1068,8 @@ export const EMPTY_ONBOARDING: OnboardingState = {
   manualTrailers: [],
   manualDrivers: [],
   fleetDone: false,
+  fleetDeferred: false,
+  rangeDeferred: false,
   range: null,
   fuelCard: null,
   efroutingCardRequested: false,

@@ -66,8 +66,18 @@ export function setupItems(ob: OnboardingState): Item[] {
     {
       key: 'fleet',
       label: 'Choose your fleet & data range',
-      state: ob.fleetDone && ob.range ? 'done' : 'todo',
-      note: ob.fleetDone && ob.range ? `${ob.cabins.length} cabins` : undefined,
+      state: !(ob.fleetDone && (ob.range || ob.rangeDeferred))
+        ? 'todo'
+        : ob.fleetDeferred || ob.rangeDeferred
+          ? 'pending'
+          : 'done',
+      note: !(ob.fleetDone && (ob.range || ob.rangeDeferred))
+        ? undefined
+        : ob.fleetDeferred
+          ? 'Comes in from your ELD once it’s connected'
+          : ob.rangeDeferred
+            ? `${ob.cabins.length} cabins · range set when your ELD connects`
+            : `${ob.cabins.length} cabins`,
       target: ob.fleetDone ? 'range' : 'fleet',
       minutes: 3,
       why: 'Pick the trucks, drivers and trailers to analyze and how much history to pull.',
