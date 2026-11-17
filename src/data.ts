@@ -48,6 +48,14 @@ export interface KpiMetric {
   // detail subcard — each with its own mini trendline + change value (e.g. the
   // rate metrics under Efficiency's Wasted Rate). Not separate selectable chips.
   subMetrics?: SubMetric[]
+  // The full fuel cost vs plan behind CPG vs optimal: pump price gap + route
+  // deviations + extra fuel = net vs plan. Always shown on the Fuel card, so a
+  // negative CPG (cheaper stations off-plan) never reads as beating the plan.
+  reconcile?: {
+    share: string // share of gallons bought at off-plan stops
+    rows: { label: string; value: string; tone: 'neutral' | 'neg' }[]
+    net: string
+  }
 }
 
 // A nested context metric shown under a KPI's main value, with its own
@@ -90,6 +98,28 @@ export interface KpiCard {
   // V1 (summary) override: a trimmed detail set shown in the summary view's
   // detail modal. Falls back to `details` when absent.
   detailsSummary?: DetailMetric[]
+}
+
+// Fuel KPI when the fleet paid LESS than the optimal price because drivers
+// refueled off-plan (prototype case, toggled from the preview bar).
+export const FUEL_OFFPLAN_METRIC: KpiMetric = {
+  sub: 'Net vs plan',
+  value: '+$0.41/gal',
+  statusText: 'Overpay',
+  statusTone: 'yellow',
+  foot: 'Extra fuel cost per gallon vs the plan',
+  footDelta: '+0.06',
+  goal: 'low',
+  tip: 'What fuel cost you per gallon above the plan: the pump price, plus the route deviations and the extra fuel those trips burned. Off-plan stations can be cheaper at the pump, but getting to them costs more.',
+  reconcile: {
+    share: '61% of gallons bought off-plan',
+    rows: [
+      { label: 'Pump price vs plan', value: '-$0.23', tone: 'neutral' },
+      { label: 'Route deviations on these trips', value: '+$0.38', tone: 'neg' },
+      { label: 'Extra fuel burned', value: '+$0.26', tone: 'neg' },
+    ],
+    net: '+$0.41/gal',
+  },
 }
 
 // Deterministic mock time-series shapes (10 points each).
@@ -181,15 +211,24 @@ export const kpiCards: KpiCard[] = [
     label: 'Fuel',
     metrics: [
       {
-        sub: 'CPG vs optimal',
-        value: '+$0.18/gal',
+        sub: 'Net vs plan',
+        value: '+$0.51/gal',
         statusText: 'Overpay',
         statusTone: 'yellow',
-        foot: 'Extra cost per gallon vs the best achievable price',
+        foot: 'Extra fuel cost per gallon vs the plan',
         footDelta: '+0.04',
         goal: 'low',
-        tip: 'How much more than the best achievable price you paid per gallon. $0.00 is optimal — every cent above it is money left on the table across every gallon burned.',
-        penalty: { value: 0.18, max: 0.6, unit: '$/gal' },
+        tip: 'What fuel cost you per gallon above the plan: the pump price, plus the route deviations and the extra fuel those trips burned. $0.00 means you ran the plan exactly.',
+        penalty: { value: 0.51, max: 1, unit: '$/gal' },
+        reconcile: {
+          share: '38% of gallons bought off-plan',
+          rows: [
+            { label: 'Pump price vs plan', value: '+$0.18', tone: 'neg' },
+            { label: 'Route deviations on these trips', value: '+$0.21', tone: 'neg' },
+            { label: 'Extra fuel burned', value: '+$0.12', tone: 'neg' },
+          ],
+          net: '+$0.51/gal',
+        },
       },
     ],
     details: [
@@ -1159,6 +1198,26 @@ export interface TripRow {
   // position (0..1) along the detected approach polyline.
   realPickup?: StopPoint
   realDropoff?: StopPoint
+  // Appointment times (HH:MM) for the planned pickup / delivery, as sent by
+  // the TMS (defaults 08:00 / 16:00 when absent).
+  pickupAppt?: string
+  deliveryAppt?: string
+  // The TMS values before the operator corrected them in My Loads (typos in
+  // the truck, an address or a date stop the real stops from being detected).
+  // Corrections are kept in efRouting and survive later TMS syncs.
+  tmsOriginal?: LoadCoreData
+}
+
+// The load data the real-stop detection runs on — what the operator can
+// correct in My Loads when the TMS sent it wrong.
+export interface LoadCoreData {
+  truck: string
+  origin: string
+  destination: string
+  startDate: string // "May 11"
+  endDate: string
+  pickupAppt: string // "08:00"
+  deliveryAppt: string
 }
 
 // A detected (or manually assigned) stop along the GPS trail.

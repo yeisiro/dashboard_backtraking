@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { X, MapPin, Flag, Check, RefreshCw, Undo2, ChevronRight, RotateCcw } from 'lucide-react'
+import { X, MapPin, Flag, Check, RefreshCw, Undo2, ChevronRight, RotateCcw, FileWarning, Truck, Radar, Map as MapIcon, PencilLine } from 'lucide-react'
 import {
   projectCity, splitLane, hashStr, seededRandom, buildRoutePoints, pointAtFraction,
   NATION_PATH, STATE_MESH_PATH,
 } from '../lib/mapGeo'
-import { makeStopPoint, missingRealStops, type StopPoint, type TripRow } from '../data'
+import { makeStopPoint, missingRealStops, type StopPoint, type TripRow, type LoadCoreData } from '../data'
 import TrailDatePicker from './TrailDatePicker'
 
 const miles = (n: number) => `${Math.round(n).toLocaleString()} mi`
@@ -24,6 +24,9 @@ export default function MyLoadsModal({
   boundsFor,
   onAssign,
   onClear,
+  onCorrect,
+  trucks,
+  places,
   onClose,
 }: {
   backlog: TripRow[]
@@ -33,10 +36,16 @@ export default function MyLoadsModal({
   boundsFor: (load: TripRow) => { start: Date; end: Date }
   onAssign: (loadRef: string, pickup: StopPoint | undefined, dropoff: StopPoint | undefined, m?: AssignMiles) => void
   onClear: (loadRef: string) => void
+  // Save corrected TMS data and run the detection again. Returns true when the
+  // real stops were found with the corrected data (the load leaves the backlog).
+  onCorrect: (loadRef: string, data: LoadCoreData) => boolean
+  trucks: string[]
+  places: string[]
   onClose: () => void
 }) {
   const [selId, setSelId] = useState<string | null>(backlog[0]?.loadRef ?? null)
-  const load = backlog.find((l) => l.loadRef === selId) ?? null
+  // A resolved load leaves the backlog: fall through to the next one.
+  const load = backlog.find((l) => l.loadRef === selId) ?? backlog[0] ?? null
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -64,7 +73,7 @@ export default function MyLoadsModal({
               return (
                 <button
                   key={l.loadRef}
-                  className={`ml-row ${selId === l.loadRef ? 'sel' : ''}`}
+                  className={`ml-row ${load?.loadRef === l.loadRef ? 'sel' : ''}`}
                   onClick={() => setSelId(l.loadRef)}
                 >
                   <div className="ml-row-main">
@@ -72,6 +81,7 @@ export default function MyLoadsModal({
                     <span className="ml-row-lane">{l.lane}</span>
                     <span className="ml-row-meta">
                       {l.truck} · {l.startDate}
+                      {l.tmsOriginal && <span className="ml-edited">Data edited</span>}
                     </span>
                   </div>
                   <span className={`ml-miss ml-miss-${miss}`}>
@@ -89,7 +99,10 @@ export default function MyLoadsModal({
                   <div key={l.loadRef} className="ml-recent-row">
                     <div className="ml-row-main">
                       <span className="ml-row-ref">{l.loadRef}</span>
-                      <span className="ml-row-meta">{l.lane}</span>
+                      <span className="ml-row-meta">
+                        {l.lane}
+                        {l.tmsOriginal && <span className="ml-edited">Detected after fix</span>}
+                      </span>
                     </div>
                     <button className="ml-undo" onClick={() => onClear(l.loadRef)}>
                       <Undo2 size={12} /> Revert
@@ -106,7 +119,16 @@ export default function MyLoadsModal({
 
           {/* ── Right: map / assign ── */}
           {load ? (
-            <AssignPane key={load.loadRef} load={load} bounds={boundsFor(load)} onAssign={onAssign} onClose={onClose} />
+            <LoadPane
+              key={load.loadRef}
+              load={load}
+              bounds={boundsFor(load)}
+              onAssign={onAssign}
+              onCorrect={onCorrect}
+              trucks={trucks}
+              places={places}
+              onClose={onClose}
+            />
           ) : (
             <div className="ml-pane ml-pane-empty">
               <MapPin size={28} />
@@ -115,6 +137,261 @@ export default function MyLoadsModal({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── A load with NO real stop detected: the TMS data it was searched with is
+// probably wrong (truck, an address or a date). Review that data first, then
+// fall back to assigning the stops on the map. Partial detections go straight
+// to the map — the data was good enough to find one stop.
+function LoadPane({
+  load,
+  bounds,
+  onAssign,
+  onCorrect,
+  trucks,
+  places,
+  onClose,
+}: {
+  load: TripRow
+  bounds: { start: Date; end: Date }
+  onAssign: (loadRef: string, pickup: StopPoint | undefined, dropoff: StopPoint | undefined, m?: AssignMiles) => void
+  onCorrect: (loadRef: string, data: LoadCoreData) => boolean
+  trucks: string[]
+  places: string[]
+  onClose: () => void
+}) {
+  const noneDetected = missingRealStops(load) === 'both'
+  const [mode, setMode] = useState<'fix' | 'map'>(noneDetected ? 'fix' : 'map')
+  if (!noneDetected) return <AssignPane load={load} bounds={bounds} onAssign={onAssign} onClose={onClose} />
+  return (
+    <div className="ml-pane-wrap">
+      <div className="ml-mode">
+        <button className={mode === 'fix' ? 'active' : ''} onClick={() => setMode('fix')}>
+          <PencilLine size={14} /> Review load data
+        </button>
+        <button className={mode === 'map' ? 'active' : ''} onClick={() => setMode('map')}>
+          <MapIcon size={14} /> Assign on the map
+        </button>
+      </div>
+      {mode === 'fix' ? (
+        <FixDataPane
+          load={load}
+          trucks={trucks}
+          places={places}
+          onCorrect={onCorrect}
+          onGoToMap={() => setMode('map')}
+          onClose={onClose}
+        />
+      ) : (
+        <AssignPane load={load} bounds={bounds} onAssign={onAssign} onClose={onClose} />
+      )}
+    </div>
+  )
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const toIso = (s: string) => {
+  const [mon, d] = s.split(' ')
+  return `2026-${String(MONTHS.indexOf(mon) + 1).padStart(2, '0')}-${String(Number(d) || 1).padStart(2, '0')}`
+}
+const fromIso = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${MONTHS[(m || 1) - 1]} ${d || 1}`
+}
+const coreOf = (l: TripRow): LoadCoreData => {
+  const [origin, destination] = splitLane(l.lane)
+  return {
+    truck: l.truck,
+    origin,
+    destination,
+    startDate: l.startDate,
+    endDate: l.endDate,
+    pickupAppt: l.pickupAppt ?? '08:00',
+    deliveryAppt: l.deliveryAppt ?? '16:00',
+  }
+}
+
+function FixDataPane({
+  load,
+  trucks,
+  places,
+  onCorrect,
+  onGoToMap,
+  onClose,
+}: {
+  load: TripRow
+  trucks: string[]
+  places: string[]
+  onCorrect: (loadRef: string, data: LoadCoreData) => boolean
+  onGoToMap: () => void
+  onClose: () => void
+}) {
+  const current = coreOf(load)
+  // What the TMS sent originally (before any earlier correction).
+  const tms = load.tmsOriginal ?? current
+  const [d, setD] = useState<LoadCoreData>(current)
+  const [state, setState] = useState<'idle' | 'busy' | 'notfound'>('idle')
+  const set = (patch: Partial<LoadCoreData>) => {
+    setD((x) => ({ ...x, ...patch }))
+    if (state === 'notfound') setState('idle')
+  }
+  const changed = (Object.keys(d) as (keyof LoadCoreData)[]).some((k) => d[k] !== current[k])
+  const datesOk = toIso(d.endDate) >= toIso(d.startDate)
+
+  // Prototype stand-in for the ELD check that backs the hint: another truck of
+  // the fleet was at the origin and the destination on these dates.
+  const suggested = useMemo(() => {
+    const others = trucks.filter((t) => t !== load.truck)
+    return others.length ? others[hashStr(load.loadRef) % others.length] : null
+  }, [trucks, load.truck, load.loadRef])
+
+  const save = () => {
+    setState('busy')
+    setTimeout(() => {
+      const found = onCorrect(load.loadRef, d)
+      if (!found) setState('notfound')
+    }, 1300)
+  }
+
+  const fieldNote = (k: keyof LoadCoreData, label?: string) =>
+    d[k] !== tms[k] ? (
+      <span className="ml-fix-tms">
+        TMS: {label ?? tms[k]}
+        <button type="button" onClick={() => set({ [k]: tms[k] } as Partial<LoadCoreData>)}>
+          <Undo2 size={11} /> Use TMS value
+        </button>
+      </span>
+    ) : null
+
+  return (
+    <div className="ml-pane ml-fix">
+      <div className="ml-pane-head">
+        <span className="ml-pane-ref">
+          {load.loadRef} · {load.lane}
+        </span>
+      </div>
+
+      <div className="ml-fix-why">
+        <FileWarning size={17} />
+        <div>
+          <b>No real stop was detected for this load</b>
+          <span>
+            We searched for {current.truck} at {current.origin} on {current.startDate} and at {current.destination} on{' '}
+            {current.endDate}, and didn&apos;t find it. That usually means the TMS sent a typo in the truck, an
+            address or a date. Fix it here and we&apos;ll run the detection again.
+          </span>
+        </div>
+      </div>
+
+      {suggested && d.truck === current.truck && (
+        <div className="ml-fix-hint">
+          <Radar size={15} />
+          <span>
+            <b>{suggested}</b> was at {current.origin} on {current.startDate} and at {current.destination} on{' '}
+            {current.endDate}. Was it the truck that ran this load?
+          </span>
+          <button onClick={() => set({ truck: suggested })}>
+            <Truck size={13} /> Use {suggested}
+          </button>
+        </div>
+      )}
+
+      <div className="ml-fix-grid">
+        <label className="ml-fix-field">
+          <span className="ml-fix-lbl">Truck</span>
+          <select value={d.truck} onChange={(e) => set({ truck: e.target.value })}>
+            {trucks.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          {fieldNote('truck')}
+        </label>
+        <div />
+
+        <label className="ml-fix-field">
+          <span className="ml-fix-lbl">
+            <span className="ml-fix-dot pu" /> Origin (pickup)
+          </span>
+          <input list="ml-places" value={d.origin} onChange={(e) => set({ origin: e.target.value })} />
+          {fieldNote('origin')}
+        </label>
+        <label className="ml-fix-field">
+          <span className="ml-fix-lbl">Pickup date and appointment</span>
+          <span className="ml-fix-dt">
+            <input type="date" value={toIso(d.startDate)} onChange={(e) => e.target.value && set({ startDate: fromIso(e.target.value) })} />
+            <input type="time" value={d.pickupAppt} onChange={(e) => set({ pickupAppt: e.target.value })} />
+          </span>
+          {fieldNote('startDate')}
+          {fieldNote('pickupAppt')}
+        </label>
+
+        <label className="ml-fix-field">
+          <span className="ml-fix-lbl">
+            <span className="ml-fix-dot do" /> Destination (drop off)
+          </span>
+          <input list="ml-places" value={d.destination} onChange={(e) => set({ destination: e.target.value })} />
+          {fieldNote('destination')}
+        </label>
+        <label className="ml-fix-field">
+          <span className="ml-fix-lbl">Delivery date and appointment</span>
+          <span className="ml-fix-dt">
+            <input type="date" value={toIso(d.endDate)} onChange={(e) => e.target.value && set({ endDate: fromIso(e.target.value) })} />
+            <input type="time" value={d.deliveryAppt} onChange={(e) => set({ deliveryAppt: e.target.value })} />
+          </span>
+          {fieldNote('endDate')}
+          {fieldNote('deliveryAppt')}
+          {!datesOk && <span className="ml-fix-err">Delivery can&apos;t be before the pickup.</span>}
+        </label>
+        <datalist id="ml-places">
+          {places.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+      </div>
+
+      {state === 'notfound' && (
+        <div className="ml-fix-result">
+          <FileWarning size={16} />
+          <div>
+            <b>Still no real stops with the corrected data</b>
+            <span>Your corrections were saved. Assign the pickup and drop off on the truck&apos;s trail instead.</span>
+          </div>
+          <button onClick={onGoToMap}>
+            <MapIcon size={13} /> Assign on the map
+          </button>
+        </div>
+      )}
+
+      <div className="ml-fix-note">
+        Corrections are saved in efRouting and kept when your TMS syncs again. Your TMS isn&apos;t changed.
+      </div>
+
+      <div className="ml-foot">
+        <div className="ml-foot-summary">
+          <span className="fd-dim">
+            {changed ? 'Save to run the detection again with this data.' : 'Change the data that came wrong from the TMS.'}
+          </span>
+        </div>
+        <div className="ml-foot-actions">
+          <button className="sd-reopen" onClick={() => { setD(current); setState('idle') }} disabled={!changed}>
+            <RotateCcw size={13} /> Reset
+          </button>
+          <button className="sd-approve" onClick={onClose}>Cancel</button>
+          <button className="sd-cut" disabled={!changed || !datesOk || state === 'busy'} onClick={save}>
+            <Radar size={15} /> Save & detect again
+          </button>
+        </div>
+      </div>
+
+      {state === 'busy' && (
+        <div className="sd-loading">
+          <RefreshCw size={22} className="refresh-spin" />
+          <span>Detecting real stops…</span>
+          <span className="sd-loading-sub">Searching {d.truck}&apos;s trail around the corrected stops and dates</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ArrowUpRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ArrowUpRight, TrendingUp, TrendingDown, Minus, MapPinOff } from 'lucide-react'
 import {
   kpiCards,
+  FUEL_OFFPLAN_METRIC,
   deltaTone,
   deltaTrend,
   type KpiMetric,
@@ -16,18 +17,23 @@ export default function KpiCards({
   noData = false,
   hideMarketPosition = false,
   cardNotes = {},
+  fuelOffPlan = false,
 }: {
   noData?: boolean
   hideMarketPosition?: boolean
   // V3: a small notice on cards affected by something the org skipped or is
   // still pending (e.g. Fuel "Estimated from ELD"), keyed by card label.
   cardNotes?: Record<string, { text: string; tip: string }>
+  // Prototype case: the fleet paid below the optimal price by refueling
+  // off-plan (Fuel card switches to the off-plan reconciliation).
+  fuelOffPlan?: boolean
 }) {
   const { compareLabel, compareRange } = usePeriod()
   const [openCard, setOpenCard] = useState<KpiCard | null>(null)
-  const cards = hideMarketPosition
-    ? kpiCards.filter((c) => c.label !== 'Market Position')
+  const base = fuelOffPlan
+    ? kpiCards.map((c) => (c.label === 'Fuel' ? { ...c, metrics: [FUEL_OFFPLAN_METRIC] } : c))
     : kpiCards
+  const cards = hideMarketPosition ? base.filter((c) => c.label !== 'Market Position') : base
 
   return (
     <div className={`kpi-row ${cards.length === 4 ? 'kpi-row-4' : ''}`}>
@@ -132,6 +138,33 @@ function Metric({ m, compare, range }: { m: KpiMetric; compare: string; range: s
         )}
       </div>
       {m.foot && <div className="foot">{m.foot}</div>}
+      {/* What the net is made of. A component below the optimal (only possible
+          by refueling off-plan) gets the orange Off-plan mark instead of
+          reading as a win. */}
+      {m.reconcile && (
+        <div className="kpi-offplan">
+          {m.reconcile.rows.map((r) => {
+            const offPlan = r.value.trim().startsWith('-')
+            return (
+              <div className={`kpi-offplan-row ${offPlan ? 'off' : r.tone}`} key={r.label}>
+                <span>
+                  {r.label}
+                  {offPlan && (
+                    <span
+                      className="kpi-offplan-chip cf-tip"
+                      data-tip="Cheaper than the plan only because drivers refueled at stations outside it. Getting there shows up as route deviations and extra fuel."
+                    >
+                      <MapPinOff size={10} /> Off-plan
+                    </span>
+                  )}
+                </span>
+                <span>{r.value}</span>
+              </div>
+            )
+          })}
+          <span className="kpi-offplan-share">{m.reconcile.share}</span>
+        </div>
+      )}
       {m.flow && (
         <div className="kpi-flow">
           <span className="kpi-flow-item pos">

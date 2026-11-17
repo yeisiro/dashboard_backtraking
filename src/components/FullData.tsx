@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import {
   tripRows, repositionRows, costSegments, deltaTone, deltaTrend,
-  DH_APPROVAL_THRESHOLD, needsRealStops, makeStopPoint, type DhApprovalReason,
+  DH_APPROVAL_THRESHOLD, needsRealStops, makeStopPoint, type DhApprovalReason, type LoadCoreData,
   type TripRow, type RepositionRow, type Goal, type StopPoint,
 } from '../data'
 import MyLoadsModal, { type AssignMiles } from './MyLoadsModal'
@@ -2129,6 +2129,62 @@ function TripsTable({
     )
   }
 
+  // My Loads → Review load data: the TMS sent the truck, an address or a date
+  // wrong, so no real stop was found. Save the corrected data (keeping the TMS
+  // original) and run the detection again. Prototype rule: a corrected truck or
+  // origin/destination finds the stops; a date-only fix still doesn't (so the
+  // map fallback can be tried). Revert restores the exact pre-fix row.
+  const correctLoadData = (loadRef: string, d: LoadCoreData): boolean => {
+    const load = trips.find((t) => t.loadRef === loadRef)
+    if (!load) return false
+    const [o, dst] = load.lane.split(' → ')
+    const cur: LoadCoreData = {
+      truck: load.truck,
+      origin: o ?? '',
+      destination: dst ?? '',
+      startDate: load.startDate,
+      endDate: load.endDate,
+      pickupAppt: load.pickupAppt ?? '08:00',
+      deliveryAppt: load.deliveryAppt ?? '16:00',
+    }
+    const original = load.tmsOriginal ?? cur
+    const sameAsTms = (Object.keys(d) as (keyof LoadCoreData)[]).every((k) => d[k] === original[k])
+    const found = d.truck !== cur.truck || d.origin !== cur.origin || d.destination !== cur.destination
+    preAssignRef.current[loadRef] = [{ ...load }]
+    const hour = (hhmm: string) => Number(hhmm.split(':')[0]) || 8
+    setTrips((prev) =>
+      prev.map((t) =>
+        t.loadRef !== loadRef
+          ? t
+          : {
+              ...t,
+              truck: d.truck,
+              lane: `${d.origin} → ${d.destination}`,
+              startDate: d.startDate,
+              endDate: d.endDate,
+              pickupAppt: d.pickupAppt,
+              deliveryAppt: d.deliveryAppt,
+              tmsOriginal: sameAsTms ? undefined : original,
+              ...(found
+                ? {
+                    realPickup: makeStopPoint(d.origin, d.startDate, hour(d.pickupAppt), 0.33, `${loadRef}-fixpu`),
+                    realDropoff: makeStopPoint(d.destination, d.endDate, hour(d.deliveryAppt), 0.66, `${loadRef}-fixdo`),
+                  }
+                : {}),
+            },
+      ),
+    )
+    if (found) {
+      setRecentCompleted((prev) => (prev.includes(loadRef) ? prev : [loadRef, ...prev]))
+      toast(`Real stops detected for ${loadRef} with the corrected data`, () => clearRealStops(loadRef))
+    } else {
+      toast(`Saved the corrected data on ${loadRef} — still no real stops detected`, () => clearRealStops(loadRef))
+    }
+    return found
+  }
+  const fleetTrucks = [...new Set(trips.map((t) => t.truck))].sort()
+  const lanePlaces = [...new Set(trips.flatMap((t) => t.lane.split(' → ')))].sort()
+
   // Revert an assignment: restore the exact snapshot (or just clear the stops).
   const clearRealStops = (loadRef: string) => {
     const snap = preAssignRef.current[loadRef]
@@ -2714,6 +2770,9 @@ function TripsTable({
           boundsFor={boundsFor}
           onAssign={assignRealStops}
           onClear={clearRealStops}
+          onCorrect={correctLoadData}
+          trucks={fleetTrucks}
+          places={lanePlaces}
           onClose={() => setMyLoadsOpen(false)}
         />
       )}

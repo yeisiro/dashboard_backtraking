@@ -40,6 +40,8 @@ export default function App() {
   const [compareRange, setCompareRange] = useState(initialCompareRange())
   const [rangeDays, setRangeDays] = useState(7)
   const [fleetMode, setFleetMode] = useState<FleetMode>('full')
+  // Prototype case: fuel bought below the optimal price at off-plan stations.
+  const [fuelOffPlan, setFuelOffPlan] = useState(false)
   // V1 = summary, V2 = full dashboard, V3 = full onboarding (sign-up first,
   // then the V2 dashboard). `view` is what the dashboard components read.
   const [version, setVersion] = useState<Version>('v1')
@@ -524,7 +526,12 @@ export default function App() {
               />
             ) : (
               <>
-                <KpiCards noData={noData} hideMarketPosition={view === 'summary'} cardNotes={kpiNotes} />
+                <KpiCards
+                  noData={noData}
+                  hideMarketPosition={view === 'summary'}
+                  cardNotes={kpiNotes}
+                  fuelOffPlan={fuelOffPlan}
+                />
                 <div className={`grid-2 ${view === 'summary' ? 'grid-2-even' : ''}`}>
                   <MoneyLeakage
                     noData={noData}
@@ -595,6 +602,17 @@ export default function App() {
                   {o.label}
                 </button>
               ))}
+              <span className="fleet-sim-label fleet-sim-sep">Fuel case</span>
+              <button className={`fleet-sim-btn ${!fuelOffPlan ? 'active' : ''}`} onClick={() => setFuelOffPlan(false)}>
+                Overpay
+              </button>
+              <button
+                className={`fleet-sim-btn ${fuelOffPlan ? 'active' : ''}`}
+                onClick={() => setFuelOffPlan(true)}
+                title="Fleet paid below the optimal price by refueling off-plan"
+              >
+                Off-plan cheaper
+              </button>
               {view === 'dashboard' && onboardingSim}
             </div>
             </>

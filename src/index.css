@@ -9355,3 +9355,92 @@ div.lc-row.static { cursor: default; }
 .sw-primary { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 800; background: #74c2c7; color: #08201f; }
 .sw-primary:hover { background: #8fd0d4; }
 @media (max-width: 900px) { .sb { flex-wrap: wrap; } .sb-progress { min-width: 0; width: 100%; } }
+
+/* ================= Fuel bought off-plan, below the optimal price (2026-11-13) ================= */
+/* KPI card: the lower price is context, the net vs plan is the headline. */
+.kpi .sub .kpi-offplan-chip {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.2px; vertical-align: middle;
+  color: #FFAC52; background: rgba(255, 172, 82, 0.12); cursor: help;
+}
+.kpi .value.muted { color: var(--text-dim); }
+.kpi-offplan { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.kpi-offplan-share { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.kpi-offplan-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-dim); }
+.kpi-offplan-row span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+.kpi-offplan-row.neg span:last-child { color: var(--red); }
+.kpi-offplan-net {
+  display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; padding: 8px 10px; border-radius: 9px;
+  background: rgba(239, 83, 80, 0.1); font-size: 12.5px; font-weight: 700; color: var(--text);
+}
+.kpi-offplan-net span:last-child { font-size: 17px; color: var(--red); font-variant-numeric: tabular-nums; }
+
+/* Net vs plan as the headline: the breakdown rows sit under it. */
+.kpi-offplan-row > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.kpi-offplan-row .kpi-offplan-chip { margin-left: 0; }
+.kpi-offplan-row.off span:last-child { color: #FFAC52; }
+.kpi-offplan-share { margin: 4px 0 0; }
+.kpi-offplan-row .kpi-offplan-chip {
+  display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; color: #FFAC52; background: rgba(255, 172, 82, 0.14); cursor: help;
+}
+
+/* ================= My Loads · Review load data (2026-11-13) ================= */
+.ml-pane-wrap { display: flex; flex-direction: column; min-width: 0; }
+.ml-mode { display: flex; gap: 6px; padding: 14px 18px 0; }
+.ml-mode button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-dim); background: transparent; border: 1px solid var(--border);
+}
+.ml-mode button.active { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
+.ml-fix { position: relative; }
+.ml-fix-why {
+  display: flex; gap: 10px; padding: 11px 13px; border-radius: 10px;
+  border: 1px solid rgba(255, 172, 82, 0.35); background: rgba(255, 172, 82, 0.07);
+}
+.ml-fix-why > svg { color: #FFAC52; flex-shrink: 0; margin-top: 1px; }
+.ml-fix-why > div { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+.ml-fix-why b { color: var(--text); font-size: 13px; }
+.ml-fix-hint {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.3); font-size: 12.5px; color: var(--text-dim);
+}
+.ml-fix-hint > svg { color: var(--blue); flex-shrink: 0; }
+.ml-fix-hint b { color: var(--text); }
+.ml-fix-hint > span { flex: 1; line-height: 1.45; }
+.ml-fix-hint button {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; color: var(--blue); background: rgba(96, 165, 250, 0.12);
+}
+.ml-fix-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.ml-fix-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ml-fix-lbl { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.ml-fix-dot { width: 8px; height: 8px; border-radius: 50%; }
+.ml-fix-dot.pu { background: var(--green); }
+.ml-fix-dot.do { background: var(--red); }
+.ml-fix-field input, .ml-fix-field select {
+  width: 100%; min-width: 0; padding: 9px 11px; border-radius: 8px; font-size: 13px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); color-scheme: dark;
+}
+.ml-fix-field input:focus, .ml-fix-field select:focus { outline: none; border-color: var(--blue); }
+.ml-fix-dt { display: grid; grid-template-columns: 1fr 132px; gap: 8px; }
+.ml-fix-tms { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; color: #FFAC52; }
+.ml-fix-tms button { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.ml-fix-tms button:hover { color: var(--text); }
+.ml-fix-err { font-size: 11.5px; color: var(--red); }
+.ml-fix-result {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(239, 83, 80, 0.35); background: rgba(239, 83, 80, 0.07);
+}
+.ml-fix-result > svg { color: var(--red); flex-shrink: 0; }
+.ml-fix-result > div { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--text-dim); }
+.ml-fix-result b { color: var(--text); }
+.ml-fix-result button {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; color: var(--text); background: var(--surface-3);
+}
+.ml-fix-note { font-size: 11.5px; color: var(--text-muted); }
+.ml-edited {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  color: #FFAC52; background: rgba(255, 172, 82, 0.12);
+}
