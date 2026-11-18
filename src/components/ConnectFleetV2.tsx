@@ -8,7 +8,7 @@ import { AddCabForm, AddTrailerForm, AddDriverForm } from './EquipmentForms'
 import {
   CABIN_POOL, DRIVER_POOL, TRAILER_POOL, SYNC_PERIODS, ELD_PROVIDERS, TMS_PROVIDERS, SUPPORTED_ELD,
   SUPPORTED_TMS, FUEL_CARD_CATALOG, labelForPeriod,
-  type PeriodKey, type Provider, type FleetDriver, type OnboardingState, type OnboardingRequest,
+  type PeriodKey, type Provider, type FleetDriver, type OnboardingState, type OnboardingRequest, isOpenRequest,
   type RequestType,
   type OnboardingGap,
   ONBOARDING_LOSS,
@@ -138,7 +138,7 @@ export default function ConnectFleetV2({
   const progress = sync?.progress ?? 0
   const sourceOf = (t: SourceType) => (t === 'eld' ? ob.eld : ob.tms)
   const pendingRequest = (type: RequestType) =>
-    requests.some((r) => r.type === type && r.status !== 'resolved')
+    requests.some((r) => r.type === type && isOpenRequest(r))
 
   // Close shortly after the sync completes (App keeps the toast + top bar).
   useEffect(() => {

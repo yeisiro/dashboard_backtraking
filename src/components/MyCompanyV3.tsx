@@ -28,10 +28,12 @@ import {
   CreditCard,
   ShieldCheck,
   ArrowRight,
+  ChevronDown,
+  AlertTriangle,
 } from 'lucide-react'
 import { AddCabForm, AddTrailerForm, AddDriverForm } from './EquipmentForms'
 import type { WizardTarget } from './ConnectFleetV2'
-import type { SignupAccount } from './SignupV3'
+import { planLabel, type SignupAccount } from './SignupV3'
 import {
   FUEL_CARD_CATALOG,
   ONBOARDING_LOSS,
@@ -40,7 +42,9 @@ import {
   type OnboardingGap,
   type OnboardingRequest,
   type OnboardingState,
+  type RequestStatus,
   type RequestType,
+  isOpenRequest,
 } from '../data'
 
 // V3 · My Company, modeled on production (efdata.efrouting.com/home/my-company,
@@ -86,11 +90,161 @@ const REQUEST_ICON: Record<RequestType, ReactNode> = {
   'efrouting-card': <CreditCard size={15} />,
   transactions: <Receipt size={15} />,
 }
-const STATUS_STEPS: { key: OnboardingRequest['status']; label: string }[] = [
-  { key: 'received', label: 'Received' },
-  { key: 'in-progress', label: 'In progress' },
-  { key: 'resolved', label: 'Resolved' },
-]
+// Request statuses — a proposal to validate with the team (2026-11-18).
+const STATUS_LABEL: Record<RequestStatus, string> = {
+  sent: 'Sent',
+  'in-review': 'In review',
+  completed: 'Completed',
+  rejected: 'Rejected',
+}
+const STATUS_TONE: Record<RequestStatus, string> = {
+  sent: '',
+  'in-review': 'blue',
+  completed: 'green',
+  rejected: 'red',
+}
+const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+// What we tell the org about timing — an estimate only when the team gave one.
+function timingNote(r: OnboardingRequest) {
+  if (r.status === 'sent') return 'We review new requests within 2 business days.'
+  if (r.status !== 'in-review') return null
+  if (r.eta) return `Estimated: ready by ${fmtDay(r.eta)}`
+  if (r.type === 'transactions') return 'We’ll call you to coordinate it — no date until then.'
+  return 'We’ll share an estimated date once we’ve reviewed it.'
+}
+const FIX_LABEL: Partial<Record<RequestType, string>> = {
+  eld: 'Connect another ELD',
+  tms: 'Connect another TMS',
+  'fuel-card': 'Choose another fuel card',
+}
+
+// ── Setup requests: informative tracker. Collapsed to one line by default and
+// closable, so it never pushes company management down. Closing hides it until
+// a status changes. The only action is on a rejected request.
+function RequestsTracker({
+  requests,
+  openSignal,
+  onFix,
+}: {
+  requests: OnboardingRequest[]
+  openSignal: number
+  onFix: (r: OnboardingRequest) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [dismissedSig, setDismissedSig] = useState<string | null>(null)
+  const [lastSignal, setLastSignal] = useState(openSignal)
+  const sig = requests.map((r) => `${r.id}:${r.status}`).join('|')
+  // "View setup requests" from Integrations reopens and expands it.
+  if (openSignal !== lastSignal) {
+    setLastSignal(openSignal)
+    setDismissedSig(null)
+    setExpanded(true)
+  }
+  if (requests.length === 0 || dismissedSig === sig) return null
+
+  const open = requests.filter(isOpenRequest)
+  const rejected = requests.filter((r) => r.status === 'rejected')
+  const counts = (['sent', 'in-review', 'completed', 'rejected'] as RequestStatus[])
+    .map((st) => ({ st, n: requests.filter((r) => r.status === st).length }))
+    .filter((c) => c.n > 0)
+  const tone = rejected.length ? 'warn' : open.length ? 'info' : 'ok'
+  const title = rejected.length
+    ? `${rejected.length} request${rejected.length === 1 ? '' : 's'} couldn’t be completed`
+    : open.length
+      ? `${open.length} setup request${open.length === 1 ? '' : 's'} in progress`
+      : 'All setup requests completed'
+  const order: Record<RequestStatus, number> = { rejected: 0, 'in-review': 1, sent: 2, completed: 3 }
+  const rows = [...requests].sort((a, b) => order[a.status] - order[b.status])
+
+  return (
+    <section className={`mc-reqbar ${tone} ${expanded ? 'open' : ''}`} id="mc-requests">
+      <div className="mc-reqbar-head">
+        <button className="mc-reqbar-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+          <span className="mc-reqbar-ico">{rejected.length ? <AlertTriangle size={15} /> : open.length ? <Clock size={15} /> : <Check size={15} />}</span>
+          <span className="mc-reqbar-text">
+            <b>{title}</b>
+            <span>
+              {rejected.length
+                ? 'See why and what you can do instead.'
+                : open.length
+                  ? 'For your information — our team handles these. Nothing to do here; we’ll email you when something changes.'
+                  : 'Everything was set up for you — nothing else to do. You can close this.'}
+            </span>
+          </span>
+          {!expanded && (
+            <span className="mc-reqbar-counts">
+              {counts.map((c) => (
+                <span key={c.st} className={`mc-pill ${STATUS_TONE[c.st]}`}>
+                  {c.n} {STATUS_LABEL[c.st].toLowerCase()}
+                </span>
+              ))}
+            </span>
+          )}
+          <ChevronDown size={16} className="mc-reqbar-chev" />
+        </button>
+        <button className="mc-icon" onClick={() => setDismissedSig(sig)} aria-label="Close setup requests" title="Close — it comes back when a status changes">
+          <X size={15} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="mc-reqs">
+          {rows.map((r) => {
+            const gap = REQUEST_GAP[r.type]
+            const steps: RequestStatus[] = ['sent', 'in-review', r.status === 'rejected' ? 'rejected' : 'completed']
+            const idx = steps.indexOf(r.status)
+            const timing = timingNote(r)
+            return (
+              <div className={`mc-req ${r.status}`} key={r.id}>
+                <span className="mc-req-ico">{REQUEST_ICON[r.type]}</span>
+                <div className="mc-req-main">
+                  <span className="mc-req-title">
+                    {REQUEST_TITLE[r.type](r.detail)}
+                    <span className={`mc-pill ${STATUS_TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                  </span>
+                  <span className="mc-dim">
+                    {r.id} · Sent {fmtDate(r.createdAt)}
+                    {r.closedAt ? ` · ${STATUS_LABEL[r.status]} ${fmtDate(r.closedAt)}` : ''}
+                  </span>
+                  {timing && <span className={`mc-req-eta ${r.eta ? 'dated' : ''}`}>{timing}</span>}
+                  {isOpenRequest(r) && gap && <span className="mc-req-loss">Meanwhile: {ONBOARDING_LOSS[gap].loss}</span>}
+                  {r.status === 'completed' && r.outcome && (
+                    <span className="mc-req-done">
+                      <Check size={12} strokeWidth={3} /> {r.outcome}
+                    </span>
+                  )}
+                  {r.status === 'rejected' && (
+                    <span className="mc-req-rejected">
+                      {r.outcome}
+                      {FIX_LABEL[r.type] && (
+                        <button className="mc-btn" onClick={() => onFix(r)}>
+                          {FIX_LABEL[r.type]}
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
+                <div className="mc-steps" aria-label={`Status: ${STATUS_LABEL[r.status]}`}>
+                  {steps.map((st, i) => (
+                    <span key={st} className={`mc-step ${st === 'rejected' && i === idx ? 'bad' : i < idx || (i === idx && st === 'completed') ? 'done' : i === idx ? 'now' : ''}`}>
+                      <i>
+                        {st === 'rejected' && i === idx ? (
+                          <X size={10} strokeWidth={3} />
+                        ) : i < idx || (i === idx && st === 'completed') ? (
+                          <Check size={10} strokeWidth={3} />
+                        ) : null}
+                      </i>
+                      {STATUS_LABEL[st]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
 
 function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / PAGE))
@@ -350,6 +504,7 @@ export default function MyCompanyV3({
   const [fuelType, setFuelType] = useState('Diesel')
   const [docs, setDocs] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  const [reqSignal, setReqSignal] = useState(0)
 
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text).catch(() => {})
@@ -432,7 +587,7 @@ export default function MyCompanyV3({
   const eqRows = onlyUnassigned ? eqAll.filter((r) => !r.driver) : eqAll
 
   // ---------- Requests ----------
-  const open = requests.filter((r) => r.status !== 'resolved')
+  const open = requests.filter(isOpenRequest)
   const reqOf = (t: RequestType) => [...requests].reverse().find((r) => r.type === t)
   const txReq = reqOf('transactions')
   const lastSync = fleet.length ? fleet.reduce((a, c) => (c.syncedTo > a ? c.syncedTo : a), fleet[0].syncedTo) : null
@@ -441,13 +596,26 @@ export default function MyCompanyV3({
     const src = ob[type]
     const label = type === 'eld' ? 'ELD' : 'TMS'
     const state = !src ? 'off' : src.status === 'connected' ? 'on' : 'wait'
+    const req = reqOf(type)
+    // Connected through a request that just completed — no step for the org.
+    const justDone = src?.status === 'connected' && req?.status === 'completed' && req.detail === src.name
+    const rejected = !src && req?.status === 'rejected'
     return (
       <div className="mc-int" key={type}>
         <div>
-          <span className="mc-int-name">{label}</span>
-          <span className={`mc-int-status ${state}`}>
+          <span className="mc-int-name">
+            {label}
+            {justDone && <span className="mc-pill green">Just connected</span>}
+          </span>
+          <span className={`mc-int-status ${rejected ? 'bad' : state}`}>
             <i />
-            {!src ? 'Not connected' : src.status === 'connected' ? `Connected · ${src.name}` : `Request sent · ${src.name}`}
+            {!src
+              ? rejected
+                ? `Not connected · ${req!.detail} couldn’t be integrated`
+                : 'Not connected'
+              : src.status === 'connected'
+                ? `Connected · ${src.name}`
+                : `${req?.status === 'in-review' ? 'In review' : 'Request sent'} · ${src.name}${req?.eta ? ` · ready by ${fmtDate(req.eta)}` : ''}`}
           </span>
         </div>
         <button className="mc-btn" onClick={() => (synced ? onOpenManage('integrations') : onOpenWizard(type))}>
@@ -512,8 +680,10 @@ export default function MyCompanyV3({
             </div>
             <div className="mc-plan">
               <span className="mc-ef">ef</span>
-              <span className="mc-pill green">Free trial</span>
-              <button className="mc-link">Get Plan</button>
+              {/* Chosen on the sign-up plan step. */}
+              <span className="mc-pill green">{account.plan === 'trial' ? 'Free trial' : `${planLabel(account.plan)} plan`}</span>
+              {account.salesContact && <span className="mc-pill blue">Sales will contact you</span>}
+              <button className="mc-link">{account.plan === 'trial' ? 'Get Plan' : 'Manage plan'}</button>
               <button className="mc-icon" aria-label="Edit company">
                 <Pencil size={14} />
               </button>
@@ -582,7 +752,20 @@ export default function MyCompanyV3({
                 </button>
               </div>
             )}
-            <span className="mc-sub-title">Connected systems</span>
+            <span className="mc-sub-title">
+              Connected systems
+              {requests.length > 0 && (
+                <button
+                  className="mc-link sm"
+                  onClick={() => {
+                    setReqSignal((n) => n + 1)
+                    setTimeout(() => document.getElementById('mc-requests')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0)
+                  }}
+                >
+                  View setup requests{open.length ? ` (${open.length} open)` : ''}
+                </button>
+              )}
+            </span>
             {sourceRow('eld')}
             {sourceRow('tms')}
             {synced && (
@@ -606,7 +789,7 @@ export default function MyCompanyV3({
             {ob.fuelCard?.kind === 'catalog' && (
               <div className="mc-fc">
                 <span>{ob.fuelCard.name}</span>
-                {ob.fuelCard.name === 'efRouting' && ob.efroutingCardRequested && reqOf('efrouting-card')?.status !== 'resolved' && (
+                {ob.fuelCard.name === 'efRouting' && ob.efroutingCardRequested && reqOf('efrouting-card')?.status !== 'completed' && (
                   <span className="mc-pill blue">Card requested</span>
                 )}
                 <span className="mc-pill green">{fuelType}</span>
@@ -633,10 +816,10 @@ export default function MyCompanyV3({
                 <span className="mc-int-sub">
                   {!txReq
                     ? 'Not shared · fuel spend is estimated from your ELD (~95%)'
-                    : txReq.status === 'resolved'
+                    : txReq.status === 'completed'
                       ? 'Shared · exact fuel spend per transaction'
-                      : txReq.status === 'in-progress'
-                        ? 'In progress · we’re setting it up with you'
+                      : txReq.status === 'in-review'
+                        ? 'In review · we’re setting it up with you'
                         : 'Request sent · we’ll reach out to coordinate it'}
                 </span>
               </div>
@@ -645,9 +828,7 @@ export default function MyCompanyV3({
                   Contact me
                 </button>
               ) : (
-                <span className={`mc-pill ${txReq.status === 'resolved' ? 'green' : 'yellow'}`}>
-                  {STATUS_STEPS.find((s) => s.key === txReq.status)?.label}
-                </span>
+                <span className={`mc-pill ${STATUS_TONE[txReq.status] || 'yellow'}`}>{STATUS_LABEL[txReq.status]}</span>
               )}
             </div>
           </section>
@@ -655,48 +836,13 @@ export default function MyCompanyV3({
 
         {/* ================= Right column ================= */}
         <div className="mc-col wide">
-          {requests.length > 0 && (
-            <section className="mc-card">
-              <div className="mc-card-head">
-                <span className="mc-card-title with-ico">
-                  <Clock size={16} /> Setup requests
-                </span>
-                <span className="mc-dim">
-                  {open.length > 0 ? `${open.length} open` : 'All resolved'} · our team handles these for you
-                </span>
-              </div>
-              <div className="mc-reqs">
-                {[...requests]
-                  .sort((a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved'))
-                  .map((r) => {
-                    const idx = STATUS_STEPS.findIndex((s) => s.key === r.status)
-                    const gap = REQUEST_GAP[r.type]
-                    return (
-                      <div className={`mc-req ${r.status}`} key={r.id}>
-                        <span className="mc-req-ico">{REQUEST_ICON[r.type]}</span>
-                        <div className="mc-req-main">
-                          <span className="mc-req-title">{REQUEST_TITLE[r.type](r.detail)}</span>
-                          <span className="mc-dim">
-                            {r.id} · Sent {fmtDate(r.createdAt)}
-                          </span>
-                          {r.status !== 'resolved' && gap && (
-                            <span className="mc-req-loss">Meanwhile: {ONBOARDING_LOSS[gap].loss}</span>
-                          )}
-                        </div>
-                        <div className="mc-steps" aria-label={`Status: ${STATUS_STEPS[idx].label}`}>
-                          {STATUS_STEPS.map((s, i) => (
-                            <span key={s.key} className={`mc-step ${i < idx ? 'done' : i === idx ? 'now' : ''}`}>
-                              <i>{i < idx || r.status === 'resolved' ? <Check size={10} strokeWidth={3} /> : null}</i>
-                              {s.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </section>
-          )}
+          <RequestsTracker
+            requests={requests}
+            openSignal={reqSignal}
+            onFix={(r) =>
+              r.type === 'fuel-card' ? setModal('fuel') : synced ? onOpenManage('integrations') : onOpenWizard(r.type as WizardTarget)
+            }
+          />
 
           <section className="mc-card">
             <div className="mc-card-head">

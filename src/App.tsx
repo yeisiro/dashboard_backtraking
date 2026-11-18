@@ -26,6 +26,7 @@ import {
   type OnboardingState,
   type OnboardingRequest,
   type RequestType,
+  isOpenRequest,
   monthsForPeriod,
   DRIVER_POOL,
   CABIN_POOL,
@@ -206,7 +207,7 @@ export default function App() {
   const addRequest = (type: RequestType, detail: string) => {
     setRequests((prev) => [
       ...prev,
-      { id: `REQ-${prev.length + 1}`, type, detail, status: 'received', createdAt: new Date() },
+      { id: `REQ-${prev.length + 1}`, type, detail, status: 'sent', createdAt: new Date() },
     ])
     setNotice(REQUEST_NOTICE[type])
   }
@@ -220,20 +221,52 @@ export default function App() {
   // (flow F5). Applies each request's effect: a custom fuel card replaces the
   // temporary efRouting one, a newly supported TMS/ELD connects and syncs the
   // same range the org picked, and the org gets a notice.
-  const pendingRequests = requests.filter((r) => r.status !== 'resolved')
-  const receivedRequests = requests.filter((r) => r.status === 'received')
-  // Prototype: the team picks the new requests up (Received → In progress).
+  const pendingRequests = requests.filter(isOpenRequest)
+  const receivedRequests = requests.filter((r) => r.status === 'sent')
+  // Prototype: the team reviews the new requests (Sent → In review). It gives
+  // an estimated date when it can (proposal: ELD/TMS ~3 days, a custom fuel
+  // card ~2, the efRouting card ~5 to ship); fuel transactions are coordinated
+  // on a call, so no date until then.
+  const REVIEW_ETA_DAYS: Partial<Record<RequestType, number>> = { eld: 3, tms: 3, 'fuel-card': 2, 'efrouting-card': 5 }
   const startRequests = () => {
     if (receivedRequests.length === 0) return
-    setRequests((prev) => prev.map((r) => (r.status === 'received' ? { ...r, status: 'in-progress' } : r)))
-    setNotice(`Our team started working on ${receivedRequests.length} request${receivedRequests.length === 1 ? '' : 's'}.`)
+    const today = startOfDayLocal(new Date())
+    setRequests((prev) =>
+      prev.map((r) => {
+        if (r.status !== 'sent') return r
+        const days = REVIEW_ETA_DAYS[r.type]
+        const eta = days ? new Date(today.getFullYear(), today.getMonth(), today.getDate() + days) : undefined
+        return { ...r, status: 'in-review', eta }
+      }),
+    )
+    setNotice(`Our team is reviewing ${receivedRequests.length} request${receivedRequests.length === 1 ? '' : 's'}.`)
+  }
+  // Prototype: the team can't do one (unsupported provider it won't integrate,
+  // card program without public discounts…). The org gets the reason and the
+  // way forward — the only time a request asks it to do something.
+  const rejectableRequest = pendingRequests.find((r) => r.type === 'eld' || r.type === 'tms' || r.type === 'fuel-card')
+  const rejectRequest = () => {
+    const r = rejectableRequest
+    if (!r) return
+    const outcome =
+      r.type === 'fuel-card'
+        ? `${r.detail.split(' — ')[0]} doesn't share its station discounts with us yet. You keep the efRouting network, so your fuel analysis doesn't change.`
+        : `We can't integrate ${r.detail} for now. Connect another ${r.type.toUpperCase()} to bring in your data.`
+    if (r.type === 'fuel-card' && onboarding.fuelCard?.kind === 'custom')
+      patchOnboarding({ fuelCard: { kind: 'catalog', name: 'efRouting' } })
+    if ((r.type === 'eld' || r.type === 'tms') && onboarding[r.type]?.name === r.detail) patchOnboarding({ [r.type]: null })
+    setRequests((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: 'rejected', closedAt: new Date(), outcome } : x)))
+    setNotice(`Update on ${r.id}: we couldn't complete it. See My Company → Setup requests.`)
   }
   const resolveRequests = () => {
     if (pendingRequests.length === 0) return
     const ob = onboarding
     const patch: Partial<OnboardingState> = {}
     const notes: string[] = []
+    // What changed for each request — shown on its completed row.
+    const outcomes: Record<string, string> = {}
     pendingRequests.forEach((r) => {
+      const before = notes.length
       if (r.type === 'fuel-card' && ob.fuelCard?.kind === 'custom') {
         patch.fuelCard = { kind: 'catalog', name: ob.fuelCard.provider }
         notes.push(`${ob.fuelCard.provider} fuel card active, fuel analysis recalculated`)
@@ -250,9 +283,11 @@ export default function App() {
         connectIntegration(r.type, r.detail, mono)
         notes.push(`${r.detail} connected`)
       }
-      if (r.type === 'transactions') notes.push('fuel transactions set up')
+      if (r.type === 'transactions') notes.push('fuel transactions set up — exact fuel spend per transaction')
       if (r.type === 'efrouting-card') notes.push('efRouting Fuel Card issued')
+      if (notes.length > before) outcomes[r.id] = notes.slice(before).join(' · ')
     })
+    const extrasFrom = notes.length
     // Fleet left for later (no ELD/TMS connected at the fleet step): once the
     // ELD connects, bring in everything it finds plus anything added by hand.
     if (ob.fleetDeferred && (patch.eld?.status === 'connected' || ob.eld?.status === 'connected')) {
@@ -266,7 +301,20 @@ export default function App() {
       patch.rangeDeferred = false
       notes.push('syncing the last 3 months')
     }
-    setRequests((prev) => prev.map((r) => ({ ...r, status: 'resolved' })))
+    const closedAt = new Date()
+    setRequests((prev) =>
+      prev.map((r) =>
+        isOpenRequest(r)
+          ? {
+              ...r,
+              status: 'completed',
+              closedAt,
+              // The ELD brought the fleet / range in too — say so on its row.
+              outcome: [outcomes[r.id] ?? 'Done', ...(r.type === 'eld' ? notes.slice(extrasFrom) : [])].join(' · '),
+            }
+          : r,
+      ),
+    )
     const next = { ...ob, ...patch }
     setOnboarding(next)
     // ELD/TMS now connected: sync the range the org already picked. If the
@@ -280,7 +328,7 @@ export default function App() {
         startOnboardingSync(next)
       }
     }
-    setNotice(`Your requests were resolved: ${notes.join(' · ')}.`)
+    setNotice(`Completed: ${notes.join(' · ')}.`)
   }
 
   // A brand-new organization: nothing connected, linked or requested.
@@ -361,15 +409,23 @@ export default function App() {
         onClick={startRequests}
         title="Simulates the efRouting team starting on the new requests"
       >
-        Start {receivedRequests.length} new
+        Review {receivedRequests.length} new
       </button>
       <button
         className="fleet-sim-btn"
         disabled={pendingRequests.length === 0}
         onClick={resolveRequests}
-        title="Simulates the efRouting team resolving every open request"
+        title="Simulates the efRouting team completing every open request"
       >
-        Resolve {pendingRequests.length} pending
+        Complete {pendingRequests.length} open
+      </button>
+      <button
+        className="fleet-sim-btn"
+        disabled={!rejectableRequest}
+        onClick={rejectRequest}
+        title="Simulates the efRouting team rejecting one ELD / TMS / fuel card request"
+      >
+        Reject 1
       </button>
       <button className="fleet-sim-btn" onClick={resetOrg} title="Start the onboarding over as a brand-new organization">
         Reset onboarding

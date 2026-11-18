@@ -1003,14 +1003,23 @@ export const FUEL_CARD_CATALOG: FuelCardOption[] = [
 // processes: an unsupported ELD/TMS, a custom fuel card, an efRouting card, or
 // a call to set up fuel transactions.
 export type RequestType = 'eld' | 'tms' | 'fuel-card' | 'efrouting-card' | 'transactions'
-export type RequestStatus = 'received' | 'in-progress' | 'resolved'
+// Statuses (proposal, 2026-11-18 — to validate with the team):
+//  sent → in-review → completed, or rejected when it can't be done.
+// `eta` is only set when the team can commit to a date; `outcome` says what
+// changed (completed) or why it couldn't be done (rejected).
+export type RequestStatus = 'sent' | 'in-review' | 'completed' | 'rejected'
 export interface OnboardingRequest {
   id: string
   type: RequestType
   detail: string
   status: RequestStatus
   createdAt: Date
+  eta?: Date
+  closedAt?: Date
+  outcome?: string
 }
+// Still with the efRouting team (nothing for the org to do).
+export const isOpenRequest = (r: OnboardingRequest) => r.status === 'sent' || r.status === 'in-review'
 
 // What an org gives up for each thing it skipped or is still pending (V3:
 // shown in the wizard review, the setup guide and the affected modules).

@@ -18,6 +18,7 @@ import {
   type Integration,
   type Provider,
   type OnboardingRequest,
+  isOpenRequest,
   type RequestType,
 } from '../data'
 
@@ -82,9 +83,10 @@ type Tab = 'integrations' | 'cabins' | 'drivers' | 'trailers'
 type Sub = null | 'add-cabin' | 'add-driver' | 'add-trailer' | 'add-integration'
 
 const REQ_STATUS: Record<OnboardingRequest['status'], string> = {
-  received: 'Request sent',
-  'in-progress': 'In progress',
-  resolved: 'Resolved',
+  sent: 'Request sent',
+  'in-review': 'In review',
+  completed: 'Completed',
+  rejected: 'Rejected',
 }
 const initials = (name: string) =>
   name.trim().split(/\s+/).map((w) => w[0]?.toUpperCase() ?? '').join('').slice(0, 2) || '?'
@@ -207,7 +209,7 @@ export default function ManageFleetModal({
       : v2 ? TMS_PROVIDERS.filter((p) => SUPPORTED_TMS.includes(p.name)) : TMS_PROVIDERS
   // Unsupported ELD/TMS the org declared — shown as pending integrations (V2).
   const pendingIntegrations = v2
-    ? requests.filter((r) => (r.type === 'eld' || r.type === 'tms') && r.status !== 'resolved')
+    ? requests.filter((r) => (r.type === 'eld' || r.type === 'tms') && isOpenRequest(r))
     : []
   const connectedNames = new Set(integrations.map((i) => i.type + ':' + i.name))
   const intComplete = !!intProvider && intProvider.fields.every((f) => (intValues[f.key] ?? '').trim()) && !!intLabel.trim()

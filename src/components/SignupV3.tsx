@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Eye, EyeOff, Check, Circle, Loader2, ArrowLeft, PartyPopper, ArrowRight, Ticket, Search, BadgeCheck, AlertTriangle } from 'lucide-react'
+import { Eye, EyeOff, Check, Circle, Loader2, ArrowLeft, PartyPopper, ArrowRight, Ticket, Search, BadgeCheck, AlertTriangle, Sparkles, Lock } from 'lucide-react'
 
 // V3 onboarding — step 1: account sign-up. Based on the production sign-up
 // (efdata.efrouting.com/signup, recorded 2026-11-11): Welcome → work email →
@@ -34,6 +34,13 @@ import { Eye, EyeOff, Check, Circle, Loader2, ArrowLeft, PartyPopper, ArrowRight
 //    found or isn't authorized only warns (production doesn't validate it).
 //  · The trial needs no card (confirmed 2026-11-12); its length isn't shown.
 //
+// Plan step (2026-11-18): after the company is created and before the welcome,
+// the org picks how to start — free trial (recommended, no card) or a plan
+// from efrouting.com/pricing (Essential / Pro go through a short checkout,
+// Business is "Contact sales" and starts the trial meanwhile). The coupon moved
+// here from the welcome screen so it applies to whichever option is picked.
+// The welcome then confirms the choice and goes straight to the dashboard.
+//
 // Minimum to create the account (2026-11-18): email, password + terms, code,
 // full name and company name. Everything else is marked "Optional" next to its
 // label and never blocks Continue — phone and MC/DOT can be added later in My
@@ -54,9 +61,41 @@ export interface SignupAccount {
   dot: string
   coupon: string
   method: 'email' | 'google' | 'apple'
+  // How the org started: free trial or a paid plan. `salesContact` = asked
+  // for Business pricing (they start on the trial meanwhile).
+  plan: PlanId
+  salesContact: boolean
 }
 
-type Step = 'welcome' | 'email' | 'password' | 'profile' | 'verify' | 'company' | 'creating' | 'ready'
+export type PlanId = 'trial' | 'essential' | 'pro'
+
+// From efrouting.com/pricing (checked 2026-11-18).
+export const PLANS: { id: 'essential' | 'pro' | 'business'; name: string; price: number | null; seats: string; perks: string[] }[] = [
+  {
+    id: 'essential',
+    name: 'Essential',
+    price: 49,
+    seats: '1 dispatcher + 1 driver seat',
+    perks: ['Lane rates and route plans', 'Optimized fuel plans', 'Load board and ELD integrations'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 99,
+    seats: '2 dispatcher + 5 driver seats',
+    perks: ['Everything in Essential', 'Advanced operational analysis and reports', 'Free personalized onboarding'],
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    price: null,
+    seats: 'Seats for your whole team',
+    perks: ['Everything in Pro', 'TMS integration and historical analysis', 'Assigned account manager'],
+  },
+]
+export const planLabel = (p: PlanId) => (p === 'trial' ? 'Free trial' : PLANS.find((x) => x.id === p)!.name)
+
+type Step = 'welcome' | 'email' | 'password' | 'profile' | 'verify' | 'company' | 'creating' | 'plan' | 'checkout' | 'ready'
 type Method = SignupAccount['method']
 
 const SLOGANS = ['Smarter routes, greater profits.', 'We simplify the complex.', 'The power of always deciding right.']
@@ -165,6 +204,12 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
   const [couponOpen, setCouponOpen] = useState(false)
   const [coupon, setCoupon] = useState('')
   const [couponApplied, setCouponApplied] = useState(false)
+  const [plan, setPlan] = useState<PlanId>('trial')
+  // Plan picked for checkout (before paying it isn't the active plan yet).
+  const [checkoutPlan, setCheckoutPlan] = useState<'essential' | 'pro'>('essential')
+  const [salesContact, setSalesContact] = useState(false)
+  const [paying, setPaying] = useState(false)
+  const [card, setCard] = useState({ number: '', exp: '', cvc: '', zip: '' })
   const codeRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Rotating slogan on the left panel (production cycles three).
@@ -225,10 +270,10 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, lastNum, lastNum === 'mc' ? mc : dot])
 
-  // Short beat while the company is created, then the single welcome screen.
+  // Short beat while the company is created, then the plan choice.
   useEffect(() => {
     if (step !== 'creating') return
-    const t = setTimeout(() => setStep('ready'), 1300)
+    const t = setTimeout(() => setStep('plan'), 1300)
     return () => clearTimeout(t)
   }, [step])
 
@@ -244,7 +289,26 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
       dot: dot.trim(),
       coupon: couponApplied ? coupon.trim() : '',
       method,
+      plan,
+      salesContact,
     })
+
+  const startTrial = (sales = false) => {
+    setPlan('trial')
+    setSalesContact(sales)
+    setStep('ready')
+  }
+  const subscribe = () => {
+    if (paying) return
+    setPaying(true)
+    setTimeout(() => {
+      setPaying(false)
+      setPlan(checkoutPlan)
+      setSalesContact(false)
+      setStep('ready')
+    }, 1100)
+  }
+  const checkoutInfo = PLANS.find((p) => p.id === checkoutPlan)!
 
   // Code entered → short "Verifying…" beat → company step (as production,
   // which verifies on the 6th digit without a button press).
@@ -290,14 +354,18 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
 
   // 12 · Steps the user goes through for the chosen method.
   // Google / Apple already verified the email, so they skip the code step.
-  const flow: Step[] = isSocial ? ['profile', 'company'] : ['email', 'password', 'profile', 'verify', 'company']
-  const stepNo = flow.indexOf(step) + 1
+  const flow: Step[] = isSocial
+    ? ['profile', 'company', 'plan']
+    : ['email', 'password', 'profile', 'verify', 'company', 'plan']
+  // Checkout is part of the plan step.
+  const stepNo = flow.indexOf(step === 'checkout' ? 'plan' : step) + 1
 
   const goBack = () => {
     if (step === 'password') return setStep('email')
     if (step === 'profile' && !isSocial) return setStep('password')
     if (step === 'verify') return setStep('profile')
     if (step === 'company') return setStep(isSocial ? 'profile' : 'verify')
+    if (step === 'checkout') return setStep('plan')
     // Back to the start: forget what the social provider pre-filled.
     if (isSocial) {
       setName('')
@@ -322,9 +390,14 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
 
   const stepNav = (
     <div className="su-nav">
-      <button type="button" className="su-back" onClick={goBack}>
-        <ArrowLeft size={15} /> Back
-      </button>
+      {/* The company already exists on the plan step — nothing to go back to. */}
+      {step === 'plan' ? (
+        <span />
+      ) : (
+        <button type="button" className="su-back" onClick={goBack}>
+          <ArrowLeft size={15} /> Back
+        </button>
+      )}
       {flow.length > 1 && (
         <span className="su-stepno">
           Step {stepNo} of {flow.length}
@@ -333,12 +406,51 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
     </div>
   )
 
+  const couponUi = couponApplied ? (
+    <span className="su-coupon-ok">
+      <Check size={13} strokeWidth={3} /> Coupon {coupon.trim().toUpperCase()} applied
+      <button
+        type="button"
+        className="su-inline-link"
+        onClick={() => {
+          setCouponApplied(false)
+          setCouponOpen(true)
+        }}
+      >
+        Change
+      </button>
+    </span>
+  ) : couponOpen ? (
+    <form
+      className="su-coupon"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (coupon.trim()) setCouponApplied(true)
+      }}
+    >
+      <input
+        autoFocus
+        className="su-input"
+        placeholder="Coupon code"
+        value={coupon}
+        onChange={(e) => setCoupon(e.target.value)}
+      />
+      <button type="submit" className="su-coupon-btn" disabled={!coupon.trim()}>
+        Apply
+      </button>
+    </form>
+  ) : (
+    <button type="button" className="su-inline-link su-coupon-link" onClick={() => setCouponOpen(true)}>
+      <Ticket size={13} /> Have a coupon code?
+    </button>
+  )
+
   return (
     <div className="su">
       {/* ---------- Left brand panel ---------- */}
       <aside className="su-side">
         <div className="su-side-bg" />
-        {['profile', 'verify', 'company', 'creating', 'ready'].includes(step) ? (
+        {['profile', 'verify', 'company', 'creating', 'plan', 'checkout', 'ready'].includes(step) ? (
           <>
             <div className="su-side-top">
               <Brand />
@@ -740,6 +852,8 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
                 Create company
               </button>
             </div>
+            {/* The dashboard comes after the plan step — don't promise it here. */}
+            <span className="su-hint su-next">Next: start your free trial or choose a plan.</span>
           </form>
         )}
 
@@ -750,6 +864,159 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
           </div>
         )}
 
+        {step === 'plan' && (
+          <div className="su-col su-col-wide">
+            {stepNav}
+            <h2 className="su-title">Choose how to start</h2>
+            <p className="su-sub">
+              {companyName} is ready. Try everything free — no card needed — or pick a plan now. You can change it
+              anytime from My Company.
+            </p>
+
+            <div className="su-trial">
+              <span className="su-trial-ico">
+                <Sparkles size={18} />
+              </span>
+              <div className="su-trial-main">
+                <span className="su-trial-tag">Recommended</span>
+                <b>Start your free trial</b>
+                <span>Full access to efRouting with your own fleet. No card needed.</span>
+              </div>
+              <button type="button" autoFocus className="su-continue" onClick={() => startTrial()}>
+                Start free trial
+              </button>
+            </div>
+
+            <div className="su-plans-divider">
+              <span>Or subscribe now</span>
+            </div>
+            <div className="su-plans">
+              {PLANS.map((p) => (
+                <div className={`su-plan ${p.id === 'pro' ? 'featured' : ''}`} key={p.id}>
+                  <span className="su-plan-name">{p.name}</span>
+                  <span className="su-plan-price">
+                    {p.price !== null ? (
+                      <>
+                        ${p.price}
+                        <small>/month</small>
+                      </>
+                    ) : (
+                      <small className="su-plan-contact">Contact for pricing</small>
+                    )}
+                  </span>
+                  <span className="su-plan-seats">{p.seats}</span>
+                  <ul>
+                    {p.perks.map((k) => (
+                      <li key={k}>
+                        <Check size={12} strokeWidth={3} />
+                        {k}
+                      </li>
+                    ))}
+                  </ul>
+                  {p.id === 'business' ? (
+                    <button type="button" className="su-plan-btn" onClick={() => startTrial(true)}>
+                      Contact sales
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="su-plan-btn"
+                      onClick={() => {
+                        setCheckoutPlan(p.id as 'essential' | 'pro')
+                        setStep('checkout')
+                      }}
+                    >
+                      Choose {p.name}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <span className="su-hint su-plans-note">
+              Contact sales starts your free trial right away — our team reaches out about Business pricing.
+            </span>
+            <div className="su-plans-coupon">{couponUi}</div>
+          </div>
+        )}
+
+        {step === 'checkout' && (
+          <form
+            className="su-col"
+            noValidate={SKIP_VALIDATION}
+            onSubmit={(e) => {
+              e.preventDefault()
+              subscribe()
+            }}
+          >
+            {stepNav}
+            <h2 className="su-title">Subscribe to {checkoutInfo.name}</h2>
+            <div className="su-summary">
+              <div>
+                <b>{checkoutInfo.name} plan</b>
+                <span>{checkoutInfo.seats} · billed monthly</span>
+              </div>
+              <span className="su-summary-price">${checkoutInfo.price}/mo</span>
+            </div>
+            {couponApplied && (
+              <div className="su-summary-line">
+                <span>Coupon {coupon.trim().toUpperCase()}</span>
+                <span>Applied at checkout</span>
+              </div>
+            )}
+            <span className="su-label">Payment details</span>
+            <input
+              className="su-input"
+              inputMode="numeric"
+              autoComplete="cc-number"
+              placeholder="Card number"
+              value={card.number}
+              onChange={(e) => setCard({ ...card, number: e.target.value })}
+            />
+            <div className="su-row2 su-card-row">
+              <input
+                className="su-input"
+                autoComplete="cc-exp"
+                placeholder="MM / YY"
+                value={card.exp}
+                onChange={(e) => setCard({ ...card, exp: e.target.value })}
+              />
+              <input
+                className="su-input"
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                placeholder="CVC"
+                value={card.cvc}
+                onChange={(e) => setCard({ ...card, cvc: e.target.value })}
+              />
+            </div>
+            <input
+              className="su-input su-card-row"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              placeholder="Billing ZIP code"
+              value={card.zip}
+              onChange={(e) => setCard({ ...card, zip: e.target.value })}
+            />
+            <span className="su-hint su-secure">
+              <Lock size={12} /> Secure payment. Cancel or change your plan anytime from My Company.
+            </span>
+            <div className="su-actions su-actions-split">
+              <button type="button" className="su-inline-link" onClick={() => startTrial()}>
+                Start free trial instead
+              </button>
+              <button type="submit" className="su-continue" disabled={paying}>
+                {paying ? (
+                  <>
+                    <Loader2 size={13} className="cfm-spin" /> Processing…
+                  </>
+                ) : (
+                  `Subscribe · $${checkoutInfo.price}/month`
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
         {step === 'ready' && (
           <div className="su-col su-ready">
             <span className="su-ready-ico">
@@ -757,8 +1024,11 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
             </span>
             <h2 className="su-ready-title">Welcome to {companyName} on efRouting!</h2>
             <p className="su-ready-sub">
-              Your free trial is active — no card needed. You&apos;ll start with sample data so you can look around,
-              and we&apos;ll guide you to connect your fleet to see your own operation.
+              {plan === 'trial'
+                ? 'Your free trial is active — no card needed.'
+                : `Your ${planLabel(plan)} plan is active.`}{' '}
+              You&apos;ll start with sample data so you can look around, and we&apos;ll guide you to connect your fleet
+              to see your own operation.
             </p>
             <ul className="su-ready-list">
               <li>
@@ -770,36 +1040,17 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
                 {dot.trim() ? ` · DOT ${dot.trim()}` : ''}
               </li>
               <li>
-                <Check size={13} strokeWidth={3} /> Free trial started
+                <Check size={13} strokeWidth={3} />
+                {plan === 'trial' ? ' Free trial started' : ` ${planLabel(plan)} plan · $${PLANS.find((p) => p.id === plan)!.price}/month`}
                 {couponApplied ? ` · coupon ${coupon.trim().toUpperCase()} applied` : ''}
               </li>
+              {salesContact && (
+                <li>
+                  <Check size={13} strokeWidth={3} /> Our sales team will contact you about Business
+                </li>
+              )}
             </ul>
-            {!couponApplied &&
-              (couponOpen ? (
-                <form
-                  className="su-coupon"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    if (coupon.trim()) setCouponApplied(true)
-                  }}
-                >
-                  <input
-                    autoFocus
-                    className="su-input"
-                    placeholder="Coupon code"
-                    value={coupon}
-                    onChange={(e) => setCoupon(e.target.value)}
-                  />
-                  <button type="submit" className="su-coupon-btn" disabled={!coupon.trim()}>
-                    Apply
-                  </button>
-                </form>
-              ) : (
-                <button type="button" className="su-inline-link su-coupon-link" onClick={() => setCouponOpen(true)}>
-                  <Ticket size={13} /> Have a coupon code?
-                </button>
-              ))}
-            <button className="su-continue su-ready-cta" onClick={finish}>
+            <button className="su-continue su-ready-cta" autoFocus onClick={finish}>
               Go to my dashboard <ArrowRight size={15} />
             </button>
           </div>

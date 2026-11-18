@@ -3,6 +3,7 @@ import {
   ONBOARDING_LOSS,
   type OnboardingGap,
   type OnboardingRequest,
+  isOpenRequest,
   type OnboardingState,
 } from '../data'
 import type { SyncState } from './ConnectFleetModal'
@@ -29,13 +30,13 @@ interface Item {
 }
 
 export function onboardingGaps(ob: OnboardingState, requests: OnboardingRequest[]): OnboardingGap[] {
-  const open = (t: OnboardingRequest['type']) => requests.some((r) => r.type === t && r.status !== 'resolved')
+  const open = (t: OnboardingRequest['type']) => requests.some((r) => r.type === t && isOpenRequest(r))
   const gaps: OnboardingGap[] = []
   if (ob.eld?.status === 'unsupported') gaps.push('eld-pending')
   if (ob.tms?.status === 'unsupported') gaps.push('tms-pending')
   if (ob.fuelCard?.kind === 'custom') gaps.push('fuelcard-pending')
   // Transactions count as a gap until they're actually set up (request resolved).
-  const txResolved = requests.some((r) => r.type === 'transactions' && r.status === 'resolved')
+  const txResolved = requests.some((r) => r.type === 'transactions' && r.status === 'completed')
   if (!txResolved && (ob.syncStarted || open('transactions'))) gaps.push('transactions')
   return gaps
 }
@@ -139,7 +140,7 @@ export default function SetupGuide({
   const eldBlocked = ob.eld?.status === 'unsupported'
   const gaps = onboardingGaps(ob, requests)
   const txRequested = ob.transactionsContact || requests.some((r) => r.type === 'transactions')
-  const openRequests = requests.filter((r) => r.status !== 'resolved').length
+  const openRequests = requests.filter(isOpenRequest).length
   const syncing = !!sync && !sync.done
   const minimumDone = ob.syncStarted
   const allSet = minimumDone && gaps.length === 0
@@ -300,8 +301,8 @@ export default function SetupGuide({
                 <span>
                   {!txRequested
                     ? `If you skip it: ${ONBOARDING_LOSS.transactions.loss}`
-                    : requests.some((r) => r.type === 'transactions' && r.status === 'in-progress')
-                      ? "In progress — we're setting it up with you."
+                    : requests.some((r) => r.type === 'transactions' && r.status === 'in-review')
+                      ? "In review — we're setting it up with you."
                       : "Request sent — we'll reach out to coordinate it with you."}
                 </span>
                 {!txRequested && (
