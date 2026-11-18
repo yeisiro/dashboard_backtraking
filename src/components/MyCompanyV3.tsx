@@ -506,7 +506,7 @@ export default function MyCompanyV3({
                     {copied === 'mc' ? <Check size={13} /> : <Copy size={13} />}
                   </button>
                 ) : (
-                  <span className="mc-dim">No MC / DOT yet</span>
+                  <span className="mc-dim">No MC / DOT yet · optional</span>
                 )}
               </div>
             </div>
@@ -531,12 +531,19 @@ export default function MyCompanyV3({
             <div className="mc-contact">
               <Phone size={15} />
               <div>
-                <span>{account.phone}</span>
-                <span className="mc-dim">Phone</span>
+                {/* Optional at sign-up — skipped phones show up here to add later. */}
+                <span className={account.phone ? '' : 'mc-dim'}>{account.phone || 'Not added yet'}</span>
+                <span className="mc-dim">Phone · optional</span>
               </div>
-              <button className="mc-icon" onClick={() => copy('phone', account.phone)} aria-label="Copy phone">
-                {copied === 'phone' ? <Check size={14} /> : <Copy size={14} />}
-              </button>
+              {account.phone ? (
+                <button className="mc-icon" onClick={() => copy('phone', account.phone)} aria-label="Copy phone">
+                  {copied === 'phone' ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              ) : (
+                <button className="mc-link sm" aria-label="Add phone">
+                  <Plus size={12} /> Add
+                </button>
+              )}
             </div>
           </section>
 

@@ -34,6 +34,11 @@ import { Eye, EyeOff, Check, Circle, Loader2, ArrowLeft, PartyPopper, ArrowRight
 //    found or isn't authorized only warns (production doesn't validate it).
 //  · The trial needs no card (confirmed 2026-11-12); its length isn't shown.
 //
+// Minimum to create the account (2026-11-18): email, password + terms, code,
+// full name and company name. Everything else is marked "Optional" next to its
+// label and never blocks Continue — phone and MC/DOT can be added later in My
+// Company, the coupon is a link on the welcome screen.
+//
 // PROTOTYPE: sign-up restrictions are off (2026-11-12) so testing reaches the
 // onboarding fast — every step's Continue / Enter works even with empty or
 // invalid fields, and blanks fall back to sample account data. The rules and
@@ -66,7 +71,6 @@ const SKIP_VALIDATION = true
 const SAMPLE_ACCOUNT = {
   name: 'Ana Torres',
   email: 'ana@acmefreight.com',
-  phone: '3055551234',
   company: 'Acme Freight',
 }
 const CODE_LEN = 6
@@ -233,7 +237,8 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
     onComplete({
       name: name.trim() || SAMPLE_ACCOUNT.name,
       email: email.trim() || SAMPLE_ACCOUNT.email,
-      phone: formatPhone(phoneDigits.length === 10 ? phoneDigits : SAMPLE_ACCOUNT.phone),
+      // Optional — a skipped phone stays empty (no sample fallback).
+      phone: phoneDigits.length === 10 ? formatPhone(phoneDigits) : '',
       company: companyName,
       mc: mc.trim(),
       dot: dot.trim(),
@@ -276,8 +281,10 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
   const mismatch = pw2.length > 0 && pw2 !== pw
   const passwordOk = SKIP_VALIDATION || (rulesOk && pw === pw2 && terms)
   const phoneError = phoneDigits.length > 0 && phoneDigits.length < 10
-  const profileOk = SKIP_VALIDATION || (!!name.trim() && phoneDigits.length === 10)
-  const companyOk = SKIP_VALIDATION || (!!company.trim() && !!(mc.trim() || dot.trim()))
+  // Phone is optional: blank is fine, a half-typed number isn't.
+  const profileOk = SKIP_VALIDATION || (!!name.trim() && !phoneError)
+  // MC / DOT are optional: only the company name is needed.
+  const companyOk = SKIP_VALIDATION || !!company.trim()
   const firstName = name.trim().split(/\s+/)[0] ?? ''
   const isSocial = method !== 'email'
 
@@ -520,7 +527,7 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
             />
             {isSocial && <span className="su-hint">From your {SOCIAL_PROFILE[method as 'google' | 'apple'].label} account — edit it if needed.</span>}
             <label className="su-label" htmlFor="su-phone">
-              Phone number
+              Phone number <span className="su-opt">Optional</span>
             </label>
             <input
               id="su-phone"
@@ -532,7 +539,11 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
               value={phoneDigits ? formatPhone(phoneDigits) : ''}
               onChange={(e) => setPhoneDigits(e.target.value.replace(/^\+1\s?/, '').replace(/\D/g, '').slice(0, 10))}
             />
-            {phoneError && <span className="su-error">Phone number must be at least 10 digits.</span>}
+            {phoneError ? (
+              <span className="su-error">Phone number must be 10 digits — or leave it blank.</span>
+            ) : (
+              <span className="su-hint">Only so our team can help you during setup. You can add it later.</span>
+            )}
             <div className="su-actions">
               <button type="submit" className="su-continue" disabled={!profileOk}>
                 Continue
@@ -619,9 +630,28 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
           <form className="su-col" noValidate={SKIP_VALIDATION} onSubmit={submit(companyOk, 'creating')}>
             {stepNav}
             <h2 className="su-title">Let&apos;s set up your company</h2>
-            <span className="su-label">MC or DOT number</span>
+            <label className="su-label" htmlFor="su-company">
+              Company name
+            </label>
+            <input
+              id="su-company"
+              autoFocus
+              className="su-input"
+              autoComplete="organization"
+              placeholder="Type your company name"
+              value={company}
+              onChange={(e) => {
+                setCompany(e.target.value)
+                setNameFromFmcsa(false)
+              }}
+            />
+            {nameFromFmcsa && company.trim() && <span className="su-hint">From FMCSA — edit it if you use a different name.</span>}
+            <span className="su-label">
+              MC or DOT number <span className="su-opt">Optional</span>
+            </span>
             <span className="su-hint top">
-              Enter at least one and we&apos;ll find your company in FMCSA. Add both if you have them.
+              Add one and we&apos;ll verify your company in FMCSA. Don&apos;t have it handy? Skip it — you can add
+              it later in My Company.
             </span>
             <div className="su-row2">
               <div>
@@ -630,7 +660,6 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
                 </label>
                 <input
                   id="su-mc"
-                  autoFocus
                   className="su-input"
                   inputMode="numeric"
                   placeholder="e.g. 123456"
@@ -701,26 +730,11 @@ export default function SignupV3({ onComplete }: { onComplete: (acct: SignupAcco
                 <Search size={15} />
                 <div>
                   <b>We couldn&apos;t find this number in FMCSA</b>
-                  <span>Check it, or type your company name below and continue — we&apos;ll review it later.</span>
+                  <span>Check it, or leave it blank and continue — you can add it later in My Company.</span>
                 </div>
               </div>
             )}
 
-            <label className="su-label" htmlFor="su-company">
-              Company name
-            </label>
-            <input
-              id="su-company"
-              className="su-input"
-              autoComplete="organization"
-              placeholder="Type your company name"
-              value={company}
-              onChange={(e) => {
-                setCompany(e.target.value)
-                setNameFromFmcsa(false)
-              }}
-            />
-            {nameFromFmcsa && company.trim() && <span className="su-hint">From FMCSA — edit it if you use a different name.</span>}
             <div className="su-actions">
               <button type="submit" className="su-continue" disabled={!companyOk}>
                 Create company
